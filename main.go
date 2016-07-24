@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +15,12 @@ import (
 
 	"golang.org/x/mobile/event/key"
 )
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
 
 func execCommand(repodir, cmdname string, args ...string) (string, error) {
 	cmd := exec.Command(cmdname, args...)
@@ -214,17 +219,15 @@ func (c *Commit) ShortMessage() string {
 	return c.Message
 }
 
-func (lc *Commit) NiceWithAbbrev() string {
-	abbrev := lc.Id
-	if len(abbrev) > 6 {
-		abbrev = abbrev[:6]
+func abbrev(s string) string {
+	if len(s) > 6 {
+		return s[:6]
 	}
-
-	return fmt.Sprintf("%s - %s", abbrev, lc.ShortMessage())
+	return s
 }
 
-func (c *Commit) Abbrev() string {
-	return c.Id[:6]
+func (lc *Commit) NiceWithAbbrev() string {
+	return fmt.Sprintf("%s - %s", abbrev(lc.Id), lc.ShortMessage())
 }
 
 func (lc *LanedCommit) Print() {
@@ -252,7 +255,7 @@ func (lc *LanedCommit) Print() {
 		}
 		fmt.Fprintf(&refsout, "]")
 	}
-	fmt.Printf("%s %s %s %s\n", lc.Abbrev(), refsout.String(), lc.ShortMessage(), lc.CommitterDate.Local().Format("2006-01-02 15:04"))
+	fmt.Printf("%s %s %s %s\n", abbrev(lc.Id), refsout.String(), lc.ShortMessage(), lc.CommitterDate.Local().Format("2006-01-02 15:04"))
 }
 
 var bookmarks = map[string]LanedCommit{}
@@ -300,26 +303,35 @@ func guiUpdate(mw *nucular.MasterWindow) {
 		}
 	}
 
-	lw.Update(mw, w)
+	style, _ := mw.Style()
+
+	h := w.LayoutAvailableHeight() - style.NormalWindow.Spacing.Y
+
+	w.LayoutRowDynamicScaled(int(float64(h)*0.7), 1)
+	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder); sw != nil {
+		lw.UpdateGraph(mw, sw)
+		sw.GroupEnd()
+	}
+	w.LayoutRowDynamicScaled(int(float64(h)*0.3), 1)
+	if sw := w.GroupBegin("log-group-bot", nucular.WindowBorder|nucular.WindowNoScrollbar); sw != nil {
+		lw.UpdateExtra(mw, sw)
+		sw.GroupEnd()
+	}
 }
 
 func main() {
 	repodir := findRepository()
 
-	allrefs, err := allRefs(repodir)
-	if err != nil {
-		log.Fatalf("Error reading refs: %v\n", err)
-	}
-
 	loadConfiguration()
 
-	wnd := nucular.NewMasterWindow(guiUpdate, 0)
+	wnd := nucular.NewMasterWindow(guiUpdate, nucular.WindowNoScrollbar)
 	wnd.SetStyle(nucular.StyleFromTheme(nucular.DarkTheme), nil, conf.Scaling)
 	style, _ := wnd.Style()
 	style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 
 	lw.repodir = repodir
-	lw.allrefs = allrefs
+	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse
+	lw.edCommit.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse
 	lw.needsMore = -1
 	lw.mw = wnd
 

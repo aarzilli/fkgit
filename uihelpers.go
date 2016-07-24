@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/aarzilli/nucular"
 
 	"golang.org/x/mobile/event/key"
@@ -15,11 +17,13 @@ type MessagePopup struct {
 
 func (mp *MessagePopup) Update(mw *nucular.MasterWindow) bool {
 	w := mw.Wnd
+	style, _ := mw.Style()
+	lnh := style.Font.Size
 
 	if w.PopupBegin(nucular.PopupStatic, mp.Title, popupFlags, nucular.Rect{20, 100, 230, 150}, true) {
 		defer w.PopupEnd()
-		w.Popup.LayoutRowDynamic(25, 1)
-		w.Popup.Label(mp.Message, nucular.TextLeft)
+		w.Popup.LayoutRowDynamicScaled(lnh, 1)
+		showLines(w, mp.Message)
 		if w.Popup.ButtonText("OK", 0) {
 			w.PopupClose()
 			return false
@@ -27,6 +31,20 @@ func (mp *MessagePopup) Update(mw *nucular.MasterWindow) bool {
 		return true
 	} else {
 		return false
+	}
+}
+
+func showLines(w *nucular.Window, s string) {
+	start := 0
+	for i := range s {
+		if s[i] == '\n' {
+			w.Label(s[start:i], nucular.TextLeft)
+			start = i + 1
+		}
+	}
+
+	if start < len(s) {
+		w.Label(s[start:], nucular.TextLeft)
 	}
 }
 
@@ -97,6 +115,7 @@ type NewBranchPopup struct {
 func (np *NewBranchPopup) Update(mw *nucular.MasterWindow) bool {
 	w := mw.Wnd
 	if np.first {
+		np.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
 		np.ed.Active = true
 		np.first = false
 	}
@@ -104,14 +123,14 @@ func (np *NewBranchPopup) Update(mw *nucular.MasterWindow) bool {
 	if open {
 		defer w.PopupEnd()
 		w.Popup.LayoutRowDynamic(25, 1)
-		active := np.ed.Edit(w.Popup, "", false, nucular.EditSigEnter|nucular.EditSelectable, 128, nucular.FilterDefault)
+		active := np.ed.Edit(w.Popup, 128, nucular.FilterDefault)
 		w.Popup.LayoutRowDynamic(25, 2)
 		var ok, cancel bool
 		if !np.ed.Active {
 			ok, cancel = okCancelKeys(w)
 		}
 		if w.Popup.ButtonText("OK", 0) || (active&nucular.EditCommitted != 0) || ok {
-			newbranchAction(string(np.ed.Buffer), np.CommitId)
+			newbranchAction(&lw, string(np.ed.Buffer), np.CommitId)
 			w.PopupClose()
 			return false
 		}
@@ -134,7 +153,6 @@ const (
 )
 
 type ResetPopup struct {
-	Ref       *Ref
 	CommitId  string
 	ResetMode resetMode
 }
@@ -157,7 +175,7 @@ func (rp *ResetPopup) Update(mw *nucular.MasterWindow) bool {
 		w.Popup.LayoutRowDynamic(25, 2)
 		ok, cancel := okCancelKeys(w)
 		if w.Popup.ButtonText("OK", 0) || ok {
-			resetAction(rp.Ref, rp.CommitId, rp.ResetMode)
+			resetAction(&lw, rp.CommitId, rp.ResetMode)
 			w.PopupClose()
 			return false
 		}
@@ -195,7 +213,7 @@ func (rp *RemotesPopup) Update(mw *nucular.MasterWindow) bool {
 	rp.Idx, done = selectFromListWindow(mw.Wnd, title, text, rp.Idx, rp.Remotes)
 	if done {
 		if rp.Idx >= 0 {
-			remoteAction(rp.Action, rp.Remotes[rp.Idx])
+			remoteAction(&lw, rp.Action, rp.Remotes[rp.Idx])
 		}
 		return false
 	}
@@ -219,7 +237,7 @@ func (mp *MergePopup) Update(mw *nucular.MasterWindow) bool {
 	mp.Idx, done = selectFromListWindow(mw.Wnd, "Merge...", "Select a branch to merge:", mp.Idx, mp.refNames)
 	if done {
 		if mp.Idx >= 0 {
-			mergeAction(&mp.Refs[mp.Idx])
+			mergeAction(&lw, &mp.Refs[mp.Idx])
 		}
 		return false
 	}
@@ -280,7 +298,7 @@ func (dp *DiffPopup) Update(mw *nucular.MasterWindow) bool {
 			niceNameA, commitOrRefA := dp.idxToCommitOrRef(dp.Idx1)
 			niceNameB, commitOrRefB := dp.idxToCommitOrRef(dp.Idx2)
 
-			diffAction(niceNameA, commitOrRefA, niceNameB, commitOrRefB)
+			diffAction(&lw, niceNameA, commitOrRefA, niceNameB, commitOrRefB)
 
 			return false
 		}
@@ -304,9 +322,42 @@ func (cp *CheckoutPopup) Update(mw *nucular.MasterWindow) bool {
 	cp.Idx, done = selectFromListWindow(mw.Wnd, "Checkout...", "Pick a branch to checkout:", cp.Idx, cp.LocalRefsNames)
 	if done {
 		if cp.Idx >= 0 {
-			checkoutAction(cp.LocalRefs[cp.Idx].Name)
+			checkoutAction(&lw, &cp.LocalRefs[cp.Idx], "")
 		}
 		return false
 	}
 	return true
+}
+
+type ForcePushPopup struct {
+	Repository string
+	Message    string
+}
+
+func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow) bool {
+	w := mw.Wnd
+
+	if w.PopupBegin(nucular.PopupStatic, "Push error", popupFlags, nucular.Rect{20, 100, 230, 150}, true) {
+		defer w.PopupEnd()
+		nlines := 1
+		for i := range fp.Message {
+			if fp.Message[i] == '\n' {
+				nlines++
+			}
+		}
+		w.Popup.LayoutRowDynamic(25*nlines, 1)
+		w.Popup.Label(fp.Message, nucular.TextLeft)
+		if w.Popup.ButtonText(fmt.Sprintf("Force Push %s", fp.Repository), 0) {
+			pushAction(&lw, true, fp.Repository)
+			w.PopupClose()
+			return false
+		}
+		if w.Popup.ButtonText("Cancel", 0) {
+			w.PopupClose()
+			return false
+		}
+		return true
+	} else {
+		return false
+	}
 }

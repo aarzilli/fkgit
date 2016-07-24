@@ -436,11 +436,7 @@ func laneCommits(headcommit string, refs []Ref, commitchan <-chan Commit, out ch
 
 		// 		lc.Print()
 		// 		for i := range lanes {
-		// 			p := lanes[i]
-		// 			if len(p) > 6 {
-		// 				p = p[:6]
-		// 			}
-		// 			fmt.Printf("[%s] ", p)
+		// 			fmt.Printf("[%s] ", abbrev(lanes[i]))
 		// 		}
 		// 		fmt.Printf("\n")
 		lc.ShiftLeftFrom = -1
@@ -457,6 +453,7 @@ type LogWidget struct {
 
 	Headisref bool
 	Head      *Ref
+	status    *GitStatus
 
 	needsMore int
 	done      bool
@@ -467,12 +464,22 @@ type LogWidget struct {
 	repodir string
 	allrefs []Ref
 	mw      *nucular.MasterWindow
+
+	showOutput         bool
+	edCommit, edOutput nucular.TextEditor
 }
 
 func (lw *LogWidget) commitproc() {
 	defer func() {
 		lw.done = true
 	}()
+
+	var err error
+	lw.allrefs, err = allRefs(lw.repodir)
+	if err != nil {
+		popupWindows = append(popupWindows, &MessagePopup{"Error", fmt.Sprintf("Error fetching references: %v\n", err)})
+		return
+	}
 
 	fetcher := allCommits(lw.repodir)
 	commitchan := make(chan LanedCommit)
@@ -558,18 +565,26 @@ var graphColor = color.RGBA{213, 204, 255, 0xff}
 var refsColor = color.RGBA{255, 182, 97, 0xff}
 var refsHeadColor = color.RGBA{233, 255, 97, 0xff}
 
-func (lw *LogWidget) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (lw *LogWidget) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
+	w.MenubarBegin()
+	w.LayoutRowDynamic(25, 1)
+	if lw.status == nil {
+		lw.status = gitStatus(lw.repodir)
+	}
+	w.Label(lw.status.Summary(), nucular.TextLeft)
+	w.MenubarEnd()
+
 	style, scaling := mw.Style()
 
-	style.NormalWindow.Spacing.Y = 0
+	style.GroupWindow.Spacing.Y = 0
 
 	lnh := int(graphLineHeight * scaling)
 	thick := int(graphThick * scaling)
 
-	for _, e := range w.Input().Keyboard.Keys {
+	for _, e := range w.KeyboardOnHover(w.Bounds).Keys {
 		switch {
 		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
 			w.Scrollbar.Y = 0
@@ -616,7 +631,7 @@ func (lw *LogWidget) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	availableWidth := w.LayoutAvailableWidth()
 
-	spacing := style.NormalWindow.Spacing
+	spacing := style.GroupWindow.Spacing
 
 	calcCommitsz := func(graphsz int, includeAuthor, includeDate bool) int {
 		w := availableWidth - graphsz - spacing.X
@@ -657,7 +672,7 @@ func (lw *LogWidget) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 			// fill the space that would be occupied by commits below the fold
 			// with a big row
 			rem := len(lw.commits) - i
-			remh := rem*graphLineHeight + (rem-1)*style.NormalWindow.Spacing.Y
+			remh := rem*graphLineHeight + (rem-1)*style.GroupWindow.Spacing.Y
 			w.LayoutRowDynamic(remh, 1)
 			w.Label("More...", nucular.TextLeft)
 			break
@@ -688,7 +703,7 @@ func (lw *LogWidget) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 
 			refsz := nucular.FontWidth(style.Font, refstr) + 2*style.Text.Padding.X
 			origcommitsz := commitsz
-			commitsz -= refsz + style.NormalWindow.Spacing.X
+			commitsz -= refsz + style.GroupWindow.Spacing.X
 
 			if commitsz <= 0 {
 				refsz = origcommitsz
@@ -742,8 +757,47 @@ func (lw *LogWidget) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 			w.SelectableLabel(datestr, nucular.TextRight, &selected)
 		}
 
-		if selected {
+		if selected && lc.Id != lw.selectedId {
 			lw.selectedId = lc.Id
+			lw.showOutput = false
+			var buf bytes.Buffer
+
+			fmt.Fprintf(&buf, "commit %s ", abbrev(lc.Id))
+			if len(lc.Parent) > 0 {
+				if len(lc.Parent) == 1 {
+					fmt.Fprintf(&buf, "parent ")
+				} else {
+					fmt.Fprintf(&buf, "parents ")
+				}
+				// TODO: make these clickable
+				for i := range lc.Parent {
+					if i == 0 {
+						fmt.Fprintf(&buf, "%s", abbrev(lc.Parent[i]))
+					} else {
+						fmt.Fprintf(&buf, ", %s", abbrev(lc.Parent[i]))
+					}
+				}
+				buf.Write([]byte{'\n'})
+			}
+
+			ad := lc.AuthorDate.Local().Format("2006-01-02 15:04")
+			cd := lc.CommitterDate.Local().Format("2006-01-02 15:04")
+
+			if lc.Author != lc.Committer {
+				fmt.Fprintf(&buf, "author %s on %s\n", lc.Author, ad)
+				fmt.Fprintf(&buf, "committer %s on %s\n", lc.Committer, cd)
+			} else {
+				if ad != cd {
+					fmt.Fprintf(&buf, "author %s on %s (committed %s)\n", lc.Author, ad, cd)
+				} else {
+					fmt.Fprintf(&buf, "author %s on %s\n", lc.Author, ad)
+				}
+			}
+			buf.WriteByte('\n')
+			buf.Write([]byte(lc.Message))
+
+			lw.edCommit.Buffer = []rune(buf.String())
+			lw.edCommit.Cursor = 0
 		}
 
 		if out == nil {
@@ -751,7 +805,7 @@ func (lw *LogWidget) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 		}
 
 		if w.ContextualBegin(0, image.Point{250, 300}, rowbounds) {
-			lw.commitMenu(lc, w.Popup)
+			lw.commitMenu(lc, mw.Wnd.Popup)
 			w.ContextualEnd()
 		}
 
@@ -805,7 +859,7 @@ func (lw *LogWidget) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 		}
 
 		nextbounds := bounds
-		nextbounds.Y += nextbounds.H + int(float64(style.NormalWindow.Spacing.Y)*scaling)
+		nextbounds.Y += nextbounds.H + int(float64(style.GroupWindow.Spacing.Y)*scaling)
 
 		for _, dst := range lc.ParentLane {
 			if dst < 0 {
@@ -896,16 +950,16 @@ func (lw *LogWidget) commitMenu(lc LanedCommit, w *nucular.Window) {
 	}
 
 	if w.MenuItemText("View", nucular.TextLeft) {
-		viewAction(lc)
+		viewAction(lw, lc)
 	}
 
 	if !lc.IsHEAD {
 		if w.MenuItemText("Checkout", nucular.TextLeft) {
 			switch len(localRefs) {
 			case 0:
-				checkoutAction(lc.Id)
+				checkoutAction(lw, nil, lc.Id)
 			case 1:
-				checkoutAction(localRefs[0].Name)
+				checkoutAction(lw, &localRefs[0], "")
 			default:
 				localRefsNames := make([]string, len(localRefs))
 				for i := range localRefs {
@@ -922,20 +976,20 @@ func (lw *LogWidget) commitMenu(lc LanedCommit, w *nucular.Window) {
 
 	if !lc.IsHEAD && lw.Headisref {
 		if w.MenuItemText(fmt.Sprintf("Reset %s here", lw.Head.Nice()), nucular.TextLeft) {
-			popupWindows = append(popupWindows, &ResetPopup{lw.Head, lc.Id, resetHard})
+			popupWindows = append(popupWindows, &ResetPopup{lc.Id, resetHard})
 		}
 	}
 
 	if !lc.IsHEAD {
 		if w.MenuItemText("Cherrypick", nucular.TextLeft) {
-			cherrypickAction(lc.Id)
+			cherrypickAction(lw, lc.Id)
 		}
 	}
 
 	if len(remotes) > 0 {
 		if w.MenuItemText("Fetch", nucular.TextLeft) {
 			if len(remotes) == 1 {
-				fetchAction(remotes[0])
+				remoteAction(lw, "fetch", remotes[0])
 			} else {
 				popupWindows = append(popupWindows, &RemotesPopup{"fetch", remotes, -1})
 			}
@@ -945,7 +999,7 @@ func (lw *LogWidget) commitMenu(lc LanedCommit, w *nucular.Window) {
 	if lc.IsHEAD && lw.Headisref && len(remotes) > 0 {
 		if w.MenuItemText("Pull", nucular.TextLeft) {
 			if len(remotes) == 1 {
-				pullAction(remotes[0])
+				remoteAction(lw, "pull", remotes[0])
 			} else {
 				popupWindows = append(popupWindows, &RemotesPopup{"pull", remotes, -1})
 			}
@@ -955,7 +1009,7 @@ func (lw *LogWidget) commitMenu(lc LanedCommit, w *nucular.Window) {
 	if lc.IsHEAD && lw.Headisref && len(remoteRefs) > 0 {
 		if w.MenuItemText("Push", nucular.TextLeft) {
 			if len(remotes) == 1 {
-				pushAction(remotes[0])
+				pushAction(lw, false, remotes[0])
 			} else {
 				popupWindows = append(popupWindows, &RemotesPopup{"push", remotes, -1})
 			}
@@ -970,11 +1024,53 @@ func (lw *LogWidget) commitMenu(lc LanedCommit, w *nucular.Window) {
 
 	if lw.Headisref {
 		if w.MenuItemText(fmt.Sprintf("Rebase %s here", lw.Head.Nice()), nucular.TextLeft) {
-			rebaseAction(lc.Id)
+			if len(localRefs) > 0 {
+				rebaseAction(lw, localRefs[0].Nice())
+			} else {
+				rebaseAction(lw, lc.Id)
+			}
 		}
 	}
 
 	if w.MenuItemText("Diff", nucular.TextLeft) {
 		popupWindows = append(popupWindows, &DiffPopup{lw.allrefs, bookmarksAsSlice(), lc, -1, -1, nil})
 	}
+}
+
+func (lw *LogWidget) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+
+	style, _ := mw.Style()
+
+	sw.LayoutAvailableHeight()
+	sw.LayoutRowStatic(25, 100, 2)
+	showDetails := !lw.showOutput
+	sw.SelectableLabel("Commit Details", nucular.TextLeft, &showDetails)
+	lw.showOutput = !showDetails
+	sw.SelectableLabel("Output", nucular.TextLeft, &lw.showOutput)
+
+	sw.LayoutRowDynamicScaled(sw.LayoutAvailableHeight()-style.NormalWindow.Spacing.Y, 1)
+	if lw.showOutput {
+		lw.edOutput.Edit(sw, -1, nucular.FilterDefault)
+	} else {
+		lw.edCommit.Edit(sw, -1, nucular.FilterDefault)
+	}
+}
+
+func (lw *LogWidget) reload() {
+	lw.commits = lw.commits[:0]
+	lw.maxOccupied = 0
+
+	lw.selectedId = ""
+
+	lw.Headisref = false
+	lw.Head = nil
+
+	lw.needsMore = -1
+	lw.done = false
+	lw.started = false
+	lw.status = nil
+
+	lw.mw.Update()
 }
