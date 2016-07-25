@@ -20,11 +20,13 @@ func (mp *MessagePopup) Update(mw *nucular.MasterWindow) bool {
 	style, _ := mw.Style()
 	lnh := style.Font.Size
 
-	if w.PopupBegin(nucular.PopupStatic, mp.Title, popupFlags, nucular.Rect{20, 100, 230, 150}, true) {
+	if w.PopupBegin(nucular.PopupStatic, mp.Title, popupFlags, nucular.Rect{20, 100, 230, 500}, true) {
 		defer w.PopupEnd()
 		w.Popup.LayoutRowDynamicScaled(lnh, 1)
-		showLines(w, mp.Message)
-		if w.Popup.ButtonText("OK", 0) {
+		showLines(w.Popup, mp.Message)
+		ok, cancel := okCancelKeys(w.Popup)
+		w.Popup.LayoutRowDynamic(25, 1)
+		if w.Popup.ButtonText("OK", 0) || ok || cancel {
 			w.PopupClose()
 			return false
 		}
@@ -66,6 +68,7 @@ func selectFromList(w *nucular.Window, name string, idx int, list []string) int 
 
 func okCancelKeys(w *nucular.Window) (ok, cancel bool) {
 	for _, e := range w.Input().Keyboard.Keys {
+		fmt.Printf("key: %v\n", e)
 		switch {
 		case (e.Modifiers == 0) && (e.Code == key.CodeReturnEnter):
 			return true, false
@@ -87,7 +90,7 @@ func selectFromListWindow(w *nucular.Window, title, text string, idx int, list [
 
 		w.Popup.LayoutRowDynamic(25, 2)
 
-		ok, cancel := okCancelKeys(w)
+		ok, cancel := okCancelKeys(w.Popup)
 
 		if w.Popup.ButtonText("OK", 0) || ok {
 			w.PopupClose()
@@ -127,7 +130,7 @@ func (np *NewBranchPopup) Update(mw *nucular.MasterWindow) bool {
 		w.Popup.LayoutRowDynamic(25, 2)
 		var ok, cancel bool
 		if !np.ed.Active {
-			ok, cancel = okCancelKeys(w)
+			ok, cancel = okCancelKeys(w.Popup)
 		}
 		if w.Popup.ButtonText("OK", 0) || (active&nucular.EditCommitted != 0) || ok {
 			newbranchAction(&lw, string(np.ed.Buffer), np.CommitId)
@@ -173,7 +176,7 @@ func (rp *ResetPopup) Update(mw *nucular.MasterWindow) bool {
 			rp.ResetMode = resetSoft
 		}
 		w.Popup.LayoutRowDynamic(25, 2)
-		ok, cancel := okCancelKeys(w)
+		ok, cancel := okCancelKeys(w.Popup)
 		if w.Popup.ButtonText("OK", 0) || ok {
 			resetAction(&lw, rp.CommitId, rp.ResetMode)
 			w.PopupClose()
@@ -290,7 +293,7 @@ func (dp *DiffPopup) Update(mw *nucular.MasterWindow) bool {
 
 		w.Popup.LayoutRowDynamic(25, 2)
 
-		ok, cancel := okCancelKeys(w)
+		ok, cancel := okCancelKeys(w.Popup)
 
 		if w.Popup.ButtonText("OK", 0) || ok {
 			w.PopupClose()

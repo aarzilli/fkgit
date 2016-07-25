@@ -10,14 +10,6 @@ import (
 
 const wordDiffDebug = false
 
-type ViewWindow struct {
-	repodir string
-	lc      LanedCommit
-
-	tooLong bool
-	diff    Diff
-}
-
 type Diff []FileDiff
 
 type FileDiff struct {

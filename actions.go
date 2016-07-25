@@ -88,7 +88,7 @@ func execBackground(lw *LogWidget, cmdname string, args ...string) {
 		lw.mu.Lock()
 		defer lw.mu.Unlock()
 
-		out := "$" + cmdname + " " + strings.Join(args, " ") + "\n" + string(bs)
+		out := "$ " + cmdname + " " + strings.Join(args, " ") + "\n" + string(bs)
 
 		lw.edOutput.Buffer = []rune(out)
 		lw.edOutput.Cursor = 0

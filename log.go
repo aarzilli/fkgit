@@ -805,6 +805,7 @@ func (lw *LogWidget) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		}
 
 		if w.ContextualBegin(0, image.Point{250, 300}, rowbounds) {
+			lw.selectedId = lc.Id
 			lw.commitMenu(lc, mw.Wnd.Popup)
 			w.ContextualEnd()
 		}

@@ -9,7 +9,17 @@ import (
 	"github.com/aarzilli/nucular"
 
 	"golang.org/x/image/font"
+	"golang.org/x/mobile/event/key"
 )
+
+type ViewWindow struct {
+	repodir string
+	lc      LanedCommit
+
+	tooLong bool
+	diff    Diff
+	width   int
+}
 
 func NewViewWindow(repodir string, lc LanedCommit) {
 	vw := &ViewWindow{}
@@ -76,6 +86,38 @@ func (vw *ViewWindow) viewUpdate(mw *nucular.MasterWindow) {
 	showCommit(style.Font.Size, w, vw.lc)
 	w.Label(" ", nucular.TextLeft)
 
+	scrollend := false
+
+	for _, e := range w.KeyboardOnHover(w.Bounds).Keys {
+		switch {
+		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
+			w.Scrollbar.X = 0
+			w.Scrollbar.Y = 0
+		case (e.Modifiers == 0) && (e.Code == key.CodeEnd):
+			w.Scrollbar.X = 0
+			scrollend = true
+		case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
+			w.Scrollbar.Y -= style.Font.Size
+		case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
+			w.Scrollbar.Y += style.Font.Size
+		case (e.Modifiers == 0) && (e.Code == key.CodeLeftArrow):
+			w.Scrollbar.X -= w.Bounds.W / 10
+		case (e.Modifiers == 0) && (e.Code == key.CodeRightArrow):
+			w.Scrollbar.X += w.Bounds.W / 10
+		case (e.Modifiers == 0) && (e.Code == key.CodePageUp):
+			w.Scrollbar.Y -= w.Bounds.H / 2
+		case (e.Modifiers == 0) && (e.Code == key.CodePageDown):
+			w.Scrollbar.Y += w.Bounds.H / 2
+		}
+
+		if w.Scrollbar.Y < 0 {
+			w.Scrollbar.Y = 0
+		}
+		if w.Scrollbar.X < 0 {
+			w.Scrollbar.X = 0
+		}
+	}
+
 	w.LayoutRowDynamic(25, 1)
 	w.Label("Changed Files:", nucular.TextLeft)
 
@@ -90,11 +132,13 @@ func (vw *ViewWindow) viewUpdate(mw *nucular.MasterWindow) {
 	w.LayoutRowDynamic(15, 1)
 	w.Spacing(1)
 
+	var scrollto int
+
 	d := font.Drawer{Face: style.Font.Face}
 
 	for filediffIdx, filediff := range vw.diff {
 		if filediffIdx == clickedfile {
-			//TODO: scroll here
+			scrollto = w.At().Y
 		}
 		w.LayoutRowDynamic(25, 1)
 		bounds, out := w.Custom(nucular.WidgetStateInactive)
@@ -110,7 +154,11 @@ func (vw *ViewWindow) viewUpdate(mw *nucular.MasterWindow) {
 		originalSpacing := style.NormalWindow.Spacing.Y
 		style.NormalWindow.Spacing.Y = 0
 
-		w.LayoutRowDynamicScaled(style.Font.Size, 1)
+		if vw.width > 0 {
+			w.LayoutRowStaticScaled(style.Font.Size, vw.width, 1)
+		} else {
+			w.LayoutRowDynamicScaled(style.Font.Size, 1)
+		}
 
 		for _, hdr := range filediff.Headers[1:] {
 			w.LabelColored(hdr.Text, nucular.TextLeft, hunkhdrColor)
@@ -143,12 +191,24 @@ func (vw *ViewWindow) viewUpdate(mw *nucular.MasterWindow) {
 
 				out.DrawText(dot, chunk.Text, style.Font, color.RGBA{0x00, 0x00, 0x00, 0xff}, style.Text.Color)
 				dot.X += dot.W
+
+				if dot.X > vw.width {
+					vw.width = dot.X
+				}
 			}
 		}
 
 		style.NormalWindow.Spacing.Y = originalSpacing
 
 		w.Spacing(1)
+	}
+
+	if scrollend {
+		scrollto = w.At().Y
+	}
+
+	if scrollend || clickedfile >= 0 {
+		w.Scrollbar.Y = scrollto
 	}
 }
 
