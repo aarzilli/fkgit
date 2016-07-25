@@ -445,7 +445,7 @@ func laneCommits(headcommit string, refs []Ref, commitchan <-chan Commit, out ch
 	}
 }
 
-type LogWidget struct {
+type LogWindow struct {
 	mu sync.Mutex
 
 	commits     []LanedCommit
@@ -469,9 +469,10 @@ type LogWidget struct {
 	edCommit, edOutput nucular.TextEditor
 }
 
-func (lw *LogWidget) commitproc() {
+func (lw *LogWindow) commitproc() {
 	defer func() {
 		lw.done = true
+		lw.mw.Update()
 	}()
 
 	var err error
@@ -565,7 +566,7 @@ var graphColor = color.RGBA{213, 204, 255, 0xff}
 var refsColor = color.RGBA{255, 182, 97, 0xff}
 var refsHeadColor = color.RGBA{233, 255, 97, 0xff}
 
-func (lw *LogWidget) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
+func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
@@ -921,7 +922,7 @@ func (lw *LogWidget) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	}
 }
 
-func (lw *LogWidget) commitMenu(lc LanedCommit, w *nucular.Window) {
+func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 	localRefs := []Ref{}
 	remoteRefs := []Ref{}
 	for _, ref := range lc.Refs {
@@ -1038,7 +1039,7 @@ func (lw *LogWidget) commitMenu(lc LanedCommit, w *nucular.Window) {
 	}
 }
 
-func (lw *LogWidget) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
+func (lw *LogWindow) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
@@ -1059,7 +1060,30 @@ func (lw *LogWidget) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
 	}
 }
 
-func (lw *LogWidget) reload() {
+func (lw *LogWindow) Title() string {
+	return "Graph"
+}
+
+func (lw *LogWindow) Update(mw *nucular.MasterWindow) {
+	w := mw.Wnd
+
+	style, _ := mw.Style()
+
+	h := w.LayoutAvailableHeight() - style.NormalWindow.Spacing.Y
+
+	w.LayoutRowDynamicScaled(int(float64(h)*0.7), 1)
+	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder); sw != nil {
+		lw.UpdateGraph(mw, sw)
+		sw.GroupEnd()
+	}
+	w.LayoutRowDynamicScaled(int(float64(h)*0.3), 1)
+	if sw := w.GroupBegin("log-group-bot", nucular.WindowBorder|nucular.WindowNoScrollbar); sw != nil {
+		lw.UpdateExtra(mw, sw)
+		sw.GroupEnd()
+	}
+}
+
+func (lw *LogWindow) reload() {
 	lw.commits = lw.commits[:0]
 	lw.maxOccupied = 0
 

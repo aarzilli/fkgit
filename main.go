@@ -14,6 +14,7 @@ import (
 	"github.com/aarzilli/nucular"
 
 	"golang.org/x/mobile/event/key"
+	"golang.org/x/mobile/event/mouse"
 )
 
 func must(err error) {
@@ -272,8 +273,35 @@ type PopupWindow interface {
 	Update(mw *nucular.MasterWindow) bool
 }
 
-var lw LogWidget
+var lw LogWindow
+var idxmw IndexManagerWindow
 var popupWindows []PopupWindow
+
+type Tab interface {
+	Title() string
+	Update(mw *nucular.MasterWindow)
+}
+
+var tabs []Tab
+var currentTab int
+
+func openTab(tab Tab) {
+	tabs = append(tabs, tab)
+	currentTab = len(tabs) - 1
+}
+
+func closeTab(tab Tab) {
+	for i := range tabs {
+		if tab == tabs[i] {
+			if currentTab == i && currentTab > 0 {
+				currentTab--
+			}
+
+			copy(tabs[i:], tabs[i+1:])
+			tabs = tabs[:len(tabs)-1]
+		}
+	}
+}
 
 func guiUpdate(mw *nucular.MasterWindow) {
 	w := mw.Wnd
@@ -303,20 +331,27 @@ func guiUpdate(mw *nucular.MasterWindow) {
 		}
 	}
 
-	style, _ := mw.Style()
-
-	h := w.LayoutAvailableHeight() - style.NormalWindow.Spacing.Y
-
-	w.LayoutRowDynamicScaled(int(float64(h)*0.7), 1)
-	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder); sw != nil {
-		lw.UpdateGraph(mw, sw)
-		sw.GroupEnd()
+	closetab := -1
+	w.LayoutRowDynamic(25, len(tabs))
+	for i := range tabs {
+		selected := i == currentTab
+		bounds := w.WidgetBounds()
+		if nucular.InputMouseClicked(mw.Wnd.Input(), mouse.ButtonMiddle, bounds) {
+			if i >= 2 {
+				closetab = i
+			}
+		}
+		w.SelectableLabel(tabs[i].Title(), nucular.TextCentered, &selected)
+		if selected {
+			currentTab = i
+		}
 	}
-	w.LayoutRowDynamicScaled(int(float64(h)*0.3), 1)
-	if sw := w.GroupBegin("log-group-bot", nucular.WindowBorder|nucular.WindowNoScrollbar); sw != nil {
-		lw.UpdateExtra(mw, sw)
-		sw.GroupEnd()
+
+	if closetab >= 0 {
+		closeTab(tabs[closetab])
 	}
+
+	tabs[currentTab].Update(mw)
 }
 
 func main() {
@@ -330,10 +365,23 @@ func main() {
 	style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 
 	lw.repodir = repodir
-	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse
-	lw.edCommit.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse
+	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
+	lw.edCommit.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
 	lw.needsMore = -1
 	lw.mw = wnd
+
+	openTab(&lw)
+
+	idxmw.repodir = repodir
+	idxmw.selected = -1
+	idxmw.mw = wnd
+	idxmw.fmtwidth = 70
+	idxmw.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse
+	idxmw.reload()
+
+	openTab(&idxmw)
+
+	currentTab = 1
 
 	wnd.Main()
 }

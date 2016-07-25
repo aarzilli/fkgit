@@ -7,15 +7,15 @@ import (
 	"strings"
 )
 
-func viewAction(lw *LogWidget, lc LanedCommit) {
+func viewAction(lw *LogWindow, lc LanedCommit) {
 	NewViewWindow(lw.repodir, lc)
 }
 
-func newbranchAction(lw *LogWidget, branchname, commitId string) {
+func newbranchAction(lw *LogWindow, branchname, commitId string) {
 	execBackground(lw, "git", "checkout", "-b", branchname, commitId)
 }
 
-func checkoutAction(lw *LogWidget, ref *Ref, commitId string) {
+func checkoutAction(lw *LogWindow, ref *Ref, commitId string) {
 	if ref != nil {
 		execBackground(lw, "git", "checkout", ref.Nice())
 	} else {
@@ -23,11 +23,11 @@ func checkoutAction(lw *LogWidget, ref *Ref, commitId string) {
 	}
 }
 
-func cherrypickAction(lw *LogWidget, commitId string) {
+func cherrypickAction(lw *LogWindow, commitId string) {
 	execBackground(lw, "git", "cherry-pick", commitId)
 }
 
-func pushAction(lw *LogWidget, force bool, repository string) {
+func pushAction(lw *LogWindow, force bool, repository string) {
 	if force {
 		execBackground(lw, "git", "push", "--force", repository)
 	} else {
@@ -42,7 +42,7 @@ func pushAction(lw *LogWidget, force bool, repository string) {
 	}
 }
 
-func rebaseAction(lw *LogWidget, commitIdOrRef string) {
+func rebaseAction(lw *LogWindow, commitIdOrRef string) {
 	if os.Getenv("EDITOR") != "" {
 		execBackground(lw, "git", "rebase", "-i", commitIdOrRef)
 	} else {
@@ -50,7 +50,7 @@ func rebaseAction(lw *LogWidget, commitIdOrRef string) {
 	}
 }
 
-func resetAction(lw *LogWidget, commitId string, resetMode resetMode) {
+func resetAction(lw *LogWindow, commitId string, resetMode resetMode) {
 	flag := ""
 	switch resetMode {
 	case resetHard:
@@ -63,7 +63,7 @@ func resetAction(lw *LogWidget, commitId string, resetMode resetMode) {
 	execBackground(lw, "git", "reset", flag, commitId)
 }
 
-func remoteAction(lw *LogWidget, action, remote string) {
+func remoteAction(lw *LogWindow, action, remote string) {
 	if action == "push" {
 		pushAction(lw, false, remote)
 		return
@@ -71,15 +71,15 @@ func remoteAction(lw *LogWidget, action, remote string) {
 	execBackground(lw, "git", action, remote)
 }
 
-func mergeAction(lw *LogWidget, ref *Ref) {
+func mergeAction(lw *LogWindow, ref *Ref) {
 	execBackground(lw, "git", "merge", ref.Nice())
 }
 
-func diffAction(lw *LogWidget, niceNameA, commitOrRefA, niceNameB, commitOrRefB string) {
+func diffAction(lw *LogWindow, niceNameA, commitOrRefA, niceNameB, commitOrRefB string) {
 	fmt.Printf("diff\n")
 }
 
-func execBackground(lw *LogWidget, cmdname string, args ...string) {
+func execBackground(lw *LogWindow, cmdname string, args ...string) {
 	go func() {
 		cmd := exec.Command(cmdname, args...)
 		cmd.Dir = lw.repodir
