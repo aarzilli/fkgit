@@ -936,8 +936,10 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 	}
 
 	remotesMap := map[string]struct{}{}
-	for _, ref := range remoteRefs {
-		remotesMap[ref.Remote()] = struct{}{}
+	for _, ref := range lw.allrefs {
+		if ref.Kind == RemoteRef {
+			remotesMap[ref.Remote()] = struct{}{}
+		}
 	}
 
 	remotes := make([]string, 0, len(remotesMap))
@@ -989,7 +991,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 		}
 	}
 
-	if len(remotes) > 0 {
+	if len(remoteRefs) > 0 {
 		if w.MenuItemText("Fetch", nucular.TextLeft) {
 			if len(remotes) == 1 {
 				remoteAction(lw, "fetch", remotes[0])
@@ -999,7 +1001,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 		}
 	}
 
-	if lc.IsHEAD && lw.Headisref && len(remotes) > 0 {
+	if lc.IsHEAD && lw.Headisref && len(remoteRefs) > 0 {
 		if w.MenuItemText("Pull", nucular.TextLeft) {
 			if len(remotes) == 1 {
 				remoteAction(lw, "pull", remotes[0])
@@ -1009,7 +1011,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 		}
 	}
 
-	if lc.IsHEAD && lw.Headisref && len(remoteRefs) > 0 {
+	if lc.IsHEAD && lw.Headisref && len(remotes) > 0 {
 		if w.MenuItemText("Push", nucular.TextLeft) {
 			if len(remotes) == 1 {
 				pushAction(lw, false, remotes[0])

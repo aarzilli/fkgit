@@ -33,7 +33,7 @@ func pushAction(lw *LogWindow, force bool, repository string) {
 	} else {
 		go func() {
 			out, err := execCommand(lw.repodir, "git", "push", repository)
-			if err == nil {
+			if err != nil {
 				lw.mu.Lock()
 				popupWindows = append(popupWindows, &ForcePushPopup{repository, out})
 				lw.mu.Unlock()

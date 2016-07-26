@@ -20,7 +20,7 @@ func (mp *MessagePopup) Update(mw *nucular.MasterWindow) bool {
 	style, _ := mw.Style()
 	lnh := style.Font.Size
 
-	if w.PopupBegin(nucular.PopupStatic, mp.Title, popupFlags, nucular.Rect{20, 100, 230, 500}, true) {
+	if w.PopupBegin(nucular.PopupStatic, mp.Title, popupFlags, nucular.Rect{20, 100, 640, 500}, true) {
 		defer w.PopupEnd()
 		w.Popup.LayoutRowDynamicScaled(lnh, 1)
 		showLines(w.Popup, mp.Message)
@@ -80,7 +80,7 @@ func okCancelKeys(w *nucular.Window) (ok, cancel bool) {
 }
 
 func selectFromListWindow(w *nucular.Window, title, text string, idx int, list []string) (int, bool) {
-	if w.PopupBegin(nucular.PopupStatic, title, popupFlags, nucular.Rect{20, 100, 230, 400}, true) {
+	if w.PopupBegin(nucular.PopupStatic, title, popupFlags, nucular.Rect{20, 100, 640, 400}, true) {
 		defer w.PopupEnd()
 		w.Popup.LayoutRowDynamic(25, 1)
 		w.Popup.Label(text, nucular.TextLeft)
@@ -122,7 +122,7 @@ func (np *NewBranchPopup) Update(mw *nucular.MasterWindow) bool {
 		np.ed.Active = true
 		np.first = false
 	}
-	open := w.PopupBegin(nucular.PopupStatic, "New branch...", popupFlags, nucular.Rect{20, 100, 230, 400}, true)
+	open := w.PopupBegin(nucular.PopupStatic, "New branch...", popupFlags, nucular.Rect{20, 100, 640, 400}, true)
 	if open {
 		defer w.PopupEnd()
 		w.Popup.LayoutRowDynamic(25, 1)
@@ -162,7 +162,7 @@ type ResetPopup struct {
 
 func (rp *ResetPopup) Update(mw *nucular.MasterWindow) bool {
 	w := mw.Wnd
-	open := w.PopupBegin(nucular.PopupStatic, "Reset...", popupFlags, nucular.Rect{20, 100, 230, 400}, true)
+	open := w.PopupBegin(nucular.PopupStatic, "Reset...", popupFlags, nucular.Rect{20, 100, 640, 400}, true)
 	if open {
 		defer w.PopupEnd()
 		w.Popup.LayoutRowDynamic(25, 1)
@@ -339,8 +339,10 @@ type ForcePushPopup struct {
 
 func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow) bool {
 	w := mw.Wnd
+	style, _ := mw.Style()
+	lnh := style.Font.Size
 
-	if w.PopupBegin(nucular.PopupStatic, "Push error", popupFlags, nucular.Rect{20, 100, 230, 150}, true) {
+	if w.PopupBegin(nucular.PopupStatic, "Push error", popupFlags, nucular.Rect{20, 100, 640, 500}, true) {
 		defer w.PopupEnd()
 		nlines := 1
 		for i := range fp.Message {
@@ -348,14 +350,16 @@ func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow) bool {
 				nlines++
 			}
 		}
-		w.Popup.LayoutRowDynamic(25*nlines, 1)
-		w.Popup.Label(fp.Message, nucular.TextLeft)
+		w.Popup.LayoutRowDynamicScaled(lnh, 1)
+		showLines(w.Popup, fp.Message)
+		_, cancel := okCancelKeys(w.Popup)
+		w.Popup.LayoutRowDynamic(25, 2)
 		if w.Popup.ButtonText(fmt.Sprintf("Force Push %s", fp.Repository), 0) {
 			pushAction(&lw, true, fp.Repository)
 			w.PopupClose()
 			return false
 		}
-		if w.Popup.ButtonText("Cancel", 0) {
+		if w.Popup.ButtonText("Cancel", 0) || cancel {
 			w.PopupClose()
 			return false
 		}
