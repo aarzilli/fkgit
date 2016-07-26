@@ -1097,6 +1097,4 @@ func (lw *LogWindow) reload() {
 	lw.done = false
 	lw.started = false
 	lw.status = nil
-
-	lw.mw.Update()
 }
