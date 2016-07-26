@@ -6,8 +6,6 @@ import (
 	"os/exec"
 
 	"github.com/aarzilli/nucular"
-
-	"golang.org/x/mobile/event/key"
 )
 
 type ViewWindow struct {
@@ -71,63 +69,7 @@ func (vw *ViewWindow) updateView(mw *nucular.MasterWindow, w *nucular.Window) {
 	showCommit(style.Font.Size, w, vw.lc)
 	w.Label(" ", nucular.TextLeft)
 
-	scrollend := false
-
-	for _, e := range w.KeyboardOnHover(w.Bounds).Keys {
-		switch {
-		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
-			w.Scrollbar.X = 0
-			w.Scrollbar.Y = 0
-		case (e.Modifiers == 0) && (e.Code == key.CodeEnd):
-			w.Scrollbar.X = 0
-			scrollend = true
-		case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
-			w.Scrollbar.Y -= style.Font.Size
-		case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
-			w.Scrollbar.Y += style.Font.Size
-		case (e.Modifiers == 0) && (e.Code == key.CodeLeftArrow):
-			w.Scrollbar.X -= w.Bounds.W / 10
-		case (e.Modifiers == 0) && (e.Code == key.CodeRightArrow):
-			w.Scrollbar.X += w.Bounds.W / 10
-		case (e.Modifiers == 0) && (e.Code == key.CodePageUp):
-			w.Scrollbar.Y -= w.Bounds.H / 2
-		case (e.Modifiers == 0) && (e.Code == key.CodePageDown):
-			w.Scrollbar.Y += w.Bounds.H / 2
-		case (e.Modifiers == 0) && ((e.Code == key.CodeEscape) || (e.Code == key.CodeQ)):
-			closeTab(vw)
-		}
-
-		if w.Scrollbar.Y < 0 {
-			w.Scrollbar.Y = 0
-		}
-		if w.Scrollbar.X < 0 {
-			w.Scrollbar.X = 0
-		}
-	}
-
-	w.LayoutRowDynamic(25, 1)
-	w.Label("Changed Files:", nucular.TextLeft)
-
-	clickedfile := -1
-
-	for i := range vw.diff {
-		if w.ButtonText(vw.diff[i].Filename, 0) {
-			clickedfile = i
-		}
-	}
-
-	w.LayoutRowDynamic(15, 1)
-	w.Spacing(1)
-
-	scrollto := showDiff(mw, w, vw.diff, clickedfile, &vw.width)
-
-	if scrollend {
-		scrollto = w.At().Y
-	}
-
-	if scrollend || clickedfile >= 0 {
-		w.Scrollbar.Y = scrollto
-	}
+	showDiff(mw, w, vw.diff, &vw.width)
 }
 
 func showCommit(lnh int, w *nucular.Window, lc LanedCommit) {

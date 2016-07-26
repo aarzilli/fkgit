@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/aarzilli/nucular"
+
+	"golang.org/x/mobile/event/key"
 )
 
 type IndexManagerWindow struct {
@@ -37,6 +39,8 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 	idxmw.mu.Lock()
 	defer idxmw.mu.Unlock()
 
+	var diffbounds nucular.Rect
+
 	w := mw.Wnd
 
 	if idxmw.updating {
@@ -58,13 +62,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 			checked := line.Index != " " && line.WorkDir == " "
 
 			if sw.CheckboxText("", &checked) {
-				if checked {
-					execCommand(idxmw.repodir, "git", "add", line.Path)
-				} else {
-					execCommand(idxmw.repodir, "git", "reset", "-q", "--", line.Path)
-				}
-				idxmw.updating = true
-				go idxmw.reload()
+				idxmw.addRemoveIndex(checked, i)
 			}
 
 			selected := idxmw.selected == i
@@ -86,6 +84,10 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 			idxmw.amend = true
 		}
 		if idxmw.amend != oldamend {
+			if !idxmw.amend {
+				idxmw.ed.Buffer = []rune{}
+				idxmw.ed.Cursor = 0
+			}
 			idxmw.loadCommitMsg()
 		}
 
@@ -95,7 +97,9 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 
 		sw.LayoutRowFixed(25, 100, 50, 50, 100)
 		sw.PropertyInt("fmt:", 10, &idxmw.fmtwidth, 150, 1, 1)
-		sw.ButtonText("fmt", 0)
+		if sw.ButtonText("fmt", 0) {
+			idxmw.formatmsg()
+		}
 		sw.Spacing(1)
 		if sw.ButtonText("Commit", 0) {
 			var cmd *exec.Cmd
@@ -119,18 +123,59 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 				idxmw.ed.Cursor = 0
 			}
 			idxmw.updating = true
+			lw.mu.Lock()
+			go lw.reload()
+			lw.mu.Unlock()
 			go idxmw.reload()
 		}
 
 		sw.LayoutRowDynamicScaled(sw.LayoutAvailableHeight(), 1)
+		diffbounds = sw.WidgetBounds()
 		if diffgroup := sw.GroupBegin("index-diff", nucular.WindowBorder); diffgroup != nil {
 			if idxmw.selected >= 0 {
-				showDiff(mw, diffgroup, idxmw.diffs[idxmw.selected], -1, &idxmw.diffwidth)
+				showDiff(mw, diffgroup, idxmw.diffs[idxmw.selected], &idxmw.diffwidth)
 			}
 			diffgroup.GroupEnd()
 		}
 		sw.GroupEnd()
 	}
+
+	in := w.Input()
+	if !idxmw.ed.Active && !nucular.InputIsMouseHoveringRect(in, diffbounds) {
+		for _, e := range in.Keyboard.Keys {
+			switch {
+			case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
+				idxmw.selected--
+				if idxmw.selected < 0 {
+					idxmw.selected = -1
+				}
+			case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
+				idxmw.selected++
+				if idxmw.selected >= len(idxmw.status.Lines) {
+					idxmw.selected = 0
+				}
+			}
+		}
+		if in.Keyboard.Text != nil && in.Keyboard.Text.String() == " " {
+			if idxmw.selected >= 0 {
+				idxmw.addRemoveIndex(true, idxmw.selected)
+			}
+			idxmw.selected++
+			if idxmw.selected >= len(idxmw.status.Lines) {
+				idxmw.selected = 0
+			}
+		}
+	}
+}
+
+func (idxmw *IndexManagerWindow) addRemoveIndex(add bool, i int) {
+	if add {
+		execCommand(idxmw.repodir, "git", "add", idxmw.status.Lines[i].Path)
+	} else {
+		execCommand(idxmw.repodir, "git", "reset", "-q", "--", idxmw.status.Lines[i].Path)
+	}
+	idxmw.updating = true
+	go idxmw.reload()
 }
 
 func (idxmw *IndexManagerWindow) reload() {
@@ -144,7 +189,7 @@ func (idxmw *IndexManagerWindow) reload() {
 		idxmw.mu.Unlock()
 		idxmw.mw.Update()
 	}()
-	
+
 	oldselected := ""
 	if idxmw.status != nil {
 		oldselected = idxmw.status.Lines[idxmw.selected].Path
@@ -167,7 +212,7 @@ func (idxmw *IndexManagerWindow) reload() {
 		}
 		must(err)
 		idxmw.diffs[i] = parseDiff([]byte(bs))
-		
+
 		if line.Path == oldselected {
 			idxmw.selected = i
 		}
@@ -196,4 +241,52 @@ func (idxmw *IndexManagerWindow) loadCommitMsg() {
 			}
 		}
 	}
+}
+
+func (idxmw *IndexManagerWindow) formatmsg() {
+	fmtstart := idxmw.ed.SelectStart
+	fmtend := idxmw.ed.SelectEnd
+
+	if fmtstart > fmtend {
+		fmtstart, fmtend = fmtend, fmtstart
+	}
+
+	if fmtstart == fmtend {
+		fmtstart = 0
+		fmtend = len(idxmw.ed.Buffer)
+	}
+
+	msg := idxmw.ed.Buffer[fmtstart:fmtend]
+	out := make([]rune, 0, len(msg)+10)
+
+	start := 0
+	lastspace := 0
+
+	for i := range msg {
+		switch msg[i] {
+		case '\n':
+			out = append(out, msg[start:i+1]...)
+			start = i + 1
+			lastspace = start
+
+		case ' ':
+			lastspace = i
+
+		default:
+			if lastspace != start && (i-start) > idxmw.fmtwidth {
+				out = append(out, msg[start:lastspace+1]...)
+				out = append(out, '\n')
+				start = lastspace + 1
+				lastspace = start
+			}
+		}
+	}
+
+	out = append(out, msg[start:]...)
+
+	end := make([]rune, len(idxmw.ed.Buffer[fmtend:]))
+	copy(end, idxmw.ed.Buffer[fmtend:])
+	idxmw.ed.Buffer = idxmw.ed.Buffer[:fmtstart]
+	idxmw.ed.Buffer = append(idxmw.ed.Buffer, out...)
+	idxmw.ed.Buffer = append(idxmw.ed.Buffer, end...)
 }

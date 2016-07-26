@@ -11,6 +11,7 @@ import (
 	"github.com/aarzilli/nucular"
 
 	"golang.org/x/image/font"
+	"golang.org/x/mobile/event/key"
 )
 
 const wordDiffDebug = false
@@ -562,80 +563,95 @@ func wordSplit(in string) []string {
 	return r
 }
 
-func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, clickedfile int, width *int) (scrollto int) {
+func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int) {
 	style, scaling := mw.Style()
 
-	hdrrounding := uint16(6 * scaling)
 	rounding := uint16(4 * scaling)
 
 	d := font.Drawer{Face: style.Font.Face}
 
-	for filediffIdx, filediff := range diff {
-		if filediffIdx == clickedfile {
-			scrollto = w.At().Y - int(25*scaling)
-		}
-		w.LayoutRowDynamic(25, 1)
-		bounds, out := w.Custom(nucular.WidgetStateInactive)
-		if out != nil {
-			out.FillRect(bounds, hdrrounding, hunkhdrColor)
-			pos := bounds
-			pos.Y += pos.H/2 - style.Font.Size/2
-			width := d.MeasureString(filediff.Filename).Ceil()
-			pos.X += pos.W/2 - width/2
-			out.DrawText(pos, filediff.Filename, style.Font, color.RGBA{0x00, 0x00, 0x00, 0xff}, style.NormalWindow.Background)
-		}
+	for _, filediff := range diff {
+		if w.TreePush(nucular.TreeTab, filediff.Filename, len(diff) == 1) {
+			originalSpacing := style.NormalWindow.Spacing.Y
+			style.NormalWindow.Spacing.Y = 0
 
-		originalSpacing := style.NormalWindow.Spacing.Y
-		style.NormalWindow.Spacing.Y = 0
-
-		if *width > 0 {
-			w.LayoutRowStaticScaled(style.Font.Size, *width, 1)
-		} else {
-			w.LayoutRowDynamicScaled(style.Font.Size, 1)
-		}
-
-		for _, hdr := range filediff.Headers[1:] {
-			w.LabelColored(hdr.Text, nucular.TextLeft, hunkhdrColor)
-		}
-
-		w.Spacing(1)
-
-		for _, linediff := range filediff.Lines {
-			bounds, out := w.Custom(nucular.WidgetStateInactive)
-			if out == nil {
-				continue
+			if *width > 0 {
+				w.LayoutRowStaticScaled(style.Font.Size, *width, 1)
+			} else {
+				w.LayoutRowDynamicScaled(style.Font.Size, 1)
 			}
 
-			switch linediff.Opts {
-			case Addline:
-				out.FillRect(bounds, 0, addlineBg)
-			case Delline:
-				out.FillRect(bounds, 0, dellineBg)
+			for _, hdr := range filediff.Headers[1:] {
+				w.LabelColored(hdr.Text, nucular.TextLeft, hunkhdrColor)
 			}
 
-			dot := bounds
-			for _, chunk := range linediff.Chunks {
-				dot.W = d.MeasureString(chunk.Text).Ceil()
-				switch chunk.Opts {
-				case Addseg:
-					out.FillRect(dot, rounding, addsegBg)
-				case Delseg:
-					out.FillRect(dot, rounding, delsegBg)
+			w.Spacing(1)
+
+			for _, linediff := range filediff.Lines {
+				bounds, out := w.Custom(nucular.WidgetStateInactive)
+				if out == nil {
+					continue
 				}
 
-				out.DrawText(dot, chunk.Text, style.Font, color.RGBA{0x00, 0x00, 0x00, 0xff}, style.Text.Color)
-				dot.X += dot.W
+				switch linediff.Opts {
+				case Addline:
+					out.FillRect(bounds, 0, addlineBg)
+				case Delline:
+					out.FillRect(bounds, 0, dellineBg)
+				}
 
-				if dot.X > *width {
-					*width = dot.X
+				dot := bounds
+				for _, chunk := range linediff.Chunks {
+					dot.W = d.MeasureString(chunk.Text).Ceil()
+					switch chunk.Opts {
+					case Addseg:
+						out.FillRect(dot, rounding, addsegBg)
+					case Delseg:
+						out.FillRect(dot, rounding, delsegBg)
+					}
+
+					out.DrawText(dot, chunk.Text, style.Font, color.RGBA{0x00, 0x00, 0x00, 0xff}, style.Text.Color)
+					dot.X += dot.W
+
+					if dot.X > *width {
+						*width = dot.X
+					}
 				}
 			}
+
+			style.NormalWindow.Spacing.Y = originalSpacing
+
+			w.TreePop()
 		}
-
-		style.NormalWindow.Spacing.Y = originalSpacing
-
-		w.Spacing(1)
 	}
 
-	return scrollto
+	for _, e := range w.KeyboardOnHover(w.Bounds).Keys {
+		switch {
+		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
+			w.Scrollbar.X = 0
+			w.Scrollbar.Y = 0
+		case (e.Modifiers == 0) && (e.Code == key.CodeEnd):
+			w.Scrollbar.X = 0
+			w.Scrollbar.Y = w.At().Y
+		case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
+			w.Scrollbar.Y -= style.Font.Size
+		case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
+			w.Scrollbar.Y += style.Font.Size
+		case (e.Modifiers == 0) && (e.Code == key.CodeLeftArrow):
+			w.Scrollbar.X -= w.Bounds.W / 10
+		case (e.Modifiers == 0) && (e.Code == key.CodeRightArrow):
+			w.Scrollbar.X += w.Bounds.W / 10
+		case (e.Modifiers == 0) && (e.Code == key.CodePageUp):
+			w.Scrollbar.Y -= w.Bounds.H / 2
+		case (e.Modifiers == 0) && (e.Code == key.CodePageDown):
+			w.Scrollbar.Y += w.Bounds.H / 2
+		}
+
+		if w.Scrollbar.Y < 0 {
+			w.Scrollbar.Y = 0
+		}
+		if w.Scrollbar.X < 0 {
+			w.Scrollbar.X = 0
+		}
+	}
 }

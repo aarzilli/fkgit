@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aarzilli/fkgit/clipboard"
 	"github.com/aarzilli/nucular"
 
 	"golang.org/x/mobile/event/key"
@@ -277,6 +278,11 @@ var lw LogWindow
 var idxmw IndexManagerWindow
 var popupWindows []PopupWindow
 
+const (
+	graphTabIndex = 0
+	indexTabIndex = 1
+)
+
 type Tab interface {
 	Title() string
 	Update(mw *nucular.MasterWindow)
@@ -314,12 +320,29 @@ func guiUpdate(mw *nucular.MasterWindow) {
 			style, _ := mw.Style()
 			style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 			saveConfiguration()
+
 		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Rune == '-'):
 			conf.Scaling -= 0.1
 			mw.SetStyle(nucular.StyleFromTheme(nucular.DarkTheme), nil, conf.Scaling)
 			style, _ := mw.Style()
 			style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 			saveConfiguration()
+
+		case (e.Modifiers == 0) && ((e.Code == key.CodeEscape) || (e.Code == key.CodeQ)):
+			if currentTab != graphTabIndex && currentTab != indexTabIndex {
+				closeTab(tabs[currentTab])
+			}
+
+		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeR):
+			switch currentTab {
+			case graphTabIndex:
+				lw.mu.Lock()
+				lw.reload()
+				lw.mu.Unlock()
+
+			case indexTabIndex:
+				go idxmw.reload()
+			}
 		}
 	}
 
@@ -354,19 +377,31 @@ func guiUpdate(mw *nucular.MasterWindow) {
 	tabs[currentTab].Update(mw)
 }
 
+type Clipboard struct {
+}
+
+func (cb *Clipboard) Copy(text string) {
+	clipboard.Set(text)
+}
+
+func (cb *Clipboard) Paste() string {
+	return clipboard.Get()
+}
+
 func main() {
 	repodir := findRepository()
 
 	loadConfiguration()
 
 	wnd := nucular.NewMasterWindow(guiUpdate, nucular.WindowNoScrollbar)
+	wnd.SetClipboard(&Clipboard{})
 	wnd.SetStyle(nucular.StyleFromTheme(nucular.DarkTheme), nil, conf.Scaling)
 	style, _ := wnd.Style()
 	style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 
 	lw.repodir = repodir
-	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
-	lw.edCommit.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
+	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
+	lw.edCommit.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
 	lw.needsMore = -1
 	lw.mw = wnd
 
@@ -376,12 +411,19 @@ func main() {
 	idxmw.selected = -1
 	idxmw.mw = wnd
 	idxmw.fmtwidth = 70
-	idxmw.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditNoHorizontalScroll | nucular.EditFocusFollowsMouse
+	idxmw.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditClipboard
 	idxmw.reload()
 
 	openTab(&idxmw)
 
-	currentTab = 1
+	status := gitStatus(repodir)
+	if len(status.Lines) == 0 {
+		currentTab = graphTabIndex
+	} else {
+		currentTab = indexTabIndex
+	}
+
+	clipboard.Start()
 
 	wnd.Main()
 }

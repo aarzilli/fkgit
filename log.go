@@ -802,6 +802,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		}
 
 		if out == nil {
+			copy(prevLanes[:], lc.LanesAfter[:])
 			continue
 		}
 
