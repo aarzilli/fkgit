@@ -336,9 +336,12 @@ func guiUpdate(mw *nucular.MasterWindow) {
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeR):
 			switch currentTab {
 			case graphTabIndex:
-				lw.mu.Lock()
-				lw.reload()
-				lw.mu.Unlock()
+				// (*LogWindow).reload calls Update which can not be called from inside the update function
+				go func() {
+					lw.mu.Lock()
+					lw.reload()
+					lw.mu.Unlock()
+				}()
 
 			case indexTabIndex:
 				go idxmw.reload()

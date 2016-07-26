@@ -18,7 +18,7 @@ type IndexManagerWindow struct {
 	repodir  string
 	selected int
 	status   *GitStatus
-	diffs    []Diff
+	diff     Diff
 
 	mu       sync.Mutex
 	mw       *nucular.MasterWindow
@@ -69,6 +69,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 			sw.SelectableLabel(idxmw.status.Lines[i].Path, nucular.TextLeft, &selected)
 			if selected && idxmw.selected != i {
 				idxmw.selected = i
+				idxmw.loadDiff()
 			}
 		}
 		sw.GroupEnd()
@@ -133,7 +134,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 		diffbounds = sw.WidgetBounds()
 		if diffgroup := sw.GroupBegin("index-diff", nucular.WindowBorder); diffgroup != nil {
 			if idxmw.selected >= 0 {
-				showDiff(mw, diffgroup, idxmw.diffs[idxmw.selected], &idxmw.diffwidth)
+				showDiff(mw, diffgroup, idxmw.diff, &idxmw.diffwidth)
 			}
 			diffgroup.GroupEnd()
 		}
@@ -191,7 +192,7 @@ func (idxmw *IndexManagerWindow) reload() {
 	}()
 
 	oldselected := ""
-	if idxmw.status != nil {
+	if idxmw.status != nil && idxmw.selected >= 0 {
 		oldselected = idxmw.status.Lines[idxmw.selected].Path
 	}
 	idxmw.selected = -1
@@ -200,23 +201,34 @@ func (idxmw *IndexManagerWindow) reload() {
 
 	idxmw.status = gitStatus(idxmw.repodir)
 
-	idxmw.diffs = make([]Diff, len(idxmw.status.Lines))
-
 	for i, line := range idxmw.status.Lines {
-		var bs string
-		var err error
-		if line.Index != " " && line.WorkDir == " " {
-			bs, err = execCommand(idxmw.repodir, "git", "diff", "--color=never", "--cached", "--", line.Path)
-		} else {
-			bs, err = execCommand(idxmw.repodir, "git", "diff", "--color=never", "--", line.Path)
-		}
-		must(err)
-		idxmw.diffs[i] = parseDiff([]byte(bs))
-
 		if line.Path == oldselected {
 			idxmw.selected = i
+			break
+
 		}
 	}
+
+	idxmw.loadDiff()
+}
+
+func (idxmw *IndexManagerWindow) loadDiff() {
+	if idxmw.selected < 0 {
+		return
+	}
+
+	line := idxmw.status.Lines[idxmw.selected]
+
+	var bs string
+	var err error
+
+	if line.Index != " " && line.WorkDir == " " {
+		bs, err = execCommand(idxmw.repodir, "git", "diff", "--color=never", "--cached", "--", line.Path)
+	} else {
+		bs, err = execCommand(idxmw.repodir, "git", "diff", "--color=never", "--", line.Path)
+	}
+	must(err)
+	idxmw.diff = parseDiff([]byte(bs))
 }
 
 func (idxmw *IndexManagerWindow) loadCommitMsg() {
