@@ -118,8 +118,9 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 			}()
 			bs, err := cmd.CombinedOutput()
 			if err != nil {
-				popupWindows = append(popupWindows, &MessagePopup{"Error", fmt.Sprintf("error: %v\n%s\n", err, bs)})
+				popupWindows = append(popupWindows, NewMessagePopup("Error", fmt.Sprintf("error: %v\n%s\n", err, bs)))
 			} else {
+				idxmw.amend = false
 				idxmw.ed.Buffer = []rune{}
 				idxmw.ed.Cursor = 0
 			}
@@ -150,11 +151,13 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 				if idxmw.selected < 0 {
 					idxmw.selected = -1
 				}
+				idxmw.loadDiff()
 			case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
 				idxmw.selected++
 				if idxmw.selected >= len(idxmw.status.Lines) {
 					idxmw.selected = 0
 				}
+				idxmw.loadDiff()
 			}
 		}
 		if in.Keyboard.Text != nil && in.Keyboard.Text.String() == " " {
@@ -165,6 +168,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 			if idxmw.selected >= len(idxmw.status.Lines) {
 				idxmw.selected = 0
 			}
+			idxmw.loadDiff()
 		}
 	}
 }

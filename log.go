@@ -478,7 +478,7 @@ func (lw *LogWindow) commitproc() {
 	var err error
 	lw.allrefs, err = allRefs(lw.repodir)
 	if err != nil {
-		popupWindows = append(popupWindows, &MessagePopup{"Error", fmt.Sprintf("Error fetching references: %v\n", err)})
+		popupWindows = append(popupWindows, NewMessagePopup("Error", fmt.Sprintf("Error fetching references: %v\n", err)))
 		return
 	}
 
@@ -518,7 +518,7 @@ func (lw *LogWindow) commitproc() {
 	lw.mu.Unlock()
 
 	if fetcher.Err != nil {
-		popupWindows = append(popupWindows, &MessagePopup{"Error", fmt.Sprintf("Error fetching commits: %v\n", fetcher.Err)})
+		popupWindows = append(popupWindows, NewMessagePopup("Error", fmt.Sprintf("Error fetching commits: %v\n", fetcher.Err)))
 	}
 }
 

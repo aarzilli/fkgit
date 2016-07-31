@@ -343,6 +343,11 @@ func guiUpdate(mw *nucular.MasterWindow) {
 			case indexTabIndex:
 				go idxmw.reload()
 			}
+
+		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeW):
+			go func() {
+				mw.Close()
+			}()
 		}
 	}
 

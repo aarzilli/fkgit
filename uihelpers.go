@@ -11,21 +11,27 @@ import (
 const popupFlags = nucular.WindowMovable | nucular.WindowTitle | nucular.WindowDynamic | nucular.WindowNoScrollbar | nucular.WindowScalable
 
 type MessagePopup struct {
-	Title   string
-	Message string
+	Title string
+	ed    nucular.TextEditor
+}
+
+func NewMessagePopup(title, message string) *MessagePopup {
+	var mp MessagePopup
+	mp.Title = title
+	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
+	mp.ed.Buffer = []rune(message)
+	return &mp
 }
 
 func (mp *MessagePopup) Update(mw *nucular.MasterWindow) bool {
 	w := mw.Wnd
-	style, _ := mw.Style()
-	lnh := style.Font.Size
 
 	if w.PopupBegin(nucular.PopupStatic, mp.Title, popupFlags, nucular.Rect{20, 100, 640, 500}, true) {
 		defer w.PopupEnd()
-		w.Popup.LayoutRowDynamicScaled(lnh, 1)
-		showLines(w.Popup, mp.Message)
+		w.Popup.LayoutRowDynamic(200, 1)
 		ok, cancel := okCancelKeys(w.Popup)
 		w.Popup.LayoutRowDynamic(25, 1)
+		mp.ed.Edit(w.Popup, -1, nucular.FilterDefault)
 		if w.Popup.ButtonText("OK", 0) || ok || cancel {
 			w.PopupClose()
 			return false
@@ -334,24 +340,23 @@ func (cp *CheckoutPopup) Update(mw *nucular.MasterWindow) bool {
 
 type ForcePushPopup struct {
 	Repository string
-	Message    string
+	ed         nucular.TextEditor
+}
+
+func NewForcePushPopup(repository string, buffer []rune) *ForcePushPopup {
+	var fp ForcePushPopup
+	fp.Repository = repository
+	fp.ed.Buffer = buffer
+	return &fp
 }
 
 func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow) bool {
 	w := mw.Wnd
-	style, _ := mw.Style()
-	lnh := style.Font.Size
 
 	if w.PopupBegin(nucular.PopupStatic, "Push error", popupFlags, nucular.Rect{20, 100, 640, 500}, true) {
 		defer w.PopupEnd()
-		nlines := 1
-		for i := range fp.Message {
-			if fp.Message[i] == '\n' {
-				nlines++
-			}
-		}
-		w.Popup.LayoutRowDynamicScaled(lnh, 1)
-		showLines(w.Popup, fp.Message)
+		w.Popup.LayoutRowDynamic(200, 1)
+		fp.ed.Edit(w.Popup, -1, nucular.FilterDefault)
 		_, cancel := okCancelKeys(w.Popup)
 		w.Popup.LayoutRowDynamic(25, 2)
 		if w.Popup.ButtonText(fmt.Sprintf("Force Push %s", fp.Repository), 0) {

@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 func viewAction(lw *LogWindow, lc LanedCommit) {
@@ -12,30 +14,30 @@ func viewAction(lw *LogWindow, lc LanedCommit) {
 }
 
 func newbranchAction(lw *LogWindow, branchname, commitId string) {
-	execBackground(lw, "git", "checkout", "-b", branchname, commitId)
+	execBackground(false, lw, "git", "checkout", "-b", branchname, commitId)
 }
 
 func checkoutAction(lw *LogWindow, ref *Ref, commitId string) {
 	if ref != nil {
-		execBackground(lw, "git", "checkout", ref.Nice())
+		execBackground(false, lw, "git", "checkout", ref.Nice())
 	} else {
-		execBackground(lw, "git", "checkout", commitId)
+		execBackground(false, lw, "git", "checkout", commitId)
 	}
 }
 
 func cherrypickAction(lw *LogWindow, commitId string) {
-	execBackground(lw, "git", "cherry-pick", commitId)
+	execBackground(false, lw, "git", "cherry-pick", commitId)
 }
 
 func pushAction(lw *LogWindow, force bool, repository string) {
 	if force {
-		execBackground(lw, "git", "push", "--force", repository)
+		execBackground(false, lw, "git", "push", "--force", repository)
 	} else {
 		go func() {
-			out, err := execCommand(lw.repodir, "git", "push", repository)
+			err := execBackground(true, lw, "git", "push", repository)
 			if err != nil {
 				lw.mu.Lock()
-				popupWindows = append(popupWindows, &ForcePushPopup{repository, out})
+				popupWindows = append(popupWindows, NewForcePushPopup(repository, lw.edOutput.Buffer))
 				lw.mu.Unlock()
 			}
 		}()
@@ -44,9 +46,9 @@ func pushAction(lw *LogWindow, force bool, repository string) {
 
 func rebaseAction(lw *LogWindow, commitIdOrRef string) {
 	if os.Getenv("EDITOR") != "" {
-		execBackground(lw, "git", "rebase", "-i", commitIdOrRef)
+		execBackground(false, lw, "git", "rebase", "-i", commitIdOrRef)
 	} else {
-		execBackground(lw, "git", "rebase", commitIdOrRef)
+		execBackground(false, lw, "git", "rebase", commitIdOrRef)
 	}
 }
 
@@ -60,7 +62,7 @@ func resetAction(lw *LogWindow, commitId string, resetMode resetMode) {
 	case resetSoft:
 		flag = "--soft"
 	}
-	execBackground(lw, "git", "reset", flag, commitId)
+	execBackground(false, lw, "git", "reset", flag, commitId)
 }
 
 func remoteAction(lw *LogWindow, action, remote string) {
@@ -68,37 +70,82 @@ func remoteAction(lw *LogWindow, action, remote string) {
 		pushAction(lw, false, remote)
 		return
 	}
-	execBackground(lw, "git", action, remote)
+	execBackground(false, lw, "git", action, remote)
 }
 
 func mergeAction(lw *LogWindow, ref *Ref) {
-	execBackground(lw, "git", "merge", ref.Nice())
+	execBackground(false, lw, "git", "merge", ref.Nice())
 }
 
 func diffAction(lw *LogWindow, niceNameA, commitOrRefA, niceNameB, commitOrRefB string) {
 	fmt.Printf("diff\n")
 }
 
-func execBackground(lw *LogWindow, cmdname string, args ...string) {
+func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) error {
+	var done chan struct{}
+	if wait {
+		done = make(chan struct{})
+	}
+	var returnerror error
 	go func() {
-		cmd := exec.Command(cmdname, args...)
-		cmd.Dir = lw.repodir
-		bs, err := cmd.CombinedOutput()
-
+		if wait {
+			defer close(done)
+		}
+		
 		lw.mu.Lock()
-		defer lw.mu.Unlock()
-
-		out := "$ " + cmdname + " " + strings.Join(args, " ") + "\n" + string(bs)
-
-		lw.edOutput.Buffer = []rune(out)
+		lw.edOutput.Buffer = []rune("$ " + cmdname + " " + strings.Join(args, " ") + "\n")
 		lw.edOutput.Cursor = 0
 		lw.showOutput = true
+		lw.mu.Unlock()
+		
+		cmd := exec.Command(cmdname, args...)
+		cmd.Dir = lw.repodir
+
+		stdout, _ := cmd.StdoutPipe()
+		stderr, _ := cmd.StderrPipe()
+
+		err := cmd.Start()
+
+		if err == nil {
+			var wg sync.WaitGroup
+			filereader := func(fh io.ReadCloser) {
+				defer fh.Close()
+				defer wg.Done()
+				bsr := make([]byte, 4096)
+				for {
+					n, err := fh.Read(bsr)
+					if n > 0 {
+						lw.mu.Lock()
+						lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(string(bsr[:n]))...)
+						lw.mu.Unlock()
+					}
+					if err != nil {
+						break
+					}
+				}
+			}
+			wg.Add(2)
+			go filereader(stdout)
+			go filereader(stderr)
+			wg.Wait()
+			err = cmd.Wait()
+		}
 
 		if err != nil {
-			popupWindows = append(popupWindows, &MessagePopup{"Error", fmt.Sprintf("Error: %v\n%s\n", err, out)})
+			returnerror = err
+			lw.mu.Lock()
+			popupWindows = append(popupWindows, NewMessagePopup("Error", fmt.Sprintf("Error: %v\n", err)))
+			defer lw.mu.Unlock()
 			return
 		}
 
 		lw.reload()
 	}()
+
+	if wait {
+		<-done
+		return returnerror
+	}
+
+	return nil
 }
