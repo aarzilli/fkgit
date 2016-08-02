@@ -472,13 +472,13 @@ type LogWindow struct {
 func (lw *LogWindow) commitproc() {
 	defer func() {
 		lw.done = true
-		lw.mw.Update()
+		lw.mw.Changed()
 	}()
 
 	var err error
 	lw.allrefs, err = allRefs(lw.repodir)
 	if err != nil {
-		popupWindows = append(popupWindows, NewMessagePopup("Error", fmt.Sprintf("Error fetching references: %v\n", err)))
+		newMessagePopup(lw.mw, "Error", fmt.Sprintf("Error fetching references: %v\n", err))
 		return
 	}
 
@@ -502,7 +502,7 @@ func (lw *LogWindow) commitproc() {
 		lw.commits = append(lw.commits, commit)
 		if lw.needsMore >= 0 && lw.needsMore < len(lw.commits) {
 			lw.needsMore = -1
-			lw.mw.Update()
+			lw.mw.Changed()
 		}
 		if occupied := commit.Occupied(); occupied > lw.maxOccupied {
 			lw.maxOccupied = occupied
@@ -513,12 +513,12 @@ func (lw *LogWindow) commitproc() {
 	lw.mu.Lock()
 	if lw.needsMore >= 0 {
 		lw.needsMore = -1
-		lw.mw.Update()
+		lw.mw.Changed()
 	}
 	lw.mu.Unlock()
 
 	if fetcher.Err != nil {
-		popupWindows = append(popupWindows, NewMessagePopup("Error", fmt.Sprintf("Error fetching commits: %v\n", fetcher.Err)))
+		newMessagePopup(lw.mw, "Error", fmt.Sprintf("Error fetching commits: %v\n", fetcher.Err))
 	}
 }
 
@@ -806,11 +806,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 			continue
 		}
 
-		if w.ContextualBegin(0, image.Point{250, 300}, rowbounds) {
-			lw.selectedId = lc.Id
-			lw.commitMenu(lc, mw.Wnd.Popup)
-			w.ContextualEnd()
-		}
+		w.ContextualOpen(0, image.Point{250, 300}, rowbounds, func(mw *nucular.MasterWindow, w *nucular.Window) { lw.commitMenu(lc, mw, w) })
 
 		// draws graph proper
 
@@ -923,7 +919,8 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	}
 }
 
-func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
+func (lw *LogWindow) commitMenu(lc LanedCommit, mw *nucular.MasterWindow, w *nucular.Window) {
+	lw.selectedId = lc.Id
 	localRefs := []Ref{}
 	remoteRefs := []Ref{}
 	for _, ref := range lc.Refs {
@@ -966,22 +963,18 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 			case 1:
 				checkoutAction(lw, &localRefs[0], "")
 			default:
-				localRefsNames := make([]string, len(localRefs))
-				for i := range localRefs {
-					localRefsNames[i] = localRefs[i].Nice()
-				}
-				popupWindows = append(popupWindows, &CheckoutPopup{localRefs, localRefsNames, -1})
+				newCheckoutPopup(lw.mw, localRefs)
 			}
 		}
 	}
 
 	if w.MenuItemText("New branch", nucular.TextLeft) {
-		popupWindows = append(popupWindows, &NewBranchPopup{lc.Id, nucular.TextEditor{}, true})
+		newNewBranchPopup(lw.mw, lc.Id)
 	}
 
 	if !lc.IsHEAD && lw.Headisref {
 		if w.MenuItemText(fmt.Sprintf("Reset %s here", lw.Head.Nice()), nucular.TextLeft) {
-			popupWindows = append(popupWindows, &ResetPopup{lc.Id, resetHard})
+			newResetPopup(lw.mw, lc.Id, resetHard)
 		}
 	}
 
@@ -996,7 +989,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 			if len(remotes) == 1 {
 				remoteAction(lw, "fetch", remotes[0])
 			} else {
-				popupWindows = append(popupWindows, &RemotesPopup{"fetch", remotes, -1})
+				newRemotesPopup(lw.mw, "fetch", remotes)
 			}
 		}
 	}
@@ -1006,7 +999,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 			if len(remotes) == 1 {
 				remoteAction(lw, "pull", remotes[0])
 			} else {
-				popupWindows = append(popupWindows, &RemotesPopup{"pull", remotes, -1})
+				newRemotesPopup(lw.mw, "pull", remotes)
 			}
 		}
 	}
@@ -1016,14 +1009,14 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 			if len(remotes) == 1 {
 				pushAction(lw, false, remotes[0])
 			} else {
-				popupWindows = append(popupWindows, &RemotesPopup{"push", remotes, -1})
+				newRemotesPopup(lw.mw, "push", remotes)
 			}
 		}
 	}
 
 	if lc.IsHEAD && lw.Headisref {
 		if w.MenuItemText("Merge", nucular.TextLeft) {
-			popupWindows = append(popupWindows, &MergePopup{lw.allrefs, -1, nil})
+			newMergePopup(lw.mw, lw.allrefs)
 		}
 	}
 
@@ -1038,7 +1031,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, w *nucular.Window) {
 	}
 
 	if w.MenuItemText("Diff", nucular.TextLeft) {
-		popupWindows = append(popupWindows, &DiffPopup{lw.allrefs, bookmarksAsSlice(), lc, -1, -1, nil})
+		newDiffPopup(lw.mw, lw.allrefs, bookmarksAsSlice(), lc)
 	}
 }
 
@@ -1067,9 +1060,7 @@ func (lw *LogWindow) Title() string {
 	return "Graph"
 }
 
-func (lw *LogWindow) Update(mw *nucular.MasterWindow) {
-	w := mw.Wnd
-
+func (lw *LogWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	style, _ := mw.Style()
 
 	h := w.LayoutAvailableHeight() - style.NormalWindow.Spacing.Y

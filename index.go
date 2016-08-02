@@ -35,13 +35,11 @@ func (idxmw *IndexManagerWindow) Title() string {
 	return "Commit"
 }
 
-func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
+func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	idxmw.mu.Lock()
 	defer idxmw.mu.Unlock()
 
 	var diffbounds nucular.Rect
-
-	w := mw.Wnd
 
 	if idxmw.updating {
 		w.LayoutRowDynamic(25, 1)
@@ -118,7 +116,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow) {
 			}()
 			bs, err := cmd.CombinedOutput()
 			if err != nil {
-				popupWindows = append(popupWindows, NewMessagePopup("Error", fmt.Sprintf("error: %v\n%s\n", err, bs)))
+				newMessagePopup(mw, "Error", fmt.Sprintf("error: %v\n%s\n", err, bs))
 			} else {
 				idxmw.amend = false
 				idxmw.ed.Buffer = []rune{}
@@ -192,7 +190,7 @@ func (idxmw *IndexManagerWindow) reload() {
 		idxmw.mu.Lock()
 		idxmw.updating = false
 		idxmw.mu.Unlock()
-		idxmw.mw.Update()
+		idxmw.mw.Changed()
 	}()
 
 	oldselected := ""

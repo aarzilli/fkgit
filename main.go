@@ -270,13 +270,8 @@ func bookmarksAsSlice() []LanedCommit {
 	return r
 }
 
-type PopupWindow interface {
-	Update(mw *nucular.MasterWindow) bool
-}
-
 var lw LogWindow
 var idxmw IndexManagerWindow
-var popupWindows []PopupWindow
 
 const (
 	graphTabIndex = 0
@@ -285,7 +280,7 @@ const (
 
 type Tab interface {
 	Title() string
-	Update(mw *nucular.MasterWindow)
+	Update(mw *nucular.MasterWindow, w *nucular.Window)
 }
 
 var tabs []Tab
@@ -309,9 +304,7 @@ func closeTab(tab Tab) {
 	}
 }
 
-func guiUpdate(mw *nucular.MasterWindow) {
-	w := mw.Wnd
-
+func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 	for _, e := range w.Input().Keyboard.Keys {
 		switch {
 		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Rune == '+') || (e.Rune == '='):
@@ -351,20 +344,12 @@ func guiUpdate(mw *nucular.MasterWindow) {
 		}
 	}
 
-	if len(popupWindows) > 0 {
-		open := popupWindows[0].Update(mw)
-		if !open {
-			copy(popupWindows, popupWindows[1:])
-			popupWindows = popupWindows[:len(popupWindows[1:])]
-		}
-	}
-
 	closetab := -1
 	w.LayoutRowDynamic(25, len(tabs))
 	for i := range tabs {
 		selected := i == currentTab
 		bounds := w.WidgetBounds()
-		if nucular.InputMouseClicked(mw.Wnd.Input(), mouse.ButtonMiddle, bounds) {
+		if nucular.InputMouseClicked(w.Input(), mouse.ButtonMiddle, bounds) {
 			if i >= 2 {
 				closetab = i
 			}
@@ -379,7 +364,7 @@ func guiUpdate(mw *nucular.MasterWindow) {
 		closeTab(tabs[closetab])
 	}
 
-	tabs[currentTab].Update(mw)
+	tabs[currentTab].Update(mw, w)
 }
 
 type Clipboard struct {

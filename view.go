@@ -55,9 +55,9 @@ func (vw *ViewWindow) Title() string {
 	return vw.lc.NiceWithAbbrev()
 }
 
-func (vw *ViewWindow) Update(mw *nucular.MasterWindow) {
-	mw.Wnd.LayoutRowDynamicScaled(mw.Wnd.LayoutAvailableHeight(), 1)
-	if sw := mw.Wnd.GroupBegin("view-"+vw.lc.Id, 0); sw != nil {
+func (vw *ViewWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+	w.LayoutRowDynamicScaled(w.LayoutAvailableHeight(), 1)
+	if sw := w.GroupBegin("view-"+vw.lc.Id, 0); sw != nil {
 		vw.updateView(mw, sw)
 		sw.GroupEnd()
 	}

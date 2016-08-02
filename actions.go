@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 )
 
@@ -37,7 +36,7 @@ func pushAction(lw *LogWindow, force bool, repository string) {
 			err := execBackground(true, lw, "git", "push", repository)
 			if err != nil {
 				lw.mu.Lock()
-				popupWindows = append(popupWindows, NewForcePushPopup(repository, lw.edOutput.Buffer))
+				newForcePushPopup(lw.mw, repository, lw.edOutput.Buffer)
 				lw.mu.Unlock()
 			}
 		}()
@@ -91,13 +90,7 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 		if wait {
 			defer close(done)
 		}
-		
-		lw.mu.Lock()
-		lw.edOutput.Buffer = []rune("$ " + cmdname + " " + strings.Join(args, " ") + "\n")
-		lw.edOutput.Cursor = 0
-		lw.showOutput = true
-		lw.mu.Unlock()
-		
+
 		cmd := exec.Command(cmdname, args...)
 		cmd.Dir = lw.repodir
 
@@ -133,9 +126,7 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 
 		if err != nil {
 			returnerror = err
-			lw.mu.Lock()
-			popupWindows = append(popupWindows, NewMessagePopup("Error", fmt.Sprintf("Error: %v\n", err)))
-			defer lw.mu.Unlock()
+			newMessagePopup(lw.mw, "Error", fmt.Sprintf("Error: %v\n", err))
 			return
 		}
 

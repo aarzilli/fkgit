@@ -10,35 +10,26 @@ import (
 
 const popupFlags = nucular.WindowMovable | nucular.WindowTitle | nucular.WindowDynamic | nucular.WindowNoScrollbar | nucular.WindowScalable
 
-type MessagePopup struct {
+type messagePopup struct {
 	Title string
 	ed    nucular.TextEditor
 }
 
-func NewMessagePopup(title, message string) *MessagePopup {
-	var mp MessagePopup
+func newMessagePopup(mw *nucular.MasterWindow, title, message string) {
+	var mp messagePopup
 	mp.Title = title
 	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
 	mp.ed.Buffer = []rune(message)
-	return &mp
+	mw.PopupOpen(mp.Title, popupFlags, nucular.Rect{20, 100, 640, 500}, true, mp.Update)
 }
 
-func (mp *MessagePopup) Update(mw *nucular.MasterWindow) bool {
-	w := mw.Wnd
-
-	if w.PopupBegin(nucular.PopupStatic, mp.Title, popupFlags, nucular.Rect{20, 100, 640, 500}, true) {
-		defer w.PopupEnd()
-		w.Popup.LayoutRowDynamic(200, 1)
-		ok, cancel := okCancelKeys(w.Popup)
-		w.Popup.LayoutRowDynamic(25, 1)
-		mp.ed.Edit(w.Popup, -1, nucular.FilterDefault)
-		if w.Popup.ButtonText("OK", 0) || ok || cancel {
-			w.PopupClose()
-			return false
-		}
-		return true
-	} else {
-		return false
+func (mp *messagePopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+	w.LayoutRowDynamic(200, 1)
+	ok, cancel := okCancelKeys(w)
+	w.LayoutRowDynamic(25, 1)
+	mp.ed.Edit(w, -1, nucular.FilterDefault)
+	if w.ButtonText("OK", 0) || ok || cancel {
+		w.Close()
 	}
 }
 
@@ -85,72 +76,60 @@ func okCancelKeys(w *nucular.Window) (ok, cancel bool) {
 	return false, false
 }
 
-func selectFromListWindow(w *nucular.Window, title, text string, idx int, list []string) (int, bool) {
-	if w.PopupBegin(nucular.PopupStatic, title, popupFlags, nucular.Rect{20, 100, 640, 400}, true) {
-		defer w.PopupEnd()
-		w.Popup.LayoutRowDynamic(25, 1)
-		w.Popup.Label(text, nucular.TextLeft)
-		w.Popup.LayoutRowDynamic(150, 1)
+func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []string, onSelect func(idx int)) {
+	idx := -1
+	mw.PopupOpen(title, popupFlags, nucular.Rect{20, 100, 640, 400}, true, func(mw *nucular.MasterWindow, w *nucular.Window) {
+		w.LayoutRowDynamic(25, 1)
+		w.Label(text, nucular.TextLeft)
+		w.LayoutRowDynamic(150, 1)
 
-		idx = selectFromList(w.Popup, title+"-listgroup", idx, list)
+		idx = selectFromList(w, title+"-listgroup", idx, list)
 
-		w.Popup.LayoutRowDynamic(25, 2)
+		w.LayoutRowDynamic(25, 2)
 
-		ok, cancel := okCancelKeys(w.Popup)
+		ok, cancel := okCancelKeys(w)
 
-		if w.Popup.ButtonText("OK", 0) || ok {
-			w.PopupClose()
-			return idx, true
+		if w.ButtonText("OK", 0) || ok {
+			w.Close()
+			onSelect(idx)
 		}
-		if w.Popup.ButtonText("Cancel", 0) || cancel {
-			w.PopupClose()
-			return -1, true
+		if w.ButtonText("Cancel", 0) || cancel {
+			w.Close()
 		}
 
-		w.Popup.LayoutRowDynamic(10, 1)
-	} else {
-		return -1, true
-	}
-
-	return idx, false
+		w.LayoutRowDynamic(10, 1)
+	})
 }
 
-type NewBranchPopup struct {
+type newBranchPopup struct {
 	CommitId string
 	ed       nucular.TextEditor
-	first    bool
 }
 
-func (np *NewBranchPopup) Update(mw *nucular.MasterWindow) bool {
-	w := mw.Wnd
-	if np.first {
-		np.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
-		np.ed.Active = true
-		np.first = false
-	}
-	open := w.PopupBegin(nucular.PopupStatic, "New branch...", popupFlags, nucular.Rect{20, 100, 640, 400}, true)
-	if open {
-		defer w.PopupEnd()
-		w.Popup.LayoutRowDynamic(25, 1)
-		active := np.ed.Edit(w.Popup, 128, nucular.FilterDefault)
-		w.Popup.LayoutRowDynamic(25, 2)
-		var ok, cancel bool
-		if !np.ed.Active {
-			ok, cancel = okCancelKeys(w.Popup)
-		}
-		if w.Popup.ButtonText("OK", 0) || (active&nucular.EditCommitted != 0) || ok {
-			newbranchAction(&lw, string(np.ed.Buffer), np.CommitId)
-			w.PopupClose()
-			return false
-		}
-		if w.Popup.ButtonText("Cancel", 0) || cancel {
-			w.PopupClose()
-			return false
-		}
-		w.Popup.LayoutRowDynamic(10, 1)
-	}
+func newNewBranchPopup(mw *nucular.MasterWindow, id string) {
+	np := newBranchPopup{CommitId: id}
+	np.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
+	np.ed.Active = true
+	mw.PopupOpen("New branch...", popupFlags, nucular.Rect{20, 100, 640, 400}, true, np.Update)
 
-	return open
+}
+
+func (np *newBranchPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+	w.LayoutRowDynamic(25, 1)
+	active := np.ed.Edit(w, 128, nucular.FilterDefault)
+	w.LayoutRowDynamic(25, 2)
+	var ok, cancel bool
+	if !np.ed.Active {
+		ok, cancel = okCancelKeys(w)
+	}
+	if w.ButtonText("OK", 0) || (active&nucular.EditCommitted != 0) || ok {
+		newbranchAction(&lw, string(np.ed.Buffer), np.CommitId)
+		w.Close()
+	}
+	if w.ButtonText("Cancel", 0) || cancel {
+		w.Close()
+	}
+	w.LayoutRowDynamic(10, 1)
 }
 
 type resetMode int
@@ -161,52 +140,43 @@ const (
 	resetSoft
 )
 
-type ResetPopup struct {
+type resetPopup struct {
 	CommitId  string
 	ResetMode resetMode
 }
 
-func (rp *ResetPopup) Update(mw *nucular.MasterWindow) bool {
-	w := mw.Wnd
-	open := w.PopupBegin(nucular.PopupStatic, "Reset...", popupFlags, nucular.Rect{20, 100, 640, 400}, true)
-	if open {
-		defer w.PopupEnd()
-		w.Popup.LayoutRowDynamic(25, 1)
-		if w.Popup.OptionText("Hard: reset working tree and index", rp.ResetMode == resetHard) {
-			rp.ResetMode = resetHard
-		}
-		if w.Popup.OptionText("Mixed: leave working tree untouched, reset index", rp.ResetMode == resetMixed) {
-			rp.ResetMode = resetMixed
-		}
-		if w.Popup.OptionText("Soft: leave working tree and index untouched", rp.ResetMode == resetSoft) {
-			rp.ResetMode = resetSoft
-		}
-		w.Popup.LayoutRowDynamic(25, 2)
-		ok, cancel := okCancelKeys(w.Popup)
-		if w.Popup.ButtonText("OK", 0) || ok {
-			resetAction(&lw, rp.CommitId, rp.ResetMode)
-			w.PopupClose()
-			return false
-		}
-		if w.Popup.ButtonText("Cancel", 0) || cancel {
-			w.PopupClose()
-			return false
-		}
-		w.Popup.LayoutRowDynamic(10, 1)
+func newResetPopup(mw *nucular.MasterWindow, id string, mode resetMode) {
+	rp := resetPopup{CommitId: id, ResetMode: mode}
+	mw.PopupOpen("Reset...", popupFlags, nucular.Rect{20, 100, 640, 400}, true, rp.Update)
+}
+
+func (rp *resetPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+	w.LayoutRowDynamic(25, 1)
+	if w.OptionText("Hard: reset working tree and index", rp.ResetMode == resetHard) {
+		rp.ResetMode = resetHard
 	}
-	return open
+	if w.OptionText("Mixed: leave working tree untouched, reset index", rp.ResetMode == resetMixed) {
+		rp.ResetMode = resetMixed
+	}
+	if w.OptionText("Soft: leave working tree and index untouched", rp.ResetMode == resetSoft) {
+		rp.ResetMode = resetSoft
+	}
+	w.LayoutRowDynamic(25, 2)
+	ok, cancel := okCancelKeys(w)
+	if w.ButtonText("OK", 0) || ok {
+		resetAction(&lw, rp.CommitId, rp.ResetMode)
+		w.Close()
+	}
+	if w.ButtonText("Cancel", 0) || cancel {
+		w.Close()
+	}
+	w.LayoutRowDynamic(10, 1)
 }
 
-type RemotesPopup struct {
-	Action  string
-	Remotes []string
-	Idx     int
-}
-
-func (rp *RemotesPopup) Update(mw *nucular.MasterWindow) bool {
+func newRemotesPopup(mw *nucular.MasterWindow, action string, remotes []string) {
 	var title, text string
 
-	switch rp.Action {
+	switch action {
 	case "fetch":
 		title = "Fetch..."
 		text = "Pick a repository to fetch:"
@@ -218,42 +188,28 @@ func (rp *RemotesPopup) Update(mw *nucular.MasterWindow) bool {
 		text = "Pick a repository to push to:"
 	}
 
-	var done bool
-	rp.Idx, done = selectFromListWindow(mw.Wnd, title, text, rp.Idx, rp.Remotes)
-	if done {
-		if rp.Idx >= 0 {
-			remoteAction(&lw, rp.Action, rp.Remotes[rp.Idx])
+	selectFromListWindow(mw, title, text, remotes, func(idx int) {
+		if idx >= 0 {
+			remoteAction(&lw, action, remotes[idx])
 		}
-		return false
-	}
-	return true
+	})
 }
 
-type MergePopup struct {
-	Refs     []Ref
-	Idx      int
-	refNames []string
+func newMergePopup(mw *nucular.MasterWindow, allrefs []Ref) {
+	refnames := make([]string, len(allrefs))
+	for i := range allrefs {
+		refnames[i] = allrefs[i].Nice()
+	}
+
+	selectFromListWindow(mw, "Merge...", "Select a branch to merge:", refnames, func(idx int) {
+		if idx >= 0 {
+			mergeAction(&lw, &allrefs[idx])
+		}
+	})
+
 }
 
-func (mp *MergePopup) Update(mw *nucular.MasterWindow) bool {
-	if mp.refNames == nil {
-		mp.refNames = make([]string, len(mp.Refs))
-		for i := range mp.Refs {
-			mp.refNames[i] = mp.Refs[i].Nice()
-		}
-	}
-	var done bool
-	mp.Idx, done = selectFromListWindow(mw.Wnd, "Merge...", "Select a branch to merge:", mp.Idx, mp.refNames)
-	if done {
-		if mp.Idx >= 0 {
-			mergeAction(&lw, &mp.Refs[mp.Idx])
-		}
-		return false
-	}
-	return true
-}
-
-type DiffPopup struct {
+type diffPopup struct {
 	Refs      []Ref
 	Bookmarks []LanedCommit
 	Lc        LanedCommit
@@ -262,7 +218,20 @@ type DiffPopup struct {
 	names     []string
 }
 
-func (dp *DiffPopup) idxToCommitOrRef(idx int) (name, id string) {
+func newDiffPopup(mw *nucular.MasterWindow, refs []Ref, bookmarks []LanedCommit, lc LanedCommit) {
+	dp := diffPopup{refs, bookmarks, lc, -1, -1, nil}
+	dp.names = make([]string, 0, len(dp.Refs)+len(dp.Bookmarks)+1)
+	dp.names = append(dp.names, dp.Lc.NiceWithAbbrev())
+	for _, lc := range dp.Bookmarks {
+		dp.names = append(dp.names, lc.NiceWithAbbrev())
+	}
+	for _, ref := range dp.Refs {
+		dp.names = append(dp.names, ref.Nice())
+	}
+	mw.PopupOpen("Diff...", popupFlags, nucular.Rect{20, 100, 460, 400}, true, dp.Update)
+}
+
+func (dp *diffPopup) idxToCommitOrRef(idx int) (name, id string) {
 	if idx == 0 {
 		return dp.Lc.NiceWithAbbrev(), dp.Lc.Id
 	}
@@ -277,65 +246,39 @@ func (dp *DiffPopup) idxToCommitOrRef(idx int) (name, id string) {
 	return dp.Refs[idx].Nice(), dp.Refs[idx].CommitId
 }
 
-func (dp *DiffPopup) Update(mw *nucular.MasterWindow) bool {
-	if dp.names == nil {
-		dp.names = make([]string, 0, len(dp.Refs)+len(dp.Bookmarks)+1)
-		dp.names = append(dp.names, dp.Lc.NiceWithAbbrev())
-		for _, lc := range dp.Bookmarks {
-			dp.names = append(dp.names, lc.NiceWithAbbrev())
-		}
-		for _, ref := range dp.Refs {
-			dp.names = append(dp.names, ref.Nice())
-		}
+func (dp *diffPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+	w.LayoutRowDynamic(150, 2)
+	dp.Idx1 = selectFromList(w, "DiffA", dp.Idx1, dp.names)
+	dp.Idx2 = selectFromList(w, "DiffB", dp.Idx2, dp.names)
+
+	w.LayoutRowDynamic(25, 2)
+
+	ok, cancel := okCancelKeys(w)
+
+	if w.ButtonText("OK", 0) || ok {
+		w.Close()
+
+		niceNameA, commitOrRefA := dp.idxToCommitOrRef(dp.Idx1)
+		niceNameB, commitOrRefB := dp.idxToCommitOrRef(dp.Idx2)
+
+		diffAction(&lw, niceNameA, commitOrRefA, niceNameB, commitOrRefB)
 	}
-
-	w := mw.Wnd
-	open := w.PopupBegin(nucular.PopupStatic, "Diff...", popupFlags, nucular.Rect{20, 100, 460, 400}, true)
-	if open {
-		defer w.PopupEnd()
-		w.Popup.LayoutRowDynamic(150, 2)
-		dp.Idx1 = selectFromList(w.Popup, "DiffA", dp.Idx1, dp.names)
-		dp.Idx2 = selectFromList(w.Popup, "DiffB", dp.Idx2, dp.names)
-
-		w.Popup.LayoutRowDynamic(25, 2)
-
-		ok, cancel := okCancelKeys(w.Popup)
-
-		if w.Popup.ButtonText("OK", 0) || ok {
-			w.PopupClose()
-
-			niceNameA, commitOrRefA := dp.idxToCommitOrRef(dp.Idx1)
-			niceNameB, commitOrRefB := dp.idxToCommitOrRef(dp.Idx2)
-
-			diffAction(&lw, niceNameA, commitOrRefA, niceNameB, commitOrRefB)
-
-			return false
-		}
-		if w.Popup.ButtonText("Cancel", 0) || cancel {
-			w.PopupClose()
-			return false
-		}
-		w.Popup.LayoutRowDynamic(10, 1)
+	if w.ButtonText("Cancel", 0) || cancel {
+		w.Close()
 	}
-	return open
+	w.LayoutRowDynamic(10, 1)
 }
 
-type CheckoutPopup struct {
-	LocalRefs      []Ref
-	LocalRefsNames []string
-	Idx            int
-}
-
-func (cp *CheckoutPopup) Update(mw *nucular.MasterWindow) bool {
-	var done bool
-	cp.Idx, done = selectFromListWindow(mw.Wnd, "Checkout...", "Pick a branch to checkout:", cp.Idx, cp.LocalRefsNames)
-	if done {
-		if cp.Idx >= 0 {
-			checkoutAction(&lw, &cp.LocalRefs[cp.Idx], "")
-		}
-		return false
+func newCheckoutPopup(mw *nucular.MasterWindow, localRefs []Ref) {
+	localRefsNames := make([]string, len(localRefs))
+	for i := range localRefs {
+		localRefsNames[i] = localRefs[i].Nice()
 	}
-	return true
+	selectFromListWindow(mw, "Checkout...", "Pick a branch to checkout:", localRefsNames, func(idx int) {
+		if idx >= 0 {
+			checkoutAction(&lw, &localRefs[idx], "")
+		}
+	})
 }
 
 type ForcePushPopup struct {
@@ -343,33 +286,24 @@ type ForcePushPopup struct {
 	ed         nucular.TextEditor
 }
 
-func NewForcePushPopup(repository string, buffer []rune) *ForcePushPopup {
+func newForcePushPopup(mw *nucular.MasterWindow, repository string, buffer []rune) {
 	var fp ForcePushPopup
 	fp.Repository = repository
 	fp.ed.Buffer = buffer
-	return &fp
+	fp.ed.Flags = nucular.EditMultiline | nucular.EditReadOnly
+	mw.PopupOpen("Push error", popupFlags, nucular.Rect{20, 100, 640, 500}, true, fp.Update)
 }
 
-func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow) bool {
-	w := mw.Wnd
-
-	if w.PopupBegin(nucular.PopupStatic, "Push error", popupFlags, nucular.Rect{20, 100, 640, 500}, true) {
-		defer w.PopupEnd()
-		w.Popup.LayoutRowDynamic(200, 1)
-		fp.ed.Edit(w.Popup, -1, nucular.FilterDefault)
-		_, cancel := okCancelKeys(w.Popup)
-		w.Popup.LayoutRowDynamic(25, 2)
-		if w.Popup.ButtonText(fmt.Sprintf("Force Push %s", fp.Repository), 0) {
-			pushAction(&lw, true, fp.Repository)
-			w.PopupClose()
-			return false
-		}
-		if w.Popup.ButtonText("Cancel", 0) || cancel {
-			w.PopupClose()
-			return false
-		}
-		return true
-	} else {
-		return false
+func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+	w.LayoutRowDynamic(200, 1)
+	fp.ed.Edit(w, -1, nucular.FilterDefault)
+	_, cancel := okCancelKeys(w)
+	w.LayoutRowDynamic(25, 2)
+	if w.ButtonText(fmt.Sprintf("Force Push %s", fp.Repository), 0) {
+		pushAction(&lw, true, fp.Repository)
+		w.Close()
+	}
+	if w.ButtonText("Cancel", 0) || cancel {
+		w.Close()
 	}
 }
