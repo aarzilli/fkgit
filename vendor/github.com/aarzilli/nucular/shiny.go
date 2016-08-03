@@ -14,7 +14,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aarzilli/nucular/command"
 	"github.com/aarzilli/nucular/internal/assets"
+	"github.com/aarzilli/nucular/types"
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/raster"
 	"github.com/golang/freetype/truetype"
@@ -43,9 +45,10 @@ type MasterWindow struct {
 	img    *image.RGBA
 	bounds image.Rectangle
 
-	ctx      *context
-	layout   panel
-	prevCmds []Command
+	ctx        *context
+	layout     panel
+	prevCmds   []command.Command
+	textbuffer bytes.Buffer
 
 	uilock  sync.Mutex
 	closing bool
@@ -55,7 +58,7 @@ var ttfontDefault *truetype.Font
 var defaultFontInit sync.Once
 
 // Returns default font (ProggyClean) with specified size and scaling
-func DefaultFont(size int, scaling float64) *Face {
+func DefaultFont(size int, scaling float64) *types.Face {
 	defaultFontInit.Do(func() {
 		fontData, _ := assets.Asset("ProggyClean.ttf")
 		ttfontDefault, _ = freetype.ParseFont(fontData)
@@ -63,16 +66,16 @@ func DefaultFont(size int, scaling float64) *Face {
 
 	sz := int(float64(size) * scaling)
 
-	return &Face{
-		Size:   sz,
-		ttfont: ttfontDefault,
-		Face:   truetype.NewFace(ttfontDefault, &truetype.Options{Size: float64(sz), Hinting: font.HintingFull, DPI: 96})}
+	return &types.Face{
+		Size: sz,
+		//ttfont: ttfontDefault,
+		Face: truetype.NewFace(ttfontDefault, &truetype.Options{Size: float64(sz), Hinting: font.HintingFull, DPI: 96})}
 }
 
 // Creates new master window
 func NewMasterWindow(updatefn UpdateFn, flags WindowFlags) *MasterWindow {
 	ctx := &context{Scaling: 1.0}
-	ctx.Input.Keyboard.Text = bytes.NewBuffer(make([]byte, 0, 10))
+	ctx.Input.Mouse.valid = true
 	wnd := &MasterWindow{ctx: ctx}
 	wnd.layout.Flags = flags
 
@@ -87,34 +90,34 @@ func NewMasterWindow(updatefn UpdateFn, flags WindowFlags) *MasterWindow {
 }
 
 // Configures clipboard access object
-func (w *MasterWindow) SetClipboard(clipboard Clipboard) {
-	w.ctx.Clip = clipboard
+func (mw *MasterWindow) SetClipboard(clipboard Clipboard) {
+	mw.ctx.Clip = clipboard
 }
 
 // Shows window, runs event loop
-func (w *MasterWindow) Main() {
-	driver.Main(w.main)
+func (mw *MasterWindow) Main() {
+	driver.Main(mw.main)
 }
 
-func (w *MasterWindow) main(s screen.Screen) {
+func (mw *MasterWindow) main(s screen.Screen) {
 	var err error
-	w.screen = s
-	width, height := int(640*w.ctx.Scaling), int(480*w.ctx.Scaling)
-	w.wnd, err = s.NewWindow(&screen.NewWindowOptions{width, height})
+	mw.screen = s
+	width, height := int(640*mw.ctx.Scaling), int(480*mw.ctx.Scaling)
+	mw.wnd, err = s.NewWindow(&screen.NewWindowOptions{width, height})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "could not create window: %v", err)
 		return
 	}
-	w.setupBuffer(image.Point{width, height})
-	w.Changed()
+	mw.setupBuffer(image.Point{width, height})
+	mw.Changed()
 
-	go w.updater()
+	go mw.updater()
 
 	for {
-		ei := w.wnd.NextEvent()
-		w.uilock.Lock()
-		r := w.handleEventLocked(ei)
-		w.uilock.Unlock()
+		ei := mw.wnd.NextEvent()
+		mw.uilock.Lock()
+		r := mw.handleEventLocked(ei)
+		mw.uilock.Unlock()
 		if !r {
 			break
 		}
@@ -202,7 +205,7 @@ func (w *MasterWindow) handleEventLocked(ei interface{}) bool {
 		}
 
 		if e.Rune >= 0 && e.Rune != '\n' && (e.Modifiers == 0 || e.Modifiers == key.ModShift) {
-			io.WriteString(w.ctx.Input.Keyboard.Text, string(e.Rune))
+			io.WriteString(&w.textbuffer, string(e.Rune))
 			if e.Modifiers != 0 {
 				evin()
 			}
@@ -243,14 +246,15 @@ func (w *MasterWindow) updater() {
 }
 
 // Forces an update of the window.
-func (w *MasterWindow) Changed() {
-	atomic.AddInt32(&w.ctx.changed, 1)
+func (mw *MasterWindow) Changed() {
+	atomic.AddInt32(&mw.ctx.changed, 1)
 }
 
 func (w *MasterWindow) updateLocked() {
 	contextBegin(w.ctx, &w.layout)
 	in := &w.ctx.Input
-	w.ctx.Windows[0].Bounds = FromRectangle(w.bounds)
+	in.Keyboard.Text = w.textbuffer.String()
+	w.ctx.Windows[0].Bounds = types.FromRectangle(w.bounds)
 	var t0, t1, te time.Time
 	if perfUpdate {
 		t0 = time.Now()
@@ -277,18 +281,18 @@ func (w *MasterWindow) updateLocked() {
 
 		if win.flags&windowNonblock != 0 && !win.first {
 			/* check if user clicked outside the popup and close if so */
-			in_panel := InputIsMouseClickInRect(&w.ctx.Input, mouse.ButtonLeft, win.ctx.Windows[0].layout.Bounds)
+			in_panel := w.ctx.Input.Mouse.IsClickInRect(mouse.ButtonLeft, win.ctx.Windows[0].layout.Bounds)
 			prevbody := win.Bounds
 			prevbody.H = win.layout.Height
-			in_body := InputIsMouseClickInRect(&w.ctx.Input, mouse.ButtonLeft, prevbody)
-			in_header := InputIsMouseClickInRect(&w.ctx.Input, mouse.ButtonLeft, win.header)
+			in_body := w.ctx.Input.Mouse.IsClickInRect(mouse.ButtonLeft, prevbody)
+			in_header := w.ctx.Input.Mouse.IsClickInRect(mouse.ButtonLeft, win.header)
 			if !in_body && in_panel || in_header {
 				win.close = true
 			}
 		}
 
 		if win.flags&windowPopup != 0 {
-			win.widgets.Add(WidgetStateInactive, nk_null_rect, &drawableScissor{nk_null_rect})
+			win.widgets.Add(types.WidgetStateInactive, nk_null_rect, &drawableScissor{nk_null_rect})
 			win.widgets.Clip = nk_null_rect
 
 			if !panelBegin(w.ctx, win, win.title) {
@@ -337,11 +341,11 @@ func (w *MasterWindow) updateLocked() {
 	in.Mouse.Buttons[mouse.ButtonLeft].Clicked = false
 	in.Mouse.Buttons[mouse.ButtonMiddle].Clicked = false
 	in.Mouse.Buttons[mouse.ButtonRight].Clicked = false
-	in.Keyboard.Text.Reset()
 	in.Mouse.ScrollDelta = 0
 	in.Mouse.Prev.X = in.Mouse.Pos.X
 	in.Mouse.Prev.Y = in.Mouse.Pos.Y
 	in.Mouse.Delta = image.Point{}
+	w.textbuffer.Reset()
 	in.Keyboard.Keys = in.Keyboard.Keys[0:0]
 	draw.Draw(w.wndb.RGBA(), b, w.img, b.Min, draw.Src)
 	w.wnd.Upload(b.Min, w.wndb, b)
@@ -357,17 +361,17 @@ func (w *MasterWindow) closeLocked() {
 }
 
 // Programmatically closes window.
-func (w *MasterWindow) Close() {
-	w.uilock.Lock()
-	defer w.uilock.Unlock()
-	w.closeLocked()
+func (mw *MasterWindow) Close() {
+	mw.uilock.Lock()
+	defer mw.uilock.Unlock()
+	mw.closeLocked()
 }
 
 // Returns true if the window is closed.
-func (w *MasterWindow) Closed() bool {
-	w.uilock.Lock()
-	defer w.uilock.Unlock()
-	return w.closing
+func (mw *MasterWindow) Closed() bool {
+	mw.uilock.Lock()
+	defer mw.uilock.Unlock()
+	return mw.closing
 }
 
 func (w *MasterWindow) setupBuffer(sz image.Point) {
@@ -419,12 +423,12 @@ func (w *MasterWindow) draw() (int, int) {
 
 	for i, icmd := range cmds {
 		switch cmd := icmd.(type) {
-		case *CommandScissor:
+		case *command.Scissor:
 			img = w.img.SubImage(cmd.Rect.Rectangle()).(*image.RGBA)
 			painter = nil
 			rasterizer = nil
 
-		case *CommandLine:
+		case *command.Line:
 			colimg := image.NewUniform(cmd.Color)
 			op := draw.Over
 			if cmd.Color.A == 0xff {
@@ -463,7 +467,7 @@ func (w *MasterWindow) draw() (int, int) {
 			}
 			ln++
 
-		case *CommandRectFilled:
+		case *command.RectFilled:
 			if i == 0 {
 				// first command draws the background, insure that it's always fully opaque
 				cmd.Color.A = 0xff
@@ -498,7 +502,7 @@ func (w *MasterWindow) draw() (int, int) {
 				// only draw parts of body if this command can be optimized to a border with the next command
 
 				bordopt = true
-				cmd2, _ := cmds[i+1].(*CommandRectFilled)
+				cmd2, _ := cmds[i+1].(*command.RectFilled)
 				border += int(cmd2.Rounding)
 
 				top := image.Rect(body.Min.X, body.Min.Y, body.Max.X, body.Min.Y+border)
@@ -564,7 +568,7 @@ func (w *MasterWindow) draw() (int, int) {
 				}
 			}
 
-		case *CommandTriangleFilled:
+		case *command.TriangleFilled:
 			if perfUpdate {
 				t0 = time.Now()
 			}
@@ -586,7 +590,7 @@ func (w *MasterWindow) draw() (int, int) {
 				tritim += time.Now().Sub(t0)
 			}
 
-		case *CommandCircleFilled:
+		case *command.CircleFilled:
 			if rasterizer == nil {
 				setupRasterizer()
 			}
@@ -597,15 +601,16 @@ func (w *MasterWindow) draw() (int, int) {
 			rasterizer.Rasterize(painter)
 			fcirc++
 
-		case *CommandImage:
+		case *command.Image:
 			draw.Draw(img, cmd.Rect.Rectangle(), cmd.Img, image.Point{}, draw.Src)
 
-		case *CommandText:
+		case *command.Text:
 			if perfUpdate {
 				t0 = time.Now()
 			}
+			dstimg := w.img.SubImage(img.Bounds().Intersect(cmd.Rect.Rectangle())).(*image.RGBA)
 			d := font.Drawer{
-				Dst:  img,
+				Dst:  dstimg,
 				Src:  image.NewUniform(cmd.Foreground),
 				Face: cmd.Font.Face,
 				Dot:  fixed.P(cmd.X, cmd.Y+cmd.Font.Face.Metrics().Ascent.Ceil())}
@@ -635,12 +640,12 @@ func (w *MasterWindow) draw() (int, int) {
 
 // Returns true if cmds[idx] is a shrunk version of CommandFillRect and its
 // color is not semitransparent and the border isn't greater than 128
-func borderOptimize(cmd *CommandRectFilled, cmds []Command, idx int) (ok bool, border int) {
+func borderOptimize(cmd *command.RectFilled, cmds []command.Command, idx int) (ok bool, border int) {
 	if idx >= len(cmds) {
 		return false, 0
 	}
 
-	cmd2, ok := cmds[idx].(*CommandRectFilled)
+	cmd2, ok := cmds[idx].(*command.RectFilled)
 	if !ok {
 		return false, 0
 	}
@@ -772,15 +777,15 @@ func (r *myRGBAPainter) Paint(ss []raster.Span, done bool) {
 }
 
 // compares cmds to the last draw frame, returns true if there is a change
-func (w *MasterWindow) drawChanged(cmds []Command) bool {
+func (w *MasterWindow) drawChanged(cmds []command.Command) bool {
 	if len(cmds) != len(w.prevCmds) {
 		return true
 	}
 
 	for i := range cmds {
 		switch cmd := cmds[i].(type) {
-		case *CommandScissor:
-			pcmd, ok := w.prevCmds[i].(*CommandScissor)
+		case *command.Scissor:
+			pcmd, ok := w.prevCmds[i].(*command.Scissor)
 			if !ok {
 				return true
 			}
@@ -788,8 +793,8 @@ func (w *MasterWindow) drawChanged(cmds []Command) bool {
 				return true
 			}
 
-		case *CommandLine:
-			pcmd, ok := w.prevCmds[i].(*CommandLine)
+		case *command.Line:
+			pcmd, ok := w.prevCmds[i].(*command.Line)
 			if !ok {
 				return true
 			}
@@ -797,8 +802,8 @@ func (w *MasterWindow) drawChanged(cmds []Command) bool {
 				return true
 			}
 
-		case *CommandRectFilled:
-			pcmd, ok := w.prevCmds[i].(*CommandRectFilled)
+		case *command.RectFilled:
+			pcmd, ok := w.prevCmds[i].(*command.RectFilled)
 			if !ok {
 				return true
 			}
@@ -806,8 +811,8 @@ func (w *MasterWindow) drawChanged(cmds []Command) bool {
 				return true
 			}
 
-		case *CommandTriangleFilled:
-			pcmd, ok := w.prevCmds[i].(*CommandTriangleFilled)
+		case *command.TriangleFilled:
+			pcmd, ok := w.prevCmds[i].(*command.TriangleFilled)
 			if !ok {
 				return true
 			}
@@ -815,8 +820,8 @@ func (w *MasterWindow) drawChanged(cmds []Command) bool {
 				return true
 			}
 
-		case *CommandCircleFilled:
-			pcmd, ok := w.prevCmds[i].(*CommandCircleFilled)
+		case *command.CircleFilled:
+			pcmd, ok := w.prevCmds[i].(*command.CircleFilled)
 			if !ok {
 				return true
 			}
@@ -824,8 +829,8 @@ func (w *MasterWindow) drawChanged(cmds []Command) bool {
 				return true
 			}
 
-		case *CommandImage:
-			pcmd, ok := w.prevCmds[i].(*CommandImage)
+		case *command.Image:
+			pcmd, ok := w.prevCmds[i].(*command.Image)
 			if !ok {
 				return true
 			}
@@ -833,8 +838,8 @@ func (w *MasterWindow) drawChanged(cmds []Command) bool {
 				return true
 			}
 
-		case *CommandText:
-			pcmd, ok := w.prevCmds[i].(*CommandText)
+		case *command.Text:
+			pcmd, ok := w.prevCmds[i].(*command.Text)
 			if !ok {
 				return true
 			}

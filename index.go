@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/aarzilli/nucular"
+	ntypes "github.com/aarzilli/nucular/types"
 
 	"golang.org/x/mobile/event/key"
 )
@@ -39,11 +40,11 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 	idxmw.mu.Lock()
 	defer idxmw.mu.Unlock()
 
-	var diffbounds nucular.Rect
+	var diffbounds ntypes.Rect
 
 	if idxmw.updating {
 		w.LayoutRowDynamic(25, 1)
-		w.Label("Updating...", nucular.TextLeft)
+		w.Label("Updating...", "LC")
 		return
 	}
 
@@ -64,7 +65,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 			}
 
 			selected := idxmw.selected == i
-			sw.SelectableLabel(idxmw.status.Lines[i].Path, nucular.TextLeft, &selected)
+			sw.SelectableLabel(idxmw.status.Lines[i].Path, "LC", &selected)
 			if selected && idxmw.selected != i {
 				idxmw.selected = i
 				idxmw.loadDiff()
@@ -92,15 +93,15 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 
 		sw.LayoutRowDynamic(100, 1)
 
-		idxmw.ed.Edit(sw, -1, nucular.FilterDefault)
+		idxmw.ed.Edit(sw)
 
 		sw.LayoutRowFixed(25, 100, 50, 50, 100)
 		sw.PropertyInt("fmt:", 10, &idxmw.fmtwidth, 150, 1, 1)
-		if sw.ButtonText("fmt", 0) {
+		if sw.ButtonText("fmt") {
 			idxmw.formatmsg()
 		}
 		sw.Spacing(1)
-		if sw.ButtonText("Commit", 0) {
+		if sw.ButtonText("Commit") {
 			var cmd *exec.Cmd
 			if idxmw.amend {
 				cmd = exec.Command("git", "commit", "--amend", "-F", "-")
@@ -141,7 +142,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 	}
 
 	in := w.Input()
-	if !idxmw.ed.Active && !nucular.InputIsMouseHoveringRect(in, diffbounds) {
+	if !idxmw.ed.Active && !in.Mouse.HoveringRect(diffbounds) {
 		for _, e := range in.Keyboard.Keys {
 			switch {
 			case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
@@ -158,7 +159,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 				idxmw.loadDiff()
 			}
 		}
-		if in.Keyboard.Text != nil && in.Keyboard.Text.String() == " " {
+		if in.Keyboard.Text == " " {
 			if idxmw.selected >= 0 {
 				idxmw.addRemoveIndex(true, idxmw.selected)
 			}

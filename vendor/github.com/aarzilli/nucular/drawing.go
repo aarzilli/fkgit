@@ -3,27 +3,32 @@ package nucular
 import (
 	"image"
 	"image/color"
+
+	"github.com/aarzilli/nucular/command"
+	"github.com/aarzilli/nucular/label"
+	nstyle "github.com/aarzilli/nucular/style"
+	"github.com/aarzilli/nucular/types"
 )
 
-func drawSymbol(out *CommandBuffer, type_ SymbolType, content Rect, background color.RGBA, foreground color.RGBA, border_width int, font *Face) {
+func drawSymbol(out *command.Buffer, type_ label.SymbolType, content types.Rect, background color.RGBA, foreground color.RGBA, border_width int, font *types.Face) {
 	triangleSymbol := func(heading Heading) {
 		points := triangleFromDirection(content, 0, 0, heading)
 		out.FillTriangle(points[0], points[1], points[2], foreground)
 	}
 	switch type_ {
-	case SymbolX,
-		SymbolUnderscore,
-		SymbolPlus,
-		SymbolMinus:
+	case label.SymbolX,
+		label.SymbolUnderscore,
+		label.SymbolPlus,
+		label.SymbolMinus:
 		var X rune
 		switch type_ {
-		case SymbolX:
+		case label.SymbolX:
 			X = 'x'
-		case SymbolUnderscore:
+		case label.SymbolUnderscore:
 			X = '_'
-		case SymbolPlus:
+		case label.SymbolPlus:
 			X = '+'
-		case SymbolMinus:
+		case label.SymbolMinus:
 			X = '-'
 		}
 
@@ -31,28 +36,28 @@ func drawSymbol(out *CommandBuffer, type_ SymbolType, content Rect, background c
 		text.Padding = image.Point{0, 0}
 		text.Background = background
 		text.Text = foreground
-		widgetText(out, content, string(X), &text, TextCentered, font)
-	case SymbolRect, SymbolRectFilled:
+		widgetText(out, content, string(X), &text, "CC", font)
+	case label.SymbolRect, label.SymbolRectFilled:
 		out.FillRect(content, 0, foreground)
-		if type_ == SymbolRectFilled {
+		if type_ == label.SymbolRectFilled {
 			out.FillRect(shrinkRect(content, border_width), 0, background)
 		}
-	case SymbolCircle, SymbolCircleFilled:
+	case label.SymbolCircle, label.SymbolCircleFilled:
 		out.FillCircle(content, foreground)
-		if type_ == SymbolCircleFilled {
+		if type_ == label.SymbolCircleFilled {
 			out.FillCircle(shrinkRect(content, 1), background)
 		}
-	case SymbolTriangleUp:
+	case label.SymbolTriangleUp:
 		triangleSymbol(Up)
-	case SymbolTriangleDown:
+	case label.SymbolTriangleDown:
 		triangleSymbol(Down)
-	case SymbolTriangleLeft:
+	case label.SymbolTriangleLeft:
 		triangleSymbol(Left)
-	case SymbolTriangleRight:
+	case label.SymbolTriangleRight:
 		triangleSymbol(Right)
 	default:
 		fallthrough
-	case SymbolNone:
+	case label.SymbolNone:
 		break
 	}
 }
@@ -62,26 +67,26 @@ func drawSymbol(out *CommandBuffer, type_ SymbolType, content Rect, background c
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableWindowHeader struct {
-	Header  Rect
-	Label   Rect
+	Header  types.Rect
+	Label   types.Rect
 	Hovered bool
 	Title   string
 
 	Minimized     bool
 	Dynamic       bool
 	HeaderActive  bool
-	Bounds        Rect
+	Bounds        types.Rect
 	RowHeight     int
 	LayoutWidth   int
 	LayoutHeaderH int
-	Style         *StyleWindow
+	Style         *nstyle.Window
 }
 
-func (dwh *drawableWindowHeader) Draw(z *Style, out *CommandBuffer) {
+func (dwh *drawableWindowHeader) Draw(z *nstyle.Style, out *command.Buffer) {
 	style := dwh.Style
 	if dwh.Minimized {
 		/* draw window background if minimized */
-		out.FillRect(Rect{dwh.Bounds.X, dwh.Bounds.Y, dwh.Bounds.W, dwh.RowHeight}, 0, style.Background)
+		out.FillRect(types.Rect{dwh.Bounds.X, dwh.Bounds.Y, dwh.Bounds.W, dwh.RowHeight}, 0, style.Background)
 	} else if !dwh.Dynamic {
 		/* draw fixed window body */
 		body := dwh.Bounds
@@ -90,18 +95,18 @@ func (dwh *drawableWindowHeader) Draw(z *Style, out *CommandBuffer) {
 			body.H -= dwh.LayoutHeaderH
 		}
 
-		if style.FixedBackground.Type == StyleItemImage {
+		if style.FixedBackground.Type == nstyle.ItemImage {
 			out.DrawImage(body, style.FixedBackground.Data.Image)
 		} else {
 			out.FillRect(body, 0, style.FixedBackground.Data.Color)
 		}
 	} else {
 		/* draw dynamic window body */
-		out.FillRect(Rect{dwh.Bounds.X, dwh.Bounds.Y, dwh.Bounds.W, dwh.RowHeight + style.Padding.Y}, 0, style.Background)
+		out.FillRect(types.Rect{dwh.Bounds.X, dwh.Bounds.Y, dwh.Bounds.W, dwh.RowHeight + style.Padding.Y}, 0, style.Background)
 	}
 
 	if dwh.HeaderActive {
-		var background *StyleItem
+		var background *nstyle.Item
 		var text textWidget
 
 		/* select correct header background and text color */
@@ -114,7 +119,7 @@ func (dwh *drawableWindowHeader) Draw(z *Style, out *CommandBuffer) {
 		}
 
 		/* draw header background */
-		if background.Type == StyleItemImage {
+		if background.Type == nstyle.ItemImage {
 			text.Background = color.RGBA{0, 0, 0, 0}
 			out.DrawImage(dwh.Header, background.Data.Image)
 		} else {
@@ -123,20 +128,20 @@ func (dwh *drawableWindowHeader) Draw(z *Style, out *CommandBuffer) {
 		}
 
 		text.Padding = image.Point{0, 0}
-		widgetText(out, dwh.Label, dwh.Title, &text, TextLeft, z.Font)
+		widgetText(out, dwh.Label, dwh.Title, &text, "LC", z.Font)
 	}
 	return
 }
 
 type drawableWindowBody struct {
 	NoScrollbar bool
-	Bounds      Rect
+	Bounds      types.Rect
 	LayoutWidth int
-	Clip        Rect
-	Style       *StyleWindow
+	Clip        types.Rect
+	Style       *nstyle.Window
 }
 
-func (dwb *drawableWindowBody) Draw(z *Style, out *CommandBuffer) {
+func (dwb *drawableWindowBody) Draw(z *nstyle.Style, out *command.Buffer) {
 
 	out.PushScissor(dwb.Clip)
 	out.Clip.X = dwb.Bounds.X
@@ -148,43 +153,43 @@ func (dwb *drawableWindowBody) Draw(z *Style, out *CommandBuffer) {
 }
 
 type drawableScissor struct {
-	R Rect
+	R types.Rect
 }
 
-func (d *drawableScissor) Draw(style *Style, out *CommandBuffer) {
+func (d *drawableScissor) Draw(style *nstyle.Style, out *command.Buffer) {
 	out.PushScissor(d.R)
 	return
 }
 
 type drawableFillRect struct {
-	R Rect
+	R types.Rect
 	C color.RGBA
 }
 
-func (d *drawableFillRect) Draw(style *Style, out *CommandBuffer) {
+func (d *drawableFillRect) Draw(style *nstyle.Style, out *command.Buffer) {
 	out.FillRect(d.R, 0, d.C)
 	return
 }
 
 type drawableScalerAndBorders struct {
 	DrawScaler bool
-	ScalerRect Rect
+	ScalerRect types.Rect
 
 	DrawHeaderBorder bool
 	DrawBorders      bool
-	Bounds           Rect
+	Bounds           types.Rect
 	Border           int
 	HeaderH          int
 	BorderColor      color.RGBA
 	PaddingY         int
-	Style            *StyleWindow
+	Style            *nstyle.Window
 }
 
-func (d *drawableScalerAndBorders) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableScalerAndBorders) Draw(z *nstyle.Style, out *command.Buffer) {
 	style := d.Style
 	if d.DrawScaler {
 		/* draw scaler */
-		if style.Scaler.Type == StyleItemImage {
+		if style.Scaler.Type == nstyle.ItemImage {
 			out.DrawImage(d.ScalerRect, style.Scaler.Data.Image)
 		} else {
 			out.FillTriangle(image.Point{d.ScalerRect.X + d.ScalerRect.W, d.ScalerRect.Y}, d.ScalerRect.Max(), image.Point{d.ScalerRect.X, d.ScalerRect.Y + d.ScalerRect.H}, style.Scaler.Data.Color)
@@ -216,14 +221,14 @@ func (d *drawableScalerAndBorders) Draw(z *Style, out *CommandBuffer) {
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableTreeNode struct {
-	Style  *StyleWindow
+	Style  *nstyle.Window
 	Type   TreeType
-	Header Rect
-	Sym    Rect
+	Header types.Rect
+	Sym    types.Rect
 	Title  string
 }
 
-func (d *drawableTreeNode) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableTreeNode) Draw(z *nstyle.Style, out *command.Buffer) {
 	type_ := d.Type
 	header := d.Header
 	sym := d.Sym
@@ -236,8 +241,8 @@ func (d *drawableTreeNode) Draw(z *Style, out *CommandBuffer) {
 	var text textWidget
 
 	if type_ == TreeTab {
-		var background *StyleItem = &z.Tab.Background
-		if background.Type == StyleItemImage {
+		var background *nstyle.Item = &z.Tab.Background
+		if background.Type == nstyle.ItemImage {
 			out.DrawImage(header, background.Data.Image)
 			text.Background = color.RGBA{0, 0, 0, 0}
 		} else {
@@ -250,15 +255,15 @@ func (d *drawableTreeNode) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	/* draw node label */
-	var label Rect
+	var lblrect types.Rect
 	header.W = max(header.W, sym.W+item_spacing.Y+panel_padding.X)
-	label.X = sym.X + sym.W + item_spacing.X + 2*z.Tab.Spacing.X
-	label.Y = sym.Y
-	label.W = header.W - (sym.W + 2*z.Tab.Spacing.X + item_spacing.Y + panel_padding.X)
-	label.H = fontHeight(z.Font)
+	lblrect.X = sym.X + sym.W + item_spacing.X + 2*z.Tab.Spacing.X
+	lblrect.Y = sym.Y
+	lblrect.W = header.W - (sym.W + 2*z.Tab.Spacing.X + item_spacing.Y + panel_padding.X)
+	lblrect.H = fontHeight(z.Font)
 
 	text.Text = z.Tab.Text
-	widgetText(out, label, title, &text, TextLeft, z.Font)
+	widgetText(out, lblrect, title, &text, "LC", z.Font)
 	return
 }
 
@@ -267,17 +272,17 @@ func (d *drawableTreeNode) Draw(z *Style, out *CommandBuffer) {
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableNonInteractive struct {
-	Bounds    Rect
+	Bounds    types.Rect
 	Color     color.RGBA
 	Wrap      bool
 	Text      textWidget
-	Alignment TextAlign
+	Alignment label.Align
 	Str       string
 	Img       *image.RGBA
-	Fn        func(Rect, *Style, *CommandBuffer)
+	Fn        func(types.Rect, *nstyle.Style, *command.Buffer)
 }
 
-func (d *drawableNonInteractive) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableNonInteractive) Draw(z *nstyle.Style, out *command.Buffer) {
 	if d.Fn != nil {
 		oldClip := out.Clip
 		clip := unify(oldClip, d.Bounds)
@@ -302,17 +307,17 @@ func (d *drawableNonInteractive) Draw(z *Style, out *CommandBuffer) {
 // BUTTON
 ///////////////////////////////////////////////////////////////////////////////////
 
-func drawButton(out *CommandBuffer, bounds Rect, state WidgetStates, style *StyleButton) *StyleItem {
-	var background *StyleItem
-	if state&WidgetStateHovered != 0 {
+func drawButton(out *command.Buffer, bounds types.Rect, state types.WidgetStates, style *nstyle.Button) *nstyle.Item {
+	var background *nstyle.Item
+	if state&types.WidgetStateHovered != 0 {
 		background = &style.Hover
-	} else if state&WidgetStateActive != 0 {
+	} else if state&types.WidgetStateActive != 0 {
 		background = &style.Active
 	} else {
 		background = &style.Normal
 	}
 
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		out.DrawImage(bounds, background.Data.Image)
 	} else {
 		out.FillRect(bounds, style.Rounding, style.BorderColor)
@@ -323,15 +328,15 @@ func drawButton(out *CommandBuffer, bounds Rect, state WidgetStates, style *Styl
 }
 
 type drawableTextButton struct {
-	Bounds        Rect
-	Content       Rect
-	State         WidgetStates
-	Style         *StyleButton
+	Bounds        types.Rect
+	Content       types.Rect
+	State         types.WidgetStates
+	Style         *nstyle.Button
 	Txt           string
-	TextAlignment TextAlign
+	TextAlignment label.Align
 }
 
-func (d *drawableTextButton) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableTextButton) Draw(z *nstyle.Style, out *command.Buffer) {
 	style := d.Style
 	bounds := d.Bounds
 	content := d.Content
@@ -356,14 +361,14 @@ func (d *drawableTextButton) Draw(z *Style, out *CommandBuffer) {
 
 	/* select correct colors/images */
 	var text textWidget
-	if background.Type == StyleItemColor {
+	if background.Type == nstyle.ItemColor {
 		text.Background = background.Data.Color
 	} else {
 		text.Background = style.TextBackground
 	}
-	if state&WidgetStateHovered != 0 {
+	if state&types.WidgetStateHovered != 0 {
 		text.Text = style.TextHover
-	} else if state&WidgetStateActive != 0 {
+	} else if state&types.WidgetStateActive != 0 {
 		text.Text = style.TextActive
 	} else {
 		text.Text = style.TextNormal
@@ -374,14 +379,14 @@ func (d *drawableTextButton) Draw(z *Style, out *CommandBuffer) {
 }
 
 type drawableSymbolButton struct {
-	Bounds  Rect
-	Content Rect
-	State   WidgetStates
-	Style   *StyleButton
-	Symbol  SymbolType
+	Bounds  types.Rect
+	Content types.Rect
+	State   types.WidgetStates
+	Style   *nstyle.Button
+	Symbol  label.SymbolType
 }
 
-func (d *drawableSymbolButton) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableSymbolButton) Draw(z *nstyle.Style, out *command.Buffer) {
 	style := d.Style
 	bounds := d.Bounds
 	content := d.Content
@@ -402,16 +407,16 @@ func (d *drawableSymbolButton) Draw(z *Style, out *CommandBuffer) {
 
 	background := drawButton(out, bounds, state, style)
 	var bg color.RGBA
-	if background.Type == StyleItemColor {
+	if background.Type == nstyle.ItemColor {
 		bg = background.Data.Color
 	} else {
 		bg = style.TextBackground
 	}
 
 	var sym color.RGBA
-	if state&WidgetStateHovered != 0 {
+	if state&types.WidgetStateHovered != 0 {
 		sym = style.TextHover
-	} else if state&WidgetStateActive != 0 {
+	} else if state&types.WidgetStateActive != 0 {
 		sym = style.TextActive
 	} else {
 		sym = style.TextNormal
@@ -421,14 +426,14 @@ func (d *drawableSymbolButton) Draw(z *Style, out *CommandBuffer) {
 }
 
 type drawableImageButton struct {
-	Bounds  Rect
-	Content Rect
-	State   WidgetStates
-	Style   *StyleButton
+	Bounds  types.Rect
+	Content types.Rect
+	State   types.WidgetStates
+	Style   *nstyle.Button
 	Img     *image.RGBA
 }
 
-func (d *drawableImageButton) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableImageButton) Draw(z *nstyle.Style, out *command.Buffer) {
 	bounds := d.Bounds
 	content := d.Content
 	state := d.State
@@ -451,17 +456,16 @@ func (d *drawableImageButton) Draw(z *Style, out *CommandBuffer) {
 }
 
 type drawableTextSymbolButton struct {
-	Bounds            Rect
-	Label, SymbolRect Rect
-	State             WidgetStates
-	Style             *StyleButton
+	Bounds            types.Rect
+	Label, SymbolRect types.Rect
+	State             types.WidgetStates
+	Style             *nstyle.Button
 	Txt               string
-	Symbol            SymbolType
+	Symbol            label.SymbolType
 }
 
-func (d *drawableTextSymbolButton) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableTextSymbolButton) Draw(z *nstyle.Style, out *command.Buffer) {
 	bounds := d.Bounds
-	label := d.Label
 	symbolrect := d.SymbolRect
 	state := d.State
 	style := d.Style
@@ -484,7 +488,7 @@ func (d *drawableTextSymbolButton) Draw(z *Style, out *CommandBuffer) {
 	background := drawButton(out, bounds, state, style)
 
 	var text textWidget
-	if background.Type == StyleItemColor {
+	if background.Type == nstyle.ItemColor {
 		text.Background = background.Data.Color
 	} else {
 		text.Background = style.TextBackground
@@ -492,10 +496,10 @@ func (d *drawableTextSymbolButton) Draw(z *Style, out *CommandBuffer) {
 
 	/* select correct text colors */
 	var sym color.RGBA
-	if state&WidgetStateHovered != 0 {
+	if state&types.WidgetStateHovered != 0 {
 		sym = style.TextHover
 		text.Text = style.TextHover
-	} else if state&WidgetStateActive != 0 {
+	} else if state&types.WidgetStateActive != 0 {
 		sym = style.TextActive
 		text.Text = style.TextActive
 	} else {
@@ -505,22 +509,21 @@ func (d *drawableTextSymbolButton) Draw(z *Style, out *CommandBuffer) {
 
 	text.Padding = image.Point{0, 0}
 	drawSymbol(out, symbol, symbolrect, style.TextBackground, sym, 0, font)
-	widgetText(out, label, str, &text, TextCentered, font)
+	widgetText(out, d.Label, str, &text, "CC", font)
 	return
 }
 
 type drawableTextImageButton struct {
-	Bounds         Rect
-	Label, ImgRect Rect
-	State          WidgetStates
-	Style          *StyleButton
+	Bounds         types.Rect
+	Label, ImgRect types.Rect
+	State          types.WidgetStates
+	Style          *nstyle.Button
 	Str            string
 	Img            *image.RGBA
 }
 
-func (d *drawableTextImageButton) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableTextImageButton) Draw(z *nstyle.Style, out *command.Buffer) {
 	bounds := d.Bounds
-	label := d.Label
 	imgrect := d.ImgRect
 	state := d.State
 	style := d.Style
@@ -535,7 +538,7 @@ func (d *drawableTextImageButton) Draw(z *Style, out *CommandBuffer) {
 		defer style.DrawEnd(out)
 	}
 	if style.Draw.ButtonTextImage != nil {
-		style.Draw.ButtonTextImage(out, bounds.Rectangle(), label.Rectangle(), imgrect.Rectangle(), state, style, str, font, img)
+		style.Draw.ButtonTextImage(out, bounds.Rectangle(), d.Label.Rectangle(), imgrect.Rectangle(), state, style, str, font, img)
 		return
 	}
 
@@ -543,21 +546,21 @@ func (d *drawableTextImageButton) Draw(z *Style, out *CommandBuffer) {
 
 	/* select correct colors */
 	var text textWidget
-	if background.Type == StyleItemColor {
+	if background.Type == nstyle.ItemColor {
 		text.Background = background.Data.Color
 	} else {
 		text.Background = style.TextBackground
 	}
-	if state&WidgetStateHovered != 0 {
+	if state&types.WidgetStateHovered != 0 {
 		text.Text = style.TextHover
-	} else if state&WidgetStateActive != 0 {
+	} else if state&types.WidgetStateActive != 0 {
 		text.Text = style.TextActive
 	} else {
 		text.Text = style.TextNormal
 	}
 
 	text.Padding = image.Point{0, 0}
-	widgetText(out, label, str, &text, TextCentered, font)
+	widgetText(out, d.Label, str, &text, "CC", font)
 	out.DrawImage(imgrect, img)
 	return
 }
@@ -567,15 +570,15 @@ func (d *drawableTextImageButton) Draw(z *Style, out *CommandBuffer) {
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableSelectable struct {
-	State  WidgetStates
-	Style  *StyleSelectable
+	State  types.WidgetStates
+	Style  *nstyle.Selectable
 	Active bool
-	Bounds Rect
+	Bounds types.Rect
 	Str    string
-	Align  TextAlign
+	Align  label.Align
 }
 
-func (d *drawableSelectable) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableSelectable) Draw(z *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	style := d.Style
 	active := d.Active
@@ -595,16 +598,16 @@ func (d *drawableSelectable) Draw(z *Style, out *CommandBuffer) {
 		return
 	}
 
-	var background *StyleItem
+	var background *nstyle.Item
 	var text textWidget
 	text.Padding = style.Padding
 
 	/* select correct colors/images */
 	if !active {
-		if state&WidgetStateActive != 0 {
+		if state&types.WidgetStateActive != 0 {
 			background = &style.Pressed
 			text.Text = style.TextPressed
-		} else if state&WidgetStateHovered != 0 {
+		} else if state&types.WidgetStateHovered != 0 {
 			background = &style.Hover
 			text.Text = style.TextHover
 		} else {
@@ -612,10 +615,10 @@ func (d *drawableSelectable) Draw(z *Style, out *CommandBuffer) {
 			text.Text = style.TextNormal
 		}
 	} else {
-		if state&WidgetStateActive != 0 {
+		if state&types.WidgetStateActive != 0 {
 			background = &style.PressedActive
 			text.Text = style.TextPressedActive
-		} else if state&WidgetStateHovered != 0 {
+		} else if state&types.WidgetStateHovered != 0 {
 			background = &style.HoverActive
 			text.Text = style.TextHoverActive
 		} else {
@@ -625,7 +628,7 @@ func (d *drawableSelectable) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	/* draw selectable background and text */
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		out.DrawImage(bounds, background.Data.Image)
 		text.Background = color.RGBA{0, 0, 0, 0}
 	} else {
@@ -642,13 +645,13 @@ func (d *drawableSelectable) Draw(z *Style, out *CommandBuffer) {
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableScrollbar struct {
-	State  WidgetStates
-	Style  *StyleScrollbar
-	Bounds Rect
-	Scroll Rect
+	State  types.WidgetStates
+	Style  *nstyle.Scrollbar
+	Bounds types.Rect
+	Scroll types.Rect
 }
 
-func (d *drawableScrollbar) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableScrollbar) Draw(z *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	style := d.Style
 	bounds := d.Bounds
@@ -666,12 +669,12 @@ func (d *drawableScrollbar) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	/* select correct colors/images to draw */
-	var background *StyleItem
-	var cursorstyle *StyleItem
-	if state&WidgetStateActive != 0 {
+	var background *nstyle.Item
+	var cursorstyle *nstyle.Item
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Active
 		cursorstyle = &style.CursorActive
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Hover
 		cursorstyle = &style.CursorHover
 	} else {
@@ -680,7 +683,7 @@ func (d *drawableScrollbar) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	/* draw background */
-	if background.Type == StyleItemColor {
+	if background.Type == nstyle.ItemColor {
 		out.FillRect(bounds, style.Rounding, style.BorderColor)
 		out.FillRect(shrinkRect(bounds, style.Border), style.Rounding, background.Data.Color)
 	} else {
@@ -688,7 +691,7 @@ func (d *drawableScrollbar) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	/* draw cursor */
-	if cursorstyle.Type == StyleItemImage {
+	if cursorstyle.Type == nstyle.ItemImage {
 		out.DrawImage(scroll, cursorstyle.Data.Image)
 	} else {
 		out.FillRect(scroll, style.Rounding, cursorstyle.Data.Color)
@@ -702,19 +705,19 @@ func (d *drawableScrollbar) Draw(z *Style, out *CommandBuffer) {
 
 type drawableTogglebox struct {
 	Type                     toggleType
-	State                    WidgetStates
-	Style                    *StyleToggle
+	State                    types.WidgetStates
+	Style                    *nstyle.Toggle
 	Active                   bool
-	Label, Selector, Cursors Rect
+	Label, Selector, Cursors types.Rect
 	Str                      string
 }
 
-func (d *drawableTogglebox) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableTogglebox) Draw(z *nstyle.Style, out *command.Buffer) {
 	type_ := d.Type
 	state := d.State
 	style := d.Style
 	active := d.Active
-	label, select_, cursor := d.Label, d.Selector, d.Cursors
+	select_, cursor := d.Selector, d.Cursors
 	str := d.Str
 	font := z.Font
 
@@ -727,25 +730,25 @@ func (d *drawableTogglebox) Draw(z *Style, out *CommandBuffer) {
 	switch type_ {
 	case toggleCheck:
 		if style.Draw.Checkbox != nil {
-			style.Draw.Checkbox(out, state, style, active, label.Rectangle(), select_.Rectangle(), cursor.Rectangle(), str, font)
+			style.Draw.Checkbox(out, state, style, active, d.Label.Rectangle(), select_.Rectangle(), cursor.Rectangle(), str, font)
 			return
 		}
 	default:
 		if style.Draw.Radio != nil {
-			style.Draw.Radio(out, state, style, active, label.Rectangle(), select_.Rectangle(), cursor.Rectangle(), str, font)
+			style.Draw.Radio(out, state, style, active, d.Label.Rectangle(), select_.Rectangle(), cursor.Rectangle(), str, font)
 			return
 		}
 	}
 
 	/* select correct colors/images */
-	var background *StyleItem
-	var cursorstyle *StyleItem
+	var background *nstyle.Item
+	var cursorstyle *nstyle.Item
 	var text textWidget
-	if state&WidgetStateHovered != 0 {
+	if state&types.WidgetStateHovered != 0 {
 		background = &style.Hover
 		cursorstyle = &style.CursorHover
 		text.Text = style.TextHover
-	} else if state&WidgetStateActive != 0 {
+	} else if state&types.WidgetStateActive != 0 {
 		background = &style.Hover
 		cursorstyle = &style.CursorHover
 		text.Text = style.TextActive
@@ -756,7 +759,7 @@ func (d *drawableTogglebox) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	/* draw background and cursor */
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		out.DrawImage(select_, background.Data.Image)
 	} else {
 		switch type_ {
@@ -767,7 +770,7 @@ func (d *drawableTogglebox) Draw(z *Style, out *CommandBuffer) {
 		}
 	}
 	if active {
-		if cursorstyle.Type == StyleItemImage {
+		if cursorstyle.Type == nstyle.ItemImage {
 			out.DrawImage(cursor, cursorstyle.Data.Image)
 		} else {
 			switch type_ {
@@ -782,7 +785,7 @@ func (d *drawableTogglebox) Draw(z *Style, out *CommandBuffer) {
 	text.Padding.X = 0
 	text.Padding.Y = 0
 	text.Background = style.TextBackground
-	widgetText(out, label, str, &text, TextLeft, font)
+	widgetText(out, d.Label, str, &text, "LC", font)
 	return
 }
 
@@ -791,15 +794,15 @@ func (d *drawableTogglebox) Draw(z *Style, out *CommandBuffer) {
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableProgress struct {
-	State   WidgetStates
-	Style   *StyleProgress
-	Bounds  Rect
-	Scursor Rect
+	State   types.WidgetStates
+	Style   *nstyle.Progress
+	Bounds  types.Rect
+	Scursor types.Rect
 	Value   int
 	MaxVal  int
 }
 
-func (d *drawableProgress) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableProgress) Draw(z *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	style := d.Style
 	bounds := d.Bounds
@@ -819,14 +822,14 @@ func (d *drawableProgress) Draw(z *Style, out *CommandBuffer) {
 		return
 	}
 
-	var background *StyleItem
-	var cursor *StyleItem
+	var background *nstyle.Item
+	var cursor *nstyle.Item
 
 	/* select correct colors/images to draw */
-	if state&WidgetStateActive != 0 {
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Active
 		cursor = &style.CursorActive
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Hover
 		cursor = &style.CursorHover
 	} else {
@@ -835,14 +838,14 @@ func (d *drawableProgress) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	/* draw background */
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		out.DrawImage(bounds, background.Data.Image)
 	} else {
 		out.FillRect(bounds, style.Rounding, background.Data.Color)
 	}
 
 	/* draw cursor */
-	if cursor.Type == StyleItemImage {
+	if cursor.Type == nstyle.ItemImage {
 		out.DrawImage(scursor, cursor.Data.Image)
 	} else {
 		out.FillRect(scursor, style.Rounding, cursor.Data.Color)
@@ -855,14 +858,14 @@ func (d *drawableProgress) Draw(z *Style, out *CommandBuffer) {
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableSlider struct {
-	State               WidgetStates
-	Style               *StyleSlider
-	Bounds              Rect
-	VirtualCursor       Rect
+	State               types.WidgetStates
+	Style               *nstyle.Slider
+	Bounds              types.Rect
+	VirtualCursor       types.Rect
 	MinVal, Val, MaxVal float64
 }
 
-func (d *drawableSlider) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableSlider) Draw(z *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	style := d.Style
 	bounds := d.Bounds
@@ -880,19 +883,19 @@ func (d *drawableSlider) Draw(z *Style, out *CommandBuffer) {
 		return
 	}
 
-	var fill Rect
-	var bar Rect
-	var scursor Rect
-	var background *StyleItem
+	var fill types.Rect
+	var bar types.Rect
+	var scursor types.Rect
+	var background *nstyle.Item
 	var bar_color color.RGBA
-	var cursor *StyleItem
+	var cursor *nstyle.Item
 
 	/* select correct slider images/colors */
-	if state&WidgetStateActive != 0 {
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Active
 		bar_color = style.BarActive
 		cursor = &style.CursorActive
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Hover
 		bar_color = style.BarHover
 		cursor = &style.CursorHover
@@ -922,7 +925,7 @@ func (d *drawableSlider) Draw(z *Style, out *CommandBuffer) {
 	fill.H = bar.H
 
 	/* draw background */
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		out.DrawImage(bounds, background.Data.Image)
 	} else {
 		out.FillRect(bounds, style.Rounding, style.BorderColor)
@@ -935,7 +938,7 @@ func (d *drawableSlider) Draw(z *Style, out *CommandBuffer) {
 	out.FillRect(fill, style.Rounding, style.BarFilled)
 
 	/* draw cursor */
-	if cursor.Type == StyleItemImage {
+	if cursor.Type == nstyle.ItemImage {
 		out.DrawImage(scursor, cursor.Data.Image)
 	} else {
 		out.FillCircle(scursor, cursor.Data.Color)
@@ -948,17 +951,16 @@ func (d *drawableSlider) Draw(z *Style, out *CommandBuffer) {
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableProperty struct {
-	Style  *StyleProperty
-	Bounds Rect
-	Label  Rect
-	state  WidgetStates
+	Style  *nstyle.Property
+	Bounds types.Rect
+	Label  types.Rect
+	state  types.WidgetStates
 	Name   string
 }
 
-func (d *drawableProperty) Draw(z *Style, out *CommandBuffer) {
+func (d *drawableProperty) Draw(z *nstyle.Style, out *command.Buffer) {
 	style := d.Style
 	bounds := d.Bounds
-	label := d.Label
 	ws := d.state
 	name := d.Name
 	font := z.Font
@@ -970,18 +972,18 @@ func (d *drawableProperty) Draw(z *Style, out *CommandBuffer) {
 		defer style.DrawEnd(out)
 	}
 	if style.Draw != nil {
-		style.Draw(out, style, bounds.Rectangle(), label.Rectangle(), ws, name, font)
+		style.Draw(out, style, bounds.Rectangle(), d.Label.Rectangle(), ws, name, font)
 		return
 	}
 
 	var text textWidget
-	var background *StyleItem
+	var background *nstyle.Item
 
 	// select correct background and text color
-	if ws&WidgetStateActive != 0 {
+	if ws&types.WidgetStateActive != 0 {
 		background = &style.Active
 		text.Text = style.LabelActive
-	} else if ws&WidgetStateHovered != 0 {
+	} else if ws&types.WidgetStateHovered != 0 {
 		background = &style.Hover
 		text.Text = style.LabelHover
 	} else {
@@ -990,7 +992,7 @@ func (d *drawableProperty) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	// draw background
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		out.DrawImage(bounds, background.Data.Image)
 		text.Background = color.RGBA{0, 0, 0, 0}
 	} else {
@@ -1000,7 +1002,7 @@ func (d *drawableProperty) Draw(z *Style, out *CommandBuffer) {
 	}
 
 	// draw label
-	widgetText(out, label, name, &text, TextCentered, font)
+	widgetText(out, d.Label, name, &text, "CC", font)
 	return
 }
 
@@ -1009,49 +1011,49 @@ func (d *drawableProperty) Draw(z *Style, out *CommandBuffer) {
 ///////////////////////////////////////////////////////////////////////////////////
 
 type drawableCombo struct {
-	State    WidgetStates
-	Header   Rect
+	State    types.WidgetStates
+	Header   types.Rect
 	Active   bool
 	Selected string
 	Color    color.RGBA
-	Symbol   SymbolType
+	Symbol   label.SymbolType
 	Image    *image.RGBA
-	Fn       func(*drawableCombo, *Style, *CommandBuffer)
+	Fn       func(*drawableCombo, *nstyle.Style, *command.Buffer)
 }
 
-func (d *drawableCombo) Draw(style *Style, out *CommandBuffer) {
+func (d *drawableCombo) Draw(style *nstyle.Style, out *command.Buffer) {
 	d.Fn(d, style, out)
 	return
 }
 
-func drawableComboColor(d *drawableCombo, style *Style, out *CommandBuffer) {
+func drawableComboColor(d *drawableCombo, style *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	header := d.Header
 	is_active := d.Active
 	color := d.Color
 
 	/* draw combo box header background and border */
-	var background *StyleItem
-	if state&WidgetStateActive != 0 {
+	var background *nstyle.Item
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Combo.Active
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Combo.Hover
 	} else {
 		background = &style.Combo.Normal
 	}
 
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		out.DrawImage(header, background.Data.Image)
 	} else {
 		out.FillRect(header, 0, style.Combo.BorderColor)
 		out.FillRect(shrinkRect(header, 1), 0, background.Data.Color)
 	}
 	{
-		var content Rect
-		var button Rect
-		var bounds Rect
-		var sym SymbolType
-		if state&WidgetStateHovered != 0 {
+		var content types.Rect
+		var button types.Rect
+		var bounds types.Rect
+		var sym label.SymbolType
+		if state&types.WidgetStateHovered != 0 {
 			sym = style.Combo.SymHover
 		} else if is_active {
 			sym = style.Combo.SymActive
@@ -1085,21 +1087,21 @@ func drawableComboColor(d *drawableCombo, style *Style, out *CommandBuffer) {
 	}
 }
 
-func drawableComboSymbol(d *drawableCombo, style *Style, out *CommandBuffer) {
+func drawableComboSymbol(d *drawableCombo, style *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	header := d.Header
 	is_active := d.Active
 	symbol := d.Symbol
 
-	var background *StyleItem
+	var background *nstyle.Item
 	var sym_background color.RGBA
 	var symbol_color color.RGBA
 
 	/* draw combo box header background and border */
-	if state&WidgetStateActive != 0 {
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Combo.Active
 		symbol_color = style.Combo.SymbolActive
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Combo.Hover
 		symbol_color = style.Combo.SymbolHover
 	} else {
@@ -1107,7 +1109,7 @@ func drawableComboSymbol(d *drawableCombo, style *Style, out *CommandBuffer) {
 		symbol_color = style.Combo.SymbolHover
 	}
 
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		sym_background = color.RGBA{0, 0, 0, 0}
 		out.DrawImage(header, background.Data.Image)
 	} else {
@@ -1116,11 +1118,11 @@ func drawableComboSymbol(d *drawableCombo, style *Style, out *CommandBuffer) {
 		out.FillRect(shrinkRect(header, 1), 0, background.Data.Color)
 	}
 	{
-		var bounds = Rect{0, 0, 0, 0}
-		var content Rect
-		var button Rect
-		var sym SymbolType
-		if state&WidgetStateHovered != 0 {
+		var bounds = types.Rect{0, 0, 0, 0}
+		var content types.Rect
+		var button types.Rect
+		var sym label.SymbolType
+		if state&types.WidgetStateHovered != 0 {
 			sym = style.Combo.SymHover
 		} else if is_active {
 			sym = style.Combo.SymActive
@@ -1154,23 +1156,23 @@ func drawableComboSymbol(d *drawableCombo, style *Style, out *CommandBuffer) {
 	}
 }
 
-func drawableComboSymbolText(d *drawableCombo, style *Style, out *CommandBuffer) {
+func drawableComboSymbolText(d *drawableCombo, style *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	header := d.Header
 	is_active := d.Active
 	symbol := d.Symbol
 	selected := d.Selected
 
-	var background *StyleItem
+	var background *nstyle.Item
 	var symbol_color color.RGBA
 	var text textWidget
 
 	/* draw combo box header background and border */
-	if state&WidgetStateActive != 0 {
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Combo.Active
 		symbol_color = style.Combo.SymbolActive
 		text.Text = style.Combo.LabelActive
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Combo.Hover
 		symbol_color = style.Combo.SymbolHover
 		text.Text = style.Combo.LabelHover
@@ -1180,7 +1182,7 @@ func drawableComboSymbolText(d *drawableCombo, style *Style, out *CommandBuffer)
 		text.Text = style.Combo.LabelNormal
 	}
 
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		text.Background = color.RGBA{0, 0, 0, 0}
 		out.DrawImage(header, background.Data.Image)
 	} else {
@@ -1189,12 +1191,11 @@ func drawableComboSymbolText(d *drawableCombo, style *Style, out *CommandBuffer)
 		out.FillRect(shrinkRect(header, 1), 0, background.Data.Color)
 	}
 	{
-		var content Rect
-		var button Rect
-		var label Rect
-		var imrect Rect
-		var sym SymbolType
-		if state&WidgetStateHovered != 0 {
+		var content types.Rect
+		var button types.Rect
+		var imrect types.Rect
+		var sym label.SymbolType
+		if state&types.WidgetStateHovered != 0 {
 			sym = style.Combo.SymHover
 		} else if is_active {
 			sym = style.Combo.SymActive
@@ -1227,43 +1228,44 @@ func drawableComboSymbolText(d *drawableCombo, style *Style, out *CommandBuffer)
 		/* draw label */
 		text.Padding = image.Point{0, 0}
 
-		label.X = imrect.X + imrect.W + style.Combo.Spacing.X + style.Combo.ContentPadding.X
-		label.Y = header.Y + style.Combo.ContentPadding.Y
-		label.W = (button.X - style.Combo.ContentPadding.X) - label.X
-		label.H = header.H - 2*style.Combo.ContentPadding.Y
-		widgetText(out, label, selected, &text, TextLeft, style.Font)
+		var lblrect types.Rect
+		lblrect.X = imrect.X + imrect.W + style.Combo.Spacing.X + style.Combo.ContentPadding.X
+		lblrect.Y = header.Y + style.Combo.ContentPadding.Y
+		lblrect.W = (button.X - style.Combo.ContentPadding.X) - lblrect.X
+		lblrect.H = header.H - 2*style.Combo.ContentPadding.Y
+		widgetText(out, lblrect, selected, &text, "LC", style.Font)
 	}
 }
 
-func drawableComboImage(d *drawableCombo, style *Style, out *CommandBuffer) {
+func drawableComboImage(d *drawableCombo, style *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	header := d.Header
 	is_active := d.Active
 	img := d.Image
 
-	var background *StyleItem
+	var background *nstyle.Item
 
 	/* draw combo box header background and border */
-	if state&WidgetStateActive != 0 {
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Combo.Active
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Combo.Hover
 	} else {
 		background = &style.Combo.Normal
 	}
 
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		out.DrawImage(header, background.Data.Image)
 	} else {
 		out.FillRect(header, 0, style.Combo.BorderColor)
 		out.FillRect(shrinkRect(header, 1), 0, background.Data.Color)
 	}
 	{
-		var bounds = Rect{0, 0, 0, 0}
-		var content Rect
-		var button Rect
-		var sym SymbolType
-		if state&WidgetStateHovered != 0 {
+		var bounds = types.Rect{0, 0, 0, 0}
+		var content types.Rect
+		var button types.Rect
+		var sym label.SymbolType
+		if state&types.WidgetStateHovered != 0 {
 			sym = style.Combo.SymHover
 		} else if is_active {
 			sym = style.Combo.SymActive
@@ -1295,21 +1297,21 @@ func drawableComboImage(d *drawableCombo, style *Style, out *CommandBuffer) {
 	}
 }
 
-func drawableComboImageText(d *drawableCombo, style *Style, out *CommandBuffer) {
+func drawableComboImageText(d *drawableCombo, style *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	header := d.Header
 	is_active := d.Active
 	selected := d.Selected
 	img := d.Image
 
-	var background *StyleItem
+	var background *nstyle.Item
 	var text textWidget
 
 	/* draw combo box header background and border */
-	if state&WidgetStateActive != 0 {
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Combo.Active
 		text.Text = style.Combo.LabelActive
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Combo.Hover
 		text.Text = style.Combo.LabelHover
 	} else {
@@ -1317,7 +1319,7 @@ func drawableComboImageText(d *drawableCombo, style *Style, out *CommandBuffer) 
 		text.Text = style.Combo.LabelNormal
 	}
 
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		text.Background = color.RGBA{0, 0, 0, 0}
 		out.DrawImage(header, background.Data.Image)
 	} else {
@@ -1326,12 +1328,11 @@ func drawableComboImageText(d *drawableCombo, style *Style, out *CommandBuffer) 
 		out.FillRect(shrinkRect(header, 1), 0, background.Data.Color)
 	}
 	{
-		var content Rect
-		var button Rect
-		var label Rect
-		var imrect Rect
-		var sym SymbolType
-		if state&WidgetStateHovered != 0 {
+		var content types.Rect
+		var button types.Rect
+		var imrect types.Rect
+		var sym label.SymbolType
+		if state&types.WidgetStateHovered != 0 {
 			sym = style.Combo.SymHover
 		} else if is_active {
 			sym = style.Combo.SymActive
@@ -1363,27 +1364,28 @@ func drawableComboImageText(d *drawableCombo, style *Style, out *CommandBuffer) 
 		/* draw label */
 		text.Padding = image.Point{0, 0}
 
-		label.X = imrect.X + imrect.W + style.Combo.Spacing.X + style.Combo.ContentPadding.X
-		label.Y = header.Y + style.Combo.ContentPadding.Y
-		label.W = (button.X - style.Combo.ContentPadding.X) - label.X
-		label.H = header.H - 2*style.Combo.ContentPadding.Y
-		widgetText(out, label, selected, &text, TextLeft, style.Font)
+		var lblrect types.Rect
+		lblrect.X = imrect.X + imrect.W + style.Combo.Spacing.X + style.Combo.ContentPadding.X
+		lblrect.Y = header.Y + style.Combo.ContentPadding.Y
+		lblrect.W = (button.X - style.Combo.ContentPadding.X) - lblrect.X
+		lblrect.H = header.H - 2*style.Combo.ContentPadding.Y
+		widgetText(out, lblrect, selected, &text, "LC", style.Font)
 	}
 }
 
-func drawableComboText(d *drawableCombo, style *Style, out *CommandBuffer) {
+func drawableComboText(d *drawableCombo, style *nstyle.Style, out *command.Buffer) {
 	state := d.State
 	header := d.Header
 	is_active := d.Active
 	selected := d.Selected
 
 	/* draw combo box header background and border */
-	var background *StyleItem
+	var background *nstyle.Item
 	var text textWidget
-	if state&WidgetStateActive != 0 {
+	if state&types.WidgetStateActive != 0 {
 		background = &style.Combo.Active
 		text.Text = style.Combo.LabelActive
-	} else if state&WidgetStateHovered != 0 {
+	} else if state&types.WidgetStateHovered != 0 {
 		background = &style.Combo.Hover
 		text.Text = style.Combo.LabelHover
 	} else {
@@ -1391,7 +1393,7 @@ func drawableComboText(d *drawableCombo, style *Style, out *CommandBuffer) {
 		text.Text = style.Combo.LabelNormal
 	}
 
-	if background.Type == StyleItemImage {
+	if background.Type == nstyle.ItemImage {
 		text.Background = color.RGBA{0, 0, 0, 0}
 		out.DrawImage(header, background.Data.Image)
 	} else {
@@ -1400,13 +1402,12 @@ func drawableComboText(d *drawableCombo, style *Style, out *CommandBuffer) {
 		out.FillRect(shrinkRect(header, 1), style.Combo.Rounding, background.Data.Color)
 	}
 
-	var label Rect
-	var button Rect
-	var content Rect
+	var button types.Rect
+	var content types.Rect
 	/* print currently selected text item */
 
-	var sym SymbolType
-	if state&WidgetStateHovered != 0 {
+	var sym label.SymbolType
+	if state&types.WidgetStateHovered != 0 {
 		sym = style.Combo.SymHover
 	} else if is_active {
 		sym = style.Combo.SymActive
@@ -1429,11 +1430,12 @@ func drawableComboText(d *drawableCombo, style *Style, out *CommandBuffer) {
 	/* draw selected label */
 	text.Padding = image.Point{0, 0}
 
-	label.X = header.X + style.Combo.ContentPadding.X
-	label.Y = header.Y + style.Combo.ContentPadding.Y
-	label.W = button.X - (style.Combo.ContentPadding.X + style.Combo.Spacing.X) - label.X
-	label.H = header.H - 2*style.Combo.ContentPadding.Y
-	widgetText(out, label, selected, &text, TextLeft, style.Font)
+	var lblrect types.Rect
+	lblrect.X = header.X + style.Combo.ContentPadding.X
+	lblrect.Y = header.Y + style.Combo.ContentPadding.Y
+	lblrect.W = button.X - (style.Combo.ContentPadding.X + style.Combo.Spacing.X) - lblrect.X
+	lblrect.H = header.H - 2*style.Combo.ContentPadding.Y
+	widgetText(out, lblrect, selected, &text, "LC", style.Font)
 
 	/* draw open/close button */
 	dbs := &drawableSymbolButton{button, content, state, &style.Combo.Button, sym}

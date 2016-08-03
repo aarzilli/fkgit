@@ -1,11 +1,12 @@
 package nucular
 
 import (
-	"bytes"
 	"image"
 
 	"golang.org/x/mobile/event/key"
 	"golang.org/x/mobile/event/mouse"
+
+	"github.com/aarzilli/nucular/types"
 )
 
 type mouseButton struct {
@@ -15,6 +16,7 @@ type mouseButton struct {
 }
 
 type MouseInput struct {
+	valid       bool
 	Buttons     [4]mouseButton
 	Pos         image.Point
 	Prev        image.Point
@@ -24,7 +26,7 @@ type MouseInput struct {
 
 type KeyboardInput struct {
 	Keys []key.Event
-	Text *bytes.Buffer
+	Text string
 }
 
 type Input struct {
@@ -32,113 +34,73 @@ type Input struct {
 	Mouse    MouseInput
 }
 
-func (w *Window) Input() *Input {
-	if !w.toplevel() {
-		return &Input{Keyboard: KeyboardInput{Keys: []key.Event{}}}
+func (win *Window) Input() *Input {
+	if !win.toplevel() {
+		return &Input{}
 	}
-	return &w.ctx.Input
+	return &win.ctx.Input
 }
 
-func (w *Window) KeyboardOnHover(bounds Rect) KeyboardInput {
-	if !w.toplevel() || !InputIsMouseHoveringRect(&w.ctx.Input, bounds) {
-		return KeyboardInput{Keys: []key.Event{}}
+func (win *Window) KeyboardOnHover(bounds types.Rect) KeyboardInput {
+	if !win.toplevel() || !win.ctx.Input.Mouse.HoveringRect(bounds) {
+		return KeyboardInput{}
 	}
-	return w.ctx.Input.Keyboard
+	return win.ctx.Input.Keyboard
 }
 
-func InputHasMouseClickInRect(i *Input, id mouse.Button, b Rect) bool {
-	if i == nil {
-		return false
-	}
-	btn := &i.Mouse.Buttons[id]
-	if !b.Contains(btn.ClickedPos) {
-		return false
-	}
-	return true
+func (i *MouseInput) HasClickInRect(id mouse.Button, b types.Rect) bool {
+	btn := &i.Buttons[id]
+	return b.Contains(btn.ClickedPos)
 }
 
-func InputHasMouseClickDownInRect(i *Input, id mouse.Button, b Rect, down bool) bool {
-	if i == nil {
-		return false
-	}
-	btn := &i.Mouse.Buttons[id]
-	return InputHasMouseClickInRect(i, id, b) && (btn.Down == down)
+func (i *MouseInput) HasClickDownInRect(id mouse.Button, b types.Rect, down bool) bool {
+	btn := &i.Buttons[id]
+	return i.HasClickInRect(id, b) && (btn.Down == down)
 }
 
-func InputIsMouseClickInRect(i *Input, id mouse.Button, b Rect) bool {
-	if i == nil {
-		return false
-	}
-	btn := &i.Mouse.Buttons[id]
-	return InputHasMouseClickDownInRect(i, id, b, false) && btn.Clicked
+func (i *MouseInput) IsClickInRect(id mouse.Button, b types.Rect) bool {
+	btn := &i.Buttons[id]
+	return i.HasClickDownInRect(id, b, false) && btn.Clicked
 }
 
-func InputIsMouseClickDownInRect(i *Input, id mouse.Button, b Rect, down bool) bool {
-	if i == nil {
-		return false
-	}
-	btn := &i.Mouse.Buttons[id]
-	return InputHasMouseClickDownInRect(i, id, b, down) && btn.Clicked
+func (i *MouseInput) IsClickDownInRect(id mouse.Button, b types.Rect, down bool) bool {
+	btn := &i.Buttons[id]
+	return i.HasClickDownInRect(id, b, down) && btn.Clicked
 }
 
-func InputAnyMouseClickInRect(in *Input, b Rect) bool {
-	if in == nil {
-		return false
-	}
-	return InputIsMouseClickInRect(in, mouse.ButtonLeft, b) || InputIsMouseClickInRect(in, mouse.ButtonMiddle, b) || InputIsMouseClickInRect(in, mouse.ButtonRight, b)
+func (i *MouseInput) AnyClickInRect(b types.Rect) bool {
+	return i.IsClickInRect(mouse.ButtonLeft, b) || i.IsClickInRect(mouse.ButtonMiddle, b) || i.IsClickInRect(mouse.ButtonRight, b)
 }
 
-func InputIsMouseHoveringRect(i *Input, rect Rect) bool {
-	if i == nil {
-		return false
-	}
-	return rect.Contains(i.Mouse.Pos)
+func (i *MouseInput) HoveringRect(rect types.Rect) bool {
+	return i.valid && rect.Contains(i.Pos)
 }
 
-func InputIsMousePrevHoveringRect(i *Input, rect Rect) bool {
-	if i == nil {
-		return false
-	}
-	return rect.Contains(i.Mouse.Prev)
+func (i *MouseInput) PrevHoveringRect(rect types.Rect) bool {
+	return i.valid && rect.Contains(i.Prev)
 }
 
-func InputMouseClicked(i *Input, id mouse.Button, rect Rect) bool {
-	if i == nil {
+func (i *MouseInput) Clicked(id mouse.Button, rect types.Rect) bool {
+	if !i.HoveringRect(rect) {
 		return false
 	}
-	if !InputIsMouseHoveringRect(i, rect) {
-		return false
-	}
-	return InputIsMouseClickInRect(i, id, rect)
+	return i.IsClickInRect(id, rect)
 }
 
-func InputIsMouseDown(i *Input, id mouse.Button) bool {
-	if i == nil {
-		return false
-	}
-	return i.Mouse.Buttons[id].Down
+func (i *MouseInput) Down(id mouse.Button) bool {
+	return i.Buttons[id].Down
 }
 
-func InputIsMousePressed(i *Input, id mouse.Button) bool {
-	if i == nil {
-		return false
-	}
-	b := &i.Mouse.Buttons[id]
-	return b.Down && b.Clicked
+func (i *MouseInput) Pressed(id mouse.Button) bool {
+	return i.Buttons[id].Down && i.Buttons[id].Clicked
 }
 
-func InputIsMouseReleased(i *Input, id mouse.Button) bool {
-	if i == nil {
-		return false
-	}
-	return !(i.Mouse.Buttons[id].Down) && i.Mouse.Buttons[id].Clicked
+func (i *MouseInput) Released(id mouse.Button) bool {
+	return !(i.Buttons[id].Down) && i.Buttons[id].Clicked
 }
 
-func InputIsKeyPressed(i *Input, key key.Code) bool {
-	if i == nil {
-		return false
-	}
-	for _, k := range i.Keyboard.Keys {
+func (i *KeyboardInput) Pressed(key key.Code) bool {
+	for _, k := range i.Keys {
 		if k.Code == key {
 			return true
 		}
@@ -150,7 +112,7 @@ func (win *Window) inputMaybe(state widgetLayoutStates) *Input {
 	if state != widgetRom && win.toplevel() {
 		return &win.ctx.Input
 	}
-	return nil
+	return &Input{}
 }
 
 func (win *Window) toplevel() bool {

@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/aarzilli/nucular"
+	ntypes "github.com/aarzilli/nucular/types"
 
 	"golang.org/x/image/font"
 	"golang.org/x/mobile/event/key"
@@ -582,13 +583,13 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 			}
 
 			for _, hdr := range filediff.Headers[1:] {
-				w.LabelColored(hdr.Text, nucular.TextLeft, hunkhdrColor)
+				w.LabelColored(hdr.Text, "LC", hunkhdrColor)
 			}
 
 			w.Spacing(1)
 
 			for _, linediff := range filediff.Lines {
-				bounds, out := w.Custom(nucular.WidgetStateInactive)
+				bounds, out := w.Custom(ntypes.WidgetStateInactive)
 				if out == nil {
 					continue
 				}

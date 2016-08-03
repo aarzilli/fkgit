@@ -13,6 +13,7 @@ import (
 
 	"github.com/aarzilli/fkgit/clipboard"
 	"github.com/aarzilli/nucular"
+	nstyle "github.com/aarzilli/nucular/style"
 
 	"golang.org/x/mobile/event/key"
 	"golang.org/x/mobile/event/mouse"
@@ -309,14 +310,14 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 		switch {
 		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Rune == '+') || (e.Rune == '='):
 			conf.Scaling += 0.1
-			mw.SetStyle(nucular.StyleFromTheme(nucular.DarkTheme), nil, conf.Scaling)
+			mw.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 			style, _ := mw.Style()
 			style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 			saveConfiguration()
 
 		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Rune == '-'):
 			conf.Scaling -= 0.1
-			mw.SetStyle(nucular.StyleFromTheme(nucular.DarkTheme), nil, conf.Scaling)
+			mw.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 			style, _ := mw.Style()
 			style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 			saveConfiguration()
@@ -349,12 +350,12 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 	for i := range tabs {
 		selected := i == currentTab
 		bounds := w.WidgetBounds()
-		if nucular.InputMouseClicked(w.Input(), mouse.ButtonMiddle, bounds) {
+		if w.Input().Mouse.Clicked(mouse.ButtonMiddle, bounds) {
 			if i >= 2 {
 				closetab = i
 			}
 		}
-		w.SelectableLabel(tabs[i].Title(), nucular.TextCentered, &selected)
+		w.SelectableLabel(tabs[i].Title(), "CC", &selected)
 		if selected {
 			currentTab = i
 		}
@@ -385,7 +386,7 @@ func main() {
 
 	wnd := nucular.NewMasterWindow(guiUpdate, nucular.WindowNoScrollbar)
 	wnd.SetClipboard(&Clipboard{})
-	wnd.SetStyle(nucular.StyleFromTheme(nucular.DarkTheme), nil, conf.Scaling)
+	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 	style, _ := wnd.Style()
 	style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 

@@ -8,16 +8,13 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/aarzilli/nucular/command"
+	"github.com/aarzilli/nucular/label"
+	nstyle "github.com/aarzilli/nucular/style"
+	"github.com/aarzilli/nucular/types"
+
 	"golang.org/x/mobile/event/key"
 	"golang.org/x/mobile/event/mouse"
-)
-
-type WidgetStates int
-
-const (
-	WidgetStateInactive WidgetStates = iota
-	WidgetStateHovered
-	WidgetStateActive
 )
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +23,7 @@ const (
 
 type context struct {
 	Input   Input
-	Style   Style
+	Style   nstyle.Style
 	Windows []*Window
 	Clip    Clipboard
 	Scaling float64
@@ -40,14 +37,14 @@ type Window struct {
 	ctx          *context
 	idx          int
 	flags        WindowFlags
-	Bounds       Rect
+	Bounds       types.Rect
 	Scrollbar    image.Point
-	cmds         CommandBuffer
+	cmds         command.Buffer
 	widgets      widgetBuffer
 	layout       *panel
 	close, first bool
 	// trigger rectangle of nonblocking windows
-	triggerBounds, header Rect
+	triggerBounds, header types.Rect
 	// root of the node tree
 	rootNode *treeNode
 	// current tree node see TreePush/TreePop
@@ -70,7 +67,7 @@ type treeNode struct {
 
 type panel struct {
 	Flags   WindowFlags
-	Bounds  Rect
+	Bounds  types.Rect
 	Offset  *image.Point
 	AtX     int
 	AtY     int
@@ -80,7 +77,7 @@ type panel struct {
 	FooterH int
 	HeaderH int
 	Border  int
-	Clip    Rect
+	Clip    types.Rect
 	Menu    menuState
 	Row     rowLayout
 }
@@ -105,7 +102,7 @@ type rowLayout struct {
 	ItemHeight int
 	ItemOffset int
 	Filled     float64
-	Item       Rect
+	Item       types.Rect
 	TreeDepth  int
 
 	DynamicFreeX, DynamicFreeY, DynamicFreeW, DynamicFreeH float64
@@ -140,7 +137,7 @@ const (
 	WindowDefaultFlags = WindowBorder | WindowMovable | WindowScalable | WindowClosable | WindowMinimizable | WindowTitle
 )
 
-func contextAllCommands(ctx *context) (nwidgets int, r []Command) {
+func contextAllCommands(ctx *context) (nwidgets int, r []command.Command) {
 	for _, w := range ctx.Windows {
 		r = append(r, w.cmds.Commands...)
 	}
@@ -164,10 +161,9 @@ func contextBegin(ctx *context, layout *panel) {
 		w.curNode = w.rootNode
 		w.close = false
 		w.widgets.reset()
-		w.cmds.reset()
+		w.cmds.Reset()
 	}
 
-	ctx.Windows[0].cmds.Clip = nk_null_rect
 	ctx.Windows[0].layout = layout
 	panelBegin(ctx, ctx.Windows[0], "")
 	layout.Offset = &ctx.Windows[0].Scrollbar
@@ -177,7 +173,7 @@ func contextEnd(ctx *context) {
 	panelEnd(ctx, ctx.Windows[0])
 }
 
-func (win *Window) style() *StyleWindow {
+func (win *Window) style() *nstyle.Window {
 	switch {
 	case win.flags&windowCombo != 0:
 		return &win.ctx.Style.ComboWindow
@@ -215,7 +211,7 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 
 	/* window dragging */
 	if (win.flags&WindowMovable != 0) && win.toplevel() {
-		var move Rect
+		var move types.Rect
 		move.X = win.Bounds.X
 		move.Y = win.Bounds.Y
 		move.W = win.Bounds.W
@@ -228,8 +224,8 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 			move.H = window_padding.Y + item_spacing.Y
 		}
 
-		incursor := InputIsMousePrevHoveringRect(in, move)
-		if InputIsMouseDown(in, mouse.ButtonLeft) && incursor {
+		incursor := in.Mouse.PrevHoveringRect(move)
+		if in.Mouse.Down(mouse.ButtonLeft) && incursor {
 			delta := in.Mouse.Delta
 			win.Bounds.X = win.Bounds.X + delta.X
 			win.Bounds.Y = win.Bounds.Y + delta.Y
@@ -315,12 +311,12 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 
 		layout.Height -= layout.FooterH
 
-		dwh.Hovered = InputIsMouseHoveringRect(&ctx.Input, dwh.Header)
+		dwh.Hovered = ctx.Input.Mouse.HoveringRect(dwh.Header)
 
 		header := dwh.Header
 
 		/* window header title */
-		t := fontWidth(font, title)
+		t := FontWidth(font, title)
 
 		dwh.Label.X = header.X + wstyle.Header.Padding.X
 		dwh.Label.X += wstyle.Header.LabelPadding.X
@@ -331,15 +327,15 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 		dwh.RowHeight = layout.Row.Height
 		dwh.Title = title
 
-		win.widgets.Add(WidgetStateInactive, layout.Bounds, &dwh)
+		win.widgets.Add(types.WidgetStateInactive, layout.Bounds, &dwh)
 
-		var button Rect
+		var button types.Rect
 		/* window close button */
 		button.Y = header.Y + wstyle.Header.Padding.Y
 		button.H = layout.HeaderH - 2*wstyle.Header.Padding.Y
 		button.W = button.H
 		if win.flags&WindowClosable != 0 {
-			if wstyle.Header.Align == HeaderRight {
+			if wstyle.Header.Align == nstyle.HeaderRight {
 				button.X = (header.W + header.X) - (button.W + wstyle.Header.Padding.X)
 				header.W -= button.W + wstyle.Header.Spacing.X + wstyle.Header.Padding.X
 			} else {
@@ -347,14 +343,14 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 				header.X += button.W + wstyle.Header.Spacing.X + wstyle.Header.Padding.X
 			}
 
-			if doButtonSymbol(&win.widgets, button, wstyle.Header.CloseSymbol, ButtonNormal, &wstyle.Header.CloseButton, in) {
+			if doButton(win, label.S(wstyle.Header.CloseSymbol), button, &wstyle.Header.CloseButton, in, false) {
 				layout.Flags |= windowHidden
 			}
 		}
 
 		/* window minimize button */
 		if win.flags&WindowMinimizable != 0 {
-			if wstyle.Header.Align == HeaderRight {
+			if wstyle.Header.Align == nstyle.HeaderRight {
 				button.X = (header.W + header.X) - button.W
 				if win.flags&WindowClosable == 0 {
 					button.X -= wstyle.Header.Padding.X
@@ -367,13 +363,13 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 				header.X += button.W + wstyle.Header.Spacing.X + wstyle.Header.Padding.X
 			}
 
-			var symbolType SymbolType
+			var symbolType label.SymbolType
 			if layout.Flags&windowMinimized != 0 {
 				symbolType = wstyle.Header.MaximizeSymbol
 			} else {
 				symbolType = wstyle.Header.MinimizeSymbol
 			}
-			if doButtonSymbol(&win.widgets, button, symbolType, ButtonNormal, &wstyle.Header.MinimizeButton, in) {
+			if doButton(win, label.S(symbolType), button, &wstyle.Header.MinimizeButton, in, false) {
 				if layout.Flags&windowMinimized != 0 {
 					layout.Flags = layout.Flags & ^windowMinimized
 				} else {
@@ -384,7 +380,7 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 	} else {
 		dwh.LayoutHeaderH = layout.HeaderH
 		dwh.RowHeight = layout.Row.Height
-		win.widgets.Add(WidgetStateInactive, layout.Bounds, &dwh)
+		win.widgets.Add(types.WidgetStateInactive, layout.Bounds, &dwh)
 	}
 
 	/* fix header height for transition between minimized and maximized window state */
@@ -428,17 +424,21 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 	dwb.LayoutWidth = layout.Width
 	dwb.Clip = layout.Clip
 	win.widgets.Clip = dwb.Clip
-	win.widgets.Add(WidgetStateInactive, dwb.Bounds, &dwb)
+	win.widgets.Add(types.WidgetStateInactive, dwb.Bounds, &dwb)
+
+	layout.Row.Type = layoutInvalid
 
 	return layout.Flags&windowHidden == 0 && layout.Flags&windowMinimized == 0
 }
 
+var nk_null_rect = types.Rect{-8192.0, -8192.0, 16384.0, 16384.0}
+
 func panelEnd(ctx *context, window *Window) {
-	var footer = Rect{0, 0, 0, 0}
+	var footer = types.Rect{0, 0, 0, 0}
 
 	layout := window.layout
 	style := &ctx.Style
-	var in *Input
+	in := &Input{}
 	if window.toplevel() {
 		in = &ctx.Input
 	}
@@ -447,7 +447,7 @@ func panelEnd(ctx *context, window *Window) {
 		outclip = window.parent.widgets.Clip
 	}
 	window.widgets.Clip = outclip
-	window.widgets.Add(WidgetStateInactive, outclip, &drawableScissor{outclip})
+	window.widgets.Add(types.WidgetStateInactive, outclip, &drawableScissor{outclip})
 
 	wstyle := window.style()
 
@@ -467,13 +467,13 @@ func panelEnd(ctx *context, window *Window) {
 
 		// fill horizontal scrollbar space
 		{
-			var bounds Rect
+			var bounds types.Rect
 			bounds.X = window.Bounds.X
 			bounds.Y = layout.AtY - item_spacing.Y
 			bounds.W = window.Bounds.W
 			bounds.H = window.Bounds.Y + layout.Height + item_spacing.Y + window.style().Padding.Y - bounds.Y
 
-			window.widgets.Add(WidgetStateInactive, bounds, &drawableFillRect{bounds, wstyle.Background})
+			window.widgets.Add(types.WidgetStateInactive, bounds, &drawableFillRect{bounds, wstyle.Background})
 		}
 
 		if (layout.Offset.X == 0) || (layout.Flags&WindowNoScrollbar != 0) {
@@ -488,13 +488,13 @@ func panelEnd(ctx *context, window *Window) {
 			if (layout.Offset.X == 0) && layout.Flags&WindowNoScrollbar == 0 {
 				/* special case for windows like combobox, menu require draw call
 				 * to fill the empty scrollbar background */
-				var bounds Rect
+				var bounds types.Rect
 				bounds.X = layout.Bounds.X + layout.Width
 				bounds.Y = layout.Clip.Y
 				bounds.W = scrollbar_size.X
 				bounds.H = layout.Height
 
-				window.widgets.Add(WidgetStateInactive, bounds, &drawableFillRect{bounds, wstyle.Background})
+				window.widgets.Add(types.WidgetStateInactive, bounds, &drawableFillRect{bounds, wstyle.Background})
 			}
 		} else {
 			/* dynamic window with visible scrollbars and therefore bigger footer */
@@ -506,23 +506,23 @@ func panelEnd(ctx *context, window *Window) {
 			} else {
 				footer.Y = window.Bounds.Y + layout.Height + layout.FooterH
 			}
-			window.widgets.Add(WidgetStateInactive, footer, &drawableFillRect{footer, wstyle.Background})
+			window.widgets.Add(types.WidgetStateInactive, footer, &drawableFillRect{footer, wstyle.Background})
 
 			if layout.Flags&windowCombo == 0 && layout.Flags&windowMenu == 0 {
 				/* fill empty scrollbar space */
-				var bounds Rect
+				var bounds types.Rect
 				bounds.X = layout.Bounds.X
 				bounds.Y = window.Bounds.Y + layout.Height
 				bounds.W = layout.Bounds.W
 				bounds.H = layout.Row.Height
-				window.widgets.Add(WidgetStateInactive, bounds, &drawableFillRect{bounds, wstyle.Background})
+				window.widgets.Add(types.WidgetStateInactive, bounds, &drawableFillRect{bounds, wstyle.Background})
 			}
 		}
 	}
 
 	/* scrollbars */
 	if layout.Flags&WindowNoScrollbar == 0 && layout.Flags&windowMinimized == 0 {
-		var bounds Rect
+		var bounds types.Rect
 		var scroll_target float64
 		var scroll_offset float64
 		var scroll_step float64
@@ -541,7 +541,7 @@ func panelEnd(ctx *context, window *Window) {
 			scroll_step = float64(layout.Clip.H) * 0.10
 			scroll_inc = float64(layout.Clip.H) * 0.01
 			scroll_target = float64(layout.AtY - layout.Clip.Y)
-			scroll_offset = doScrollbarv(&window.widgets, bounds, layout.Bounds, scroll_offset, scroll_target, scroll_step, scroll_inc, &ctx.Style.Scrollv, in, style.Font)
+			scroll_offset = doScrollbarv(window, bounds, layout.Bounds, scroll_offset, scroll_target, scroll_step, scroll_inc, &ctx.Style.Scrollv, in, style.Font)
 			layout.Offset.Y = int(scroll_offset)
 		}
 		if layout.Flags&WindowNoHScrollbar == 0 {
@@ -570,7 +570,7 @@ func panelEnd(ctx *context, window *Window) {
 			scroll_target = float64(layout.MaxX - bounds.X)
 			scroll_step = float64(layout.MaxX) * 0.05
 			scroll_inc = float64(layout.MaxX) * 0.005
-			scroll_offset = doScrollbarh(&window.widgets, bounds, scroll_offset, scroll_target, scroll_step, scroll_inc, &ctx.Style.Scrollh, in, style.Font)
+			scroll_offset = doScrollbarh(window, bounds, scroll_offset, scroll_target, scroll_step, scroll_inc, &ctx.Style.Scrollh, in, style.Font)
 			layout.Offset.X = int(scroll_offset)
 		}
 	}
@@ -582,7 +582,7 @@ func panelEnd(ctx *context, window *Window) {
 	dsab.HeaderH = layout.HeaderH
 
 	/* scaler */
-	if (layout.Flags&WindowScalable != 0) && in != nil && layout.Flags&windowMinimized == 0 {
+	if (layout.Flags&WindowScalable != 0) && layout.Flags&windowMinimized == 0 {
 		dsab.DrawScaler = true
 
 		dsab.ScalerRect.W = max(0, scaler_size.X-window_padding.X)
@@ -602,7 +602,7 @@ func panelEnd(ctx *context, window *Window) {
 
 			incursor := dsab.ScalerRect.Contains(prev)
 
-			if InputIsMouseDown(in, mouse.ButtonLeft) && incursor {
+			if in != nil && in.Mouse.Down(mouse.ButtonLeft) && incursor {
 				window.Bounds.W = max(window_size.X, window.Bounds.W+in.Mouse.Delta.X)
 
 				/* dragging in y-direction is only possible if static window */
@@ -633,7 +633,7 @@ func panelEnd(ctx *context, window *Window) {
 		}
 	}
 
-	window.widgets.Add(WidgetStateInactive, dsab.Bounds, &dsab)
+	window.widgets.Add(types.WidgetStateInactive, dsab.Bounds, &dsab)
 
 	if window.flags&windowSub == 0 {
 		if layout.Flags&windowHidden != 0 {
@@ -680,7 +680,7 @@ func (win *Window) MenubarEnd() {
 	layout.Clip.H -= layout.Menu.H + layout.Row.Height
 	layout.AtY = layout.Menu.Y + layout.Menu.H
 	win.widgets.Clip = layout.Clip
-	win.widgets.Add(WidgetStateInactive, layout.Clip, &drawableScissor{layout.Clip})
+	win.widgets.Add(types.WidgetStateInactive, layout.Clip, &drawableScissor{layout.Clip})
 }
 
 type widgetLayoutStates int
@@ -691,10 +691,10 @@ const (
 	widgetRom
 )
 
-func (win *Window) widget() (widgetLayoutStates, Rect) {
-	var c *Rect = nil
+func (win *Window) widget() (widgetLayoutStates, types.Rect) {
+	var c *types.Rect = nil
 
-	var bounds Rect
+	var bounds types.Rect
 
 	/* allocate space  and check if the widget needs to be updated and drawn */
 	panelAllocSpace(&bounds, win)
@@ -704,7 +704,7 @@ func (win *Window) widget() (widgetLayoutStates, Rect) {
 		return widgetInvalid, bounds
 	}
 
-	contains := func(r *Rect, b *Rect) bool {
+	contains := func(r *types.Rect, b *types.Rect) bool {
 		return b.Contains(image.Point{r.X, r.Y}) && b.Contains(image.Point{r.X + r.W, r.Y + r.H})
 	}
 
@@ -714,7 +714,7 @@ func (win *Window) widget() (widgetLayoutStates, Rect) {
 	return widgetValid, bounds
 }
 
-func (win *Window) widgetFitting(item_padding image.Point) (state widgetLayoutStates, bounds Rect) {
+func (win *Window) widgetFitting(item_padding image.Point) (state widgetLayoutStates, bounds types.Rect) {
 	/* update the bounds to stand without padding  */
 	style := win.style()
 	layout := win.layout
@@ -726,7 +726,7 @@ func (win *Window) widgetFitting(item_padding image.Point) (state widgetLayoutSt
 		bounds.X -= item_padding.X
 	}
 
-	if layout.Row.Index == layout.Row.Columns {
+	if layout.Row.Columns > 0 && layout.Row.Index == layout.Row.Columns {
 		bounds.W += style.Padding.X
 	} else {
 		bounds.W += item_padding.X
@@ -734,10 +734,10 @@ func (win *Window) widgetFitting(item_padding image.Point) (state widgetLayoutSt
 	return state, bounds
 }
 
-func panelAllocSpace(bounds *Rect, win *Window) {
+func panelAllocSpace(bounds *types.Rect, win *Window) {
 	/* check if the end of the row has been hit and begin new row if so */
 	layout := win.layout
-	if layout.Row.Index >= layout.Row.Columns {
+	if layout.Row.Columns > 0 && layout.Row.Index >= layout.Row.Columns {
 		panelAllocRow(win)
 	}
 
@@ -771,22 +771,25 @@ func panelLayout(ctx *context, win *Window, height int, cols int) {
 	layout.Row.ItemOffset = 0
 	if layout.Flags&WindowDynamic != 0 {
 		var drect drawableFillRect
-		drect.R = Rect{layout.Bounds.X, layout.AtY, layout.Bounds.W, height + panel_padding.Y}
+		drect.R = types.Rect{layout.Bounds.X, layout.AtY, layout.Bounds.W, height + panel_padding.Y}
 		drect.C = style.Background
-		win.widgets.Add(WidgetStateInactive, drect.R, &drect)
+		win.widgets.Add(types.WidgetStateInactive, drect.R, &drect)
 	}
 }
 
 const (
-	layoutDynamicFixed = 0
-	layoutDynamicFree  = 2
-	layoutDynamic      = 3
-	layoutStaticFixed  = 4
-	layoutStaticFree   = 6
-	layoutStatic       = 7
+	layoutDynamicFixed = iota
+	layoutDynamicFree
+	layoutDynamic
+	layoutStaticFixed
+	layoutStaticFree
+	layoutStatic
+	layoutInvalid
 )
 
-func layoutWidgetSpace(bounds *Rect, ctx *context, win *Window, modify bool) {
+var InvalidLayoutErr = errors.New("invalid layout")
+
+func layoutWidgetSpace(bounds *types.Rect, ctx *context, win *Window, modify bool) {
 	layout := win.layout
 
 	/* cache some configuration data */
@@ -806,6 +809,8 @@ func layoutWidgetSpace(bounds *Rect, ctx *context, win *Window, modify bool) {
 	item_spacing := 0
 
 	switch layout.Row.Type {
+	case layoutInvalid:
+		panic(InvalidLayoutErr)
 	case layoutDynamicFixed:
 		/* scaling fixed size widgets item width */
 		item_width = int(float64(panel_space) / float64(layout.Row.Columns))
@@ -918,8 +923,17 @@ func (win *Window) LayoutRowDynamicScaled(height int, cols int) {
 }
 
 // Starts new row that has cols columns each item_width wide.
+// If cols is zero the row will never autowrap.
 func (win *Window) LayoutRowStatic(height int, item_width int, cols int) {
 	rowLayoutCtr(win, false, height, cols, item_width, true)
+}
+
+// Changes item width for of static layouts
+func (win *Window) LayoutStaticChange(itemWidth int, scaled bool) {
+	if !scaled {
+		itemWidth = win.ctx.scale(itemWidth)
+	}
+	win.layout.Row.ItemWidth = itemWidth
 }
 
 // Like LayoutRowStatic but height and item_width are specified in scaled units.
@@ -1017,19 +1031,10 @@ func (win *Window) LayoutSpaceBeginRatio(height int, widget_count int) {
 	layout.Row.Filled = 0
 }
 
-func (win *Window) LayoutSpaceEnd() {
-	layout := win.layout
-	layout.Row.ItemWidth = 0
-	layout.Row.ItemRatio = 0.0
-	layout.Row.ItemHeight = 0
-	layout.Row.ItemOffset = 0
-	layout.Row.Item = Rect{}
-}
-
 var WrongLayoutErr = errors.New("Command not available with current layout")
 
 // Sets position and size of the next widgets in a Space row layout
-func (win *Window) LayoutSpacePush(rect Rect) {
+func (win *Window) LayoutSpacePush(rect types.Rect) {
 	if win.layout.Row.Type != layoutStaticFree {
 		panic(WrongLayoutErr)
 	}
@@ -1048,11 +1053,11 @@ func (win *Window) LayoutSpacePushRatio(x, y, w, h float64) {
 	win.layout.Row.DynamicFreeX, win.layout.Row.DynamicFreeY, win.layout.Row.DynamicFreeH, win.layout.Row.DynamicFreeW = x, y, w, h
 }
 
-func (win *Window) layoutPeek(bounds *Rect) {
+func (win *Window) layoutPeek(bounds *types.Rect) {
 	layout := win.layout
 	y := layout.AtY
 	index := layout.Row.Index
-	if layout.Row.Index >= layout.Row.Columns {
+	if layout.Row.Columns > 0 && layout.Row.Index >= layout.Row.Columns {
 		layout.AtY += layout.Row.Height
 		layout.Row.Index = 0
 	}
@@ -1065,8 +1070,8 @@ func (win *Window) layoutPeek(bounds *Rect) {
 // Returns the position and size of the next widget that will be
 // added to the current row.
 // Note that the return value is in scaled units.
-func (win *Window) WidgetBounds() Rect {
-	var bounds Rect
+func (win *Window) WidgetBounds() types.Rect {
+	var bounds types.Rect
 	win.layoutPeek(&bounds)
 	return bounds
 }
@@ -1133,18 +1138,18 @@ func (win *Window) TreePush(type_ TreeType, title string, initial_open bool) boo
 	}
 
 	/* update node state */
-	var in *Input
+	in := &Input{}
 	if win.toplevel() && widget_state == widgetValid {
 		in = &win.ctx.Input
 	}
 
 	ws := win.widgets.PrevState(header)
-	if buttonBehaviorDo(&ws, header, in, ButtonNormal) {
+	if buttonBehaviorDo(&ws, header, in, false) {
 		node.Open = !node.Open
 	}
 
 	/* calculate the triangle bounds */
-	var sym Rect
+	var sym types.Rect
 	sym.H = fontHeight(style.Font)
 	sym.W = sym.H
 	sym.Y = header.Y + style.Tab.Padding.Y
@@ -1161,7 +1166,7 @@ func (win *Window) TreePush(type_ TreeType, title string, initial_open bool) boo
 	if type_ == TreeTab {
 		styleButton = &style.Tab.TabButton
 	}
-	doButtonSymbol(&win.widgets, sym, symbolType, ButtonNormal, styleButton, in)
+	doButton(win, label.S(symbolType), sym, styleButton, in, false)
 
 	/* increase x-axis cursor widget position pointer */
 	if node.Open {
@@ -1193,8 +1198,8 @@ func (win *Window) TreePop() {
 ///////////////////////////////////////////////////////////////////////////////////
 
 // LabelColored draws a text label with the specified background color.
-func (win *Window) LabelColored(str string, alignment TextAlign, color color.RGBA) {
-	var bounds Rect
+func (win *Window) LabelColored(str string, alignment label.Align, color color.RGBA) {
+	var bounds types.Rect
 	var text textWidget
 
 	style := &win.ctx.Style
@@ -1205,14 +1210,14 @@ func (win *Window) LabelColored(str string, alignment TextAlign, color color.RGB
 	text.Padding.Y = item_padding.Y
 	text.Background = win.style().Background
 	text.Text = color
-	win.widgets.Add(WidgetStateInactive, bounds, &drawableNonInteractive{bounds, color, false, text, alignment, str, nil, nil})
+	win.widgets.Add(types.WidgetStateInactive, bounds, &drawableNonInteractive{bounds, color, false, text, alignment, str, nil, nil})
 
 }
 
 // LabelWrapColored draws a text label with the specified background
 // color autowrappping the text.
 func (win *Window) LabelWrapColored(str string, color color.RGBA) {
-	var bounds Rect
+	var bounds types.Rect
 	var text textWidget
 
 	style := &win.ctx.Style
@@ -1223,11 +1228,11 @@ func (win *Window) LabelWrapColored(str string, color color.RGBA) {
 	text.Padding.Y = item_padding.Y
 	text.Background = win.style().Background
 	text.Text = color
-	win.widgets.Add(WidgetStateInactive, bounds, &drawableNonInteractive{bounds, color, true, text, TextAlignLeft, str, nil, nil})
+	win.widgets.Add(types.WidgetStateInactive, bounds, &drawableNonInteractive{bounds, color, true, text, "LT", str, nil, nil})
 }
 
 // Label draws a text label.
-func (win *Window) Label(str string, alignment TextAlign) {
+func (win *Window) Label(str string, alignment label.Align) {
 	win.LabelColored(str, alignment, win.ctx.Style.Text.Color)
 }
 
@@ -1238,30 +1243,32 @@ func (win *Window) LabelWrap(str string) {
 
 // Image draws an image.
 func (win *Window) Image(img *image.RGBA) {
-	var bounds Rect
+	var bounds types.Rect
 	var s widgetLayoutStates
 
 	if s, bounds = win.widget(); s == 0 {
 		return
 	}
-	win.widgets.Add(WidgetStateInactive, bounds, &drawableNonInteractive{Bounds: bounds, Img: img})
+	win.widgets.Add(types.WidgetStateInactive, bounds, &drawableNonInteractive{Bounds: bounds, Img: img})
 }
 
 // Spacing adds empty space
 func (win *Window) Spacing(cols int) {
-	var nilrect Rect
+	var nilrect types.Rect
 	var i int
 
 	/* spacing over row boundaries */
 
 	layout := win.layout
-	index := (layout.Row.Index + cols) % layout.Row.Columns
-	rows := (layout.Row.Index + cols) / layout.Row.Columns
-	if rows != 0 {
-		for i = 0; i < rows; i++ {
-			panelAllocRow(win)
+	if layout.Row.Columns > 0 {
+		index := (layout.Row.Index + cols) % layout.Row.Columns
+		rows := (layout.Row.Index + cols) / layout.Row.Columns
+		if rows != 0 {
+			for i = 0; i < rows; i++ {
+				panelAllocRow(win)
+			}
+			cols = index
 		}
-		cols = index
 	}
 
 	/* non table layout need to allocate space */
@@ -1270,12 +1277,11 @@ func (win *Window) Spacing(cols int) {
 			panelAllocSpace(&nilrect, win)
 		}
 	}
-
-	layout.Row.Index = index
 }
 
 // CustomState returns the widget state of a custom widget.
-func (win *Window) CustomState(bounds Rect) WidgetStates {
+func (win *Window) CustomState() types.WidgetStates {
+	bounds := win.WidgetBounds()
 	s := widgetValid
 	if !win.layout.Clip.Intersect(&bounds) {
 		s = widgetInvalid
@@ -1287,7 +1293,7 @@ func (win *Window) CustomState(bounds Rect) WidgetStates {
 }
 
 // Custom adds a custom widget.
-func (win *Window) Custom(state WidgetStates) (bounds Rect, out *CommandBuffer) {
+func (win *Window) Custom(state types.WidgetStates) (bounds types.Rect, out *command.Buffer) {
 	var s widgetLayoutStates
 
 	if s, bounds = win.widget(); s == 0 {
@@ -1295,7 +1301,7 @@ func (win *Window) Custom(state WidgetStates) (bounds Rect, out *CommandBuffer) 
 	}
 	prevstate := win.widgets.PrevState(bounds)
 	exitstate := basicWidgetStateControl(&prevstate, win.inputMaybe(s), bounds)
-	if state != WidgetStateActive {
+	if state != types.WidgetStateActive {
 		state = exitstate
 	}
 	win.widgets.Add(state, bounds, nil)
@@ -1306,29 +1312,18 @@ func (win *Window) Custom(state WidgetStates) (bounds Rect, out *CommandBuffer) 
 // BUTTON
 ///////////////////////////////////////////////////////////////////////////////////
 
-// Controls the behavior of a button.
-type ButtonBehavior int
-
-const (
-	// The button will return true once every time the user clicks it.
-	ButtonNormal ButtonBehavior = iota
-	// The button will return true once for every frame while pressed.
-	ButtonRepeater
-)
-
-func buttonBehaviorDo(state *WidgetStates, r Rect, i *Input, behavior ButtonBehavior) (ret bool) {
+func buttonBehaviorDo(state *types.WidgetStates, r types.Rect, i *Input, repeat bool) (ret bool) {
 	exitstate := basicWidgetStateControl(state, i, r)
 
-	if *state == WidgetStateActive {
-		if exitstate == WidgetStateHovered {
-			switch behavior {
-			default:
-				ret = InputIsMouseDown(i, mouse.ButtonLeft)
-			case ButtonNormal:
-				ret = InputIsMouseReleased(i, mouse.ButtonLeft)
+	if *state == types.WidgetStateActive {
+		if exitstate == types.WidgetStateHovered {
+			if repeat {
+				ret = i.Mouse.Down(mouse.ButtonLeft)
+			} else {
+				ret = i.Mouse.Released(mouse.ButtonLeft)
 			}
 		}
-		if !InputIsMouseDown(i, mouse.ButtonLeft) {
+		if !i.Mouse.Down(mouse.ButtonLeft) {
 			*state = exitstate
 		}
 	}
@@ -1336,99 +1331,98 @@ func buttonBehaviorDo(state *WidgetStates, r Rect, i *Input, behavior ButtonBeha
 	return ret
 }
 
-func doButton(out *widgetBuffer, r Rect, style *StyleButton, in *Input, behavior ButtonBehavior) (ok bool, state WidgetStates, content Rect) {
+func doButton(win *Window, lbl label.Label, r types.Rect, style *nstyle.Button, in *Input, repeat bool) bool {
+	out := win.widgets
+	if lbl.Kind == label.ColorLabel {
+		button := *style
+		button.Normal = nstyle.MakeItemColor(lbl.Color)
+		button.Hover = nstyle.MakeItemColor(lbl.Color)
+		button.Active = nstyle.MakeItemColor(lbl.Color)
+		button.Padding = image.Point{0, 0}
+		style = &button
+	}
+
 	/* calculate button content space */
+	var content types.Rect
 	content.X = r.X + style.Padding.X + style.Border
 	content.Y = r.Y + style.Padding.Y + style.Border
 	content.W = r.W - 2*style.Padding.X + style.Border
 	content.H = r.H - 2*style.Padding.Y + style.Border
 
 	/* execute button behavior */
-	var bounds Rect
+	var bounds types.Rect
 	bounds.X = r.X - style.TouchPadding.X
 	bounds.Y = r.Y - style.TouchPadding.Y
 	bounds.W = r.W + 2*style.TouchPadding.X
 	bounds.H = r.H + 2*style.TouchPadding.Y
-	state = out.PrevState(bounds)
-	ok = buttonBehaviorDo(&state, bounds, in, behavior)
-	return ok, state, content
-}
+	state := out.PrevState(bounds)
+	ok := buttonBehaviorDo(&state, bounds, in, repeat)
 
-func doButtonText(out *widgetBuffer, bounds Rect, str string, align TextAlign, behavior ButtonBehavior, style *StyleButton, in *Input) (ret bool) {
-	if str == "" {
-		return false
+	switch lbl.Kind {
+	case label.TextLabel:
+		if lbl.Align == "" {
+			lbl.Align = "CC"
+		}
+		out.Add(state, bounds, &drawableTextButton{bounds, content, state, style, lbl.Text, lbl.Align})
+	case label.SymbolLabel:
+		out.Add(state, bounds, &drawableSymbolButton{bounds, content, state, style, lbl.Symbol})
+	case label.ImageLabel:
+		content.X += style.ImagePadding.X
+		content.Y += style.ImagePadding.Y
+		content.W -= 2 * style.ImagePadding.X
+		content.H -= 2 * style.ImagePadding.Y
+
+		out.Add(state, bounds, &drawableImageButton{bounds, content, state, style, lbl.Img})
+	case label.SymbolTextLabel:
+		if lbl.Align == "" {
+			lbl.Align = "CC"
+		}
+		font := win.ctx.Style.Font
+		var tri types.Rect
+		tri.Y = content.Y + (content.H / 2) - fontHeight(font)/2
+		tri.W = fontHeight(font)
+		tri.H = fontHeight(font)
+		if lbl.Align[0] == 'L' {
+			tri.X = (content.X + content.W) - (2*style.Padding.X + tri.W)
+			tri.X = max(tri.X, 0)
+		} else {
+			tri.X = content.X + 2*style.Padding.X
+		}
+
+		out.Add(state, bounds, &drawableTextSymbolButton{bounds, content, tri, state, style, lbl.Text, lbl.Symbol})
+
+	case label.ImageTextLabel:
+		if lbl.Align == "" {
+			lbl.Align = "CC"
+		}
+		var icon types.Rect
+		icon.Y = bounds.Y + style.Padding.Y
+		icon.H = bounds.H - 2*style.Padding.Y
+		icon.W = icon.H
+		if lbl.Align[0] == 'L' {
+			icon.X = (bounds.X + bounds.W) - (2*style.Padding.X + icon.W)
+			icon.X = max(icon.X, 0)
+		} else {
+			icon.X = bounds.X + 2*style.Padding.X
+		}
+
+		icon.X += style.ImagePadding.X
+		icon.Y += style.ImagePadding.Y
+		icon.W -= 2 * style.ImagePadding.X
+		icon.H -= 2 * style.ImagePadding.Y
+
+		out.Add(state, bounds, &drawableTextImageButton{bounds, content, icon, state, style, lbl.Text, lbl.Img})
+
+	case label.ColorLabel:
+		out.Add(state, bounds, &drawableSymbolButton{bounds, bounds, state, style, label.SymbolNone})
+
 	}
 
-	ret, state, content := doButton(out, bounds, style, in, behavior)
-	out.Add(state, bounds, &drawableTextButton{bounds, content, state, style, str, align})
-	return ret
+	return ok
 }
 
-func doButtonSymbol(out *widgetBuffer, bounds Rect, symbol SymbolType, behavior ButtonBehavior, style *StyleButton, in *Input) (ret bool) {
-	ret, state, content := doButton(out, bounds, style, in, behavior)
-	out.Add(state, bounds, &drawableSymbolButton{bounds, content, state, style, symbol})
-	return ret
-}
-
-func doButtonImage(out *widgetBuffer, bounds Rect, img *image.RGBA, b ButtonBehavior, style *StyleButton, in *Input) (ret bool) {
-	ret, state, content := doButton(out, bounds, style, in, b)
-	content.X += style.ImagePadding.X
-	content.Y += style.ImagePadding.Y
-	content.W -= 2 * style.ImagePadding.X
-	content.H -= 2 * style.ImagePadding.Y
-
-	out.Add(state, bounds, &drawableImageButton{bounds, content, state, style, img})
-
-	return ret
-}
-
-func doButtonTextSymbol(out *widgetBuffer, bounds Rect, symbol SymbolType, str string, align TextAlign, behavior ButtonBehavior, style *StyleButton, font *Face, in *Input) (ret bool) {
-	ret, state, content := doButton(out, bounds, style, in, behavior)
-	var tri Rect
-	tri.Y = content.Y + (content.H / 2) - fontHeight(font)/2
-	tri.W = fontHeight(font)
-	tri.H = fontHeight(font)
-	if align&TextAlignLeft != 0 {
-		tri.X = (content.X + content.W) - (2*style.Padding.X + tri.W)
-		tri.X = max(tri.X, 0)
-	} else {
-		tri.X = content.X + 2*style.Padding.X
-	}
-
-	out.Add(state, bounds, &drawableTextSymbolButton{bounds, content, tri, state, style, str, symbol})
-
-	return ret
-}
-
-func doButtonTextImage(out *widgetBuffer, bounds Rect, img *image.RGBA, str string, align TextAlign, behavior ButtonBehavior, style *StyleButton, in *Input) (ret bool) {
-	var icon Rect
-
-	if str == "" {
-		return false
-	}
-
-	ret, state, content := doButton(out, bounds, style, in, behavior)
-	icon.Y = bounds.Y + style.Padding.Y
-	icon.H = bounds.H - 2*style.Padding.Y
-	icon.W = icon.H
-	if align&TextAlignLeft != 0 {
-		icon.X = (bounds.X + bounds.W) - (2*style.Padding.X + icon.W)
-		icon.X = max(icon.X, 0)
-	} else {
-		icon.X = bounds.X + 2*style.Padding.X
-	}
-
-	icon.X += style.ImagePadding.X
-	icon.Y += style.ImagePadding.Y
-	icon.W -= 2 * style.ImagePadding.X
-	icon.H -= 2 * style.ImagePadding.Y
-
-	out.Add(state, bounds, &drawableTextImageButton{bounds, content, icon, state, style, str, img})
-	return ret
-}
-
-// ButtonText adds a button with a text caption
-func (win *Window) ButtonText(title string, behavior ButtonBehavior) bool {
+// Button adds a button
+func (win *Window) Button(lbl label.Label, repeat bool) bool {
 	style := &win.ctx.Style
 	state, bounds := win.widget()
 
@@ -1436,88 +1430,25 @@ func (win *Window) ButtonText(title string, behavior ButtonBehavior) bool {
 		return false
 	}
 	in := win.inputMaybe(state)
-	//TODO: collapse call
-	return doButtonText(&win.widgets, bounds, title, style.Button.TextAlignment, behavior, &style.Button, in)
+	return doButton(win, lbl, bounds, &style.Button, in, repeat)
 }
 
-// ButtonColor adds a button filled with the specified color.
-func (win *Window) ButtonColor(color color.RGBA, behavior ButtonBehavior) bool {
-	state, bounds := win.widget()
-	if state == 0 {
-		return false
-	}
-	in := win.inputMaybe(state)
-
-	button := win.ctx.Style.Button
-	button.Normal = MakeStyleItemColor(color)
-	button.Hover = MakeStyleItemColor(color)
-	button.Active = MakeStyleItemColor(color)
-	button.Padding = image.Point{0, 0}
-	ret, ws, bounds := doButton(&win.widgets, bounds, &button, in, behavior)
-	win.widgets.Add(ws, bounds, &drawableSymbolButton{bounds, bounds, ws, &button, SymbolNone})
-	return ret
-}
-
-// ButtonSymbol adds a button with the specified symbol as caption.
-func (win *Window) ButtonSymbol(symbol SymbolType, behavior ButtonBehavior) bool {
-	style := &win.ctx.Style
-
-	state, bounds := win.widget()
-	if state == 0 {
-		return false
-	}
-	in := win.inputMaybe(state)
-	return doButtonSymbol(&win.widgets, bounds, symbol, behavior, &style.Button, in)
-}
-
-// ButtonImage adds a button with the specified image as caption.
-func (win *Window) ButtonImage(img *image.RGBA, behavior ButtonBehavior) bool {
-	style := &win.ctx.Style
-
-	state, bounds := win.widget()
-	if state == 0 {
-		return false
-	}
-	in := win.inputMaybe(state)
-	return doButtonImage(&win.widgets, bounds, img, behavior, &style.Button, in)
-}
-
-// ButtonSymbolText adds a button with the specified symbol and text as caption
-func (win *Window) ButtonSymbolText(symbol SymbolType, text string, align TextAlign, behavior ButtonBehavior) bool {
-	style := &win.ctx.Style
-
-	state, bounds := win.widget()
-	if state == 0 {
-		return false
-	}
-	in := win.inputMaybe(state)
-	return doButtonTextSymbol(&win.widgets, bounds, symbol, text, align, behavior, &style.Button, style.Font, in)
-}
-
-// ButtonImageLabel adds a button with the specified image and text as caption
-func (win *Window) ButtonImageText(img *image.RGBA, text string, align TextAlign, behavior ButtonBehavior) bool {
-	style := &win.ctx.Style
-
-	state, bounds := win.widget()
-	if state == 0 {
-		return false
-	}
-	in := win.inputMaybe(state)
-	return doButtonTextImage(&win.widgets, bounds, img, text, align, behavior, &style.Button, in)
+func (win *Window) ButtonText(text string) bool {
+	return win.Button(label.T(text), false)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
 // SELECTABLE
 ///////////////////////////////////////////////////////////////////////////////////
 
-func doSelectable(out *widgetBuffer, bounds Rect, str string, align TextAlign, value *bool, style *StyleSelectable, in *Input) bool {
+func doSelectable(out *widgetBuffer, bounds types.Rect, str string, align label.Align, value *bool, style *nstyle.Selectable, in *Input) bool {
 	if str == "" {
 		return false
 	}
 	old_value := *value
 
 	/* remove padding */
-	var touch Rect
+	var touch types.Rect
 	touch.X = bounds.X - style.TouchPadding.X
 	touch.Y = bounds.Y - style.TouchPadding.Y
 	touch.W = bounds.W + style.TouchPadding.X*2
@@ -1525,7 +1456,7 @@ func doSelectable(out *widgetBuffer, bounds Rect, str string, align TextAlign, v
 
 	/* update button */
 	state := out.PrevState(bounds)
-	if buttonBehaviorDo(&state, touch, in, ButtonNormal) {
+	if buttonBehaviorDo(&state, touch, in, false) {
 		*value = !*value
 	}
 
@@ -1537,7 +1468,7 @@ func doSelectable(out *widgetBuffer, bounds Rect, str string, align TextAlign, v
 // to a flag that will be changed to reflect the selected state of
 // this label.
 // Returns true when the label is clicked.
-func (win *Window) SelectableLabel(str string, align TextAlign, value *bool) bool {
+func (win *Window) SelectableLabel(str string, align label.Align, value *bool) bool {
 	style := &win.ctx.Style
 	state, bounds := win.widget()
 	if state == 0 {
@@ -1551,25 +1482,26 @@ func (win *Window) SelectableLabel(str string, align TextAlign, value *bool) boo
 // SCROLLBARS
 ///////////////////////////////////////////////////////////////////////////////////
 
-type Orientation int
+type orientation int
 
 const (
-	Vertical Orientation = iota
-	Horizontal
+	vertical orientation = iota
+	horizontal
 )
 
-func scrollbarBehavior(state *WidgetStates, in *Input, scroll, cursor, scrollwheel_bounds Rect, scroll_offset float64, target float64, scroll_step float64, o Orientation) float64 {
+func scrollbarBehavior(state *types.WidgetStates, in *Input, scroll, cursor, scrollwheel_bounds types.Rect, scroll_offset float64, target float64, scroll_step float64, o orientation) float64 {
 	exitstate := basicWidgetStateControl(state, in, cursor)
 
-	if *state == WidgetStateActive {
-		if !InputIsMouseDown(in, mouse.ButtonLeft) {
+	if *state == types.WidgetStateActive {
+		if !in.Mouse.Down(mouse.ButtonLeft) {
 			*state = exitstate
 		} else {
-			if o == Vertical {
+			switch o {
+			case vertical:
 				pixel := in.Mouse.Delta.Y
 				delta := (float64(pixel) / float64(scroll.H)) * target
 				scroll_offset = clampFloat(0, scroll_offset+delta, target-float64(scroll.H))
-			} else {
+			case horizontal:
 				pixel := in.Mouse.Delta.X
 				delta := (float64(pixel) / float64(scroll.W)) * target
 				scroll_offset = clampFloat(0, scroll_offset+delta, target-float64(scroll.W))
@@ -1577,12 +1509,12 @@ func scrollbarBehavior(state *WidgetStates, in *Input, scroll, cursor, scrollwhe
 		}
 	}
 
-	if o == Vertical && (in != nil) && ((in.Mouse.ScrollDelta < 0) || (in.Mouse.ScrollDelta > 0)) && InputIsMouseHoveringRect(in, scrollwheel_bounds) {
+	if o == vertical && ((in.Mouse.ScrollDelta < 0) || (in.Mouse.ScrollDelta > 0)) && in.Mouse.HoveringRect(scrollwheel_bounds) {
 		/* update cursor by mouse scrolling */
 		old_scroll_offset := scroll_offset
 		scroll_offset = scroll_offset + scroll_step*float64(-in.Mouse.ScrollDelta)
 
-		if o == Vertical {
+		if o == vertical {
 			scroll_offset = clampFloat(0, scroll_offset, target-float64(scroll.H))
 		} else {
 			scroll_offset = clampFloat(0, scroll_offset, target-float64(scroll.W))
@@ -1599,8 +1531,8 @@ func scrollbarBehavior(state *WidgetStates, in *Input, scroll, cursor, scrollwhe
 	return scroll_offset
 }
 
-func doScrollbarv(out *widgetBuffer, scroll, scrollwheel_bounds Rect, offset float64, target float64, step float64, button_pixel_inc float64, style *StyleScrollbar, in *Input, font *Face) float64 {
-	var cursor Rect
+func doScrollbarv(win *Window, scroll, scrollwheel_bounds types.Rect, offset float64, target float64, step float64, button_pixel_inc float64, style *nstyle.Scrollbar, in *Input, font *types.Face) float64 {
+	var cursor types.Rect
 	var scroll_step float64
 	var scroll_offset float64
 	var scroll_off float64
@@ -1620,7 +1552,7 @@ func doScrollbarv(out *widgetBuffer, scroll, scrollwheel_bounds Rect, offset flo
 
 	/* optional scrollbar buttons */
 	if style.ShowButtons {
-		var button Rect
+		var button types.Rect
 		button.X = scroll.X
 		button.W = scroll.W
 		button.H = scroll.W
@@ -1631,14 +1563,14 @@ func doScrollbarv(out *widgetBuffer, scroll, scrollwheel_bounds Rect, offset flo
 		/* decrement button */
 		button.Y = scroll.Y
 
-		if doButtonSymbol(out, button, style.DecSymbol, ButtonRepeater, &style.DecButton, in) {
+		if doButton(win, label.S(style.DecSymbol), button, &style.DecButton, in, true) {
 			offset = offset - scroll_step
 		}
 
 		/* increment button */
 		button.Y = scroll.Y + scroll.H - button.H
 
-		if doButtonSymbol(out, button, style.IncSymbol, ButtonRepeater, &style.IncButton, in) {
+		if doButton(win, label.S(style.IncSymbol), button, &style.IncButton, in, true) {
 			offset = offset + scroll_step
 		}
 
@@ -1661,8 +1593,9 @@ func doScrollbarv(out *widgetBuffer, scroll, scrollwheel_bounds Rect, offset flo
 	cursor.X = scroll.X + 1
 
 	/* update scrollbar */
+	out := &win.widgets
 	state := out.PrevState(scroll)
-	scroll_offset = scrollbarBehavior(&state, in, scroll, cursor, scrollwheel_bounds, scroll_offset, target, scroll_step, Vertical)
+	scroll_offset = scrollbarBehavior(&state, in, scroll, cursor, scrollwheel_bounds, scroll_offset, target, scroll_step, vertical)
 
 	scroll_off = scroll_offset / target
 	cursor.Y = scroll.Y + int(scroll_off*float64(scroll.H))
@@ -1672,8 +1605,8 @@ func doScrollbarv(out *widgetBuffer, scroll, scrollwheel_bounds Rect, offset flo
 	return scroll_offset
 }
 
-func doScrollbarh(out *widgetBuffer, scroll Rect, offset float64, target float64, step float64, button_pixel_inc float64, style *StyleScrollbar, in *Input, font *Face) float64 {
-	var cursor Rect
+func doScrollbarh(win *Window, scroll types.Rect, offset float64, target float64, step float64, button_pixel_inc float64, style *nstyle.Scrollbar, in *Input, font *types.Face) float64 {
+	var cursor types.Rect
 	var scroll_step float64
 	var scroll_offset float64
 	var scroll_off float64
@@ -1695,7 +1628,7 @@ func doScrollbarh(out *widgetBuffer, scroll Rect, offset float64, target float64
 	/* optional scrollbar buttons */
 	if style.ShowButtons {
 		var scroll_w float64
-		var button Rect
+		var button types.Rect
 		button.Y = scroll.Y
 		button.W = scroll.H
 		button.H = scroll.H
@@ -1706,14 +1639,14 @@ func doScrollbarh(out *widgetBuffer, scroll Rect, offset float64, target float64
 		/* decrement button */
 		button.X = scroll.X
 
-		if doButtonSymbol(out, button, style.DecSymbol, ButtonRepeater, &style.DecButton, in) {
+		if doButton(win, label.S(style.DecSymbol), button, &style.DecButton, in, true) {
 			offset = offset - scroll_step
 		}
 
 		/* increment button */
 		button.X = scroll.X + scroll.W - button.W
 
-		if doButtonSymbol(out, button, style.IncSymbol, ButtonRepeater, &style.IncButton, in) {
+		if doButton(win, label.S(style.IncSymbol), button, &style.IncButton, in, true) {
 			offset = offset + scroll_step
 		}
 
@@ -1735,8 +1668,9 @@ func doScrollbarh(out *widgetBuffer, scroll Rect, offset float64, target float64
 	cursor.Y = scroll.Y + 1
 
 	/* update scrollbar */
+	out := &win.widgets
 	state := out.PrevState(scroll)
-	scroll_offset = scrollbarBehavior(&state, in, scroll, cursor, Rect{0, 0, 0, 0}, scroll_offset, target, scroll_step, Horizontal)
+	scroll_offset = scrollbarBehavior(&state, in, scroll, cursor, types.Rect{0, 0, 0, 0}, scroll_offset, target, scroll_step, horizontal)
 
 	scroll_off = scroll_offset / target
 	cursor.X = scroll.X + int(scroll_off*float64(scroll.W))
@@ -1757,26 +1691,26 @@ const (
 	toggleOption
 )
 
-func toggleBehavior(in *Input, b Rect, state *WidgetStates, active bool) bool {
+func toggleBehavior(in *Input, b types.Rect, state *types.WidgetStates, active bool) bool {
 	//TODO: rewrite using basicWidgetStateControl
-	if InputIsMouseHoveringRect(in, b) {
-		*state = WidgetStateHovered
+	if in.Mouse.HoveringRect(b) {
+		*state = types.WidgetStateHovered
 	} else {
-		*state = WidgetStateInactive
+		*state = types.WidgetStateInactive
 	}
-	if *state == WidgetStateHovered && InputMouseClicked(in, mouse.ButtonLeft, b) {
-		*state = WidgetStateActive
+	if *state == types.WidgetStateHovered && in.Mouse.Clicked(mouse.ButtonLeft, b) {
+		*state = types.WidgetStateActive
 		active = !active
 	}
 
 	return active
 }
 
-func doToggle(out *widgetBuffer, r Rect, active bool, str string, type_ toggleType, style *StyleToggle, in *Input, font *Face) bool {
-	var bounds Rect
-	var select_ Rect
-	var cursor Rect
-	var label Rect
+func doToggle(out *widgetBuffer, r types.Rect, active bool, str string, type_ toggleType, style *nstyle.Toggle, in *Input, font *types.Face) bool {
+	var bounds types.Rect
+	var select_ types.Rect
+	var cursor types.Rect
+	var label types.Rect
 	var cursor_pad int
 
 	r.W = max(r.W, fontHeight(font)+2*style.Padding.X)
@@ -1857,11 +1791,11 @@ func (win *Window) CheckboxText(text string, active *bool) bool {
 // SLIDER
 ///////////////////////////////////////////////////////////////////////////////////
 
-func sliderBehavior(state *WidgetStates, cursor *Rect, in *Input, style *StyleSlider, bounds Rect, slider_min float64, slider_value float64, slider_max float64, slider_step float64, slider_steps int) float64 {
+func sliderBehavior(state *types.WidgetStates, cursor *types.Rect, in *Input, style *nstyle.Slider, bounds types.Rect, slider_min float64, slider_value float64, slider_max float64, slider_step float64, slider_steps int) float64 {
 	exitstate := basicWidgetStateControl(state, in, bounds)
 
-	if *state == WidgetStateActive {
-		if !InputIsMouseDown(in, mouse.ButtonLeft) {
+	if *state == types.WidgetStateActive {
+		if !in.Mouse.Down(mouse.ButtonLeft) {
 			*state = exitstate
 		} else {
 			d := in.Mouse.Pos.X - (cursor.X + cursor.W/2.0)
@@ -1882,10 +1816,10 @@ func sliderBehavior(state *WidgetStates, cursor *Rect, in *Input, style *StyleSl
 	return slider_value
 }
 
-func doSlider(out *widgetBuffer, bounds Rect, minval float64, val float64, maxval float64, step float64, style *StyleSlider, in *Input, font *Face) float64 {
+func doSlider(win *Window, bounds types.Rect, minval float64, val float64, maxval float64, step float64, style *nstyle.Slider, in *Input) float64 {
 	var slider_range float64
 	var cursor_offset float64
-	var cursor Rect
+	var cursor types.Rect
 
 	/* remove padding from slider bounds */
 	bounds.X = bounds.X + style.Padding.X
@@ -1898,7 +1832,7 @@ func doSlider(out *widgetBuffer, bounds Rect, minval float64, val float64, maxva
 
 	/* optional buttons */
 	if style.ShowButtons {
-		var button Rect
+		var button types.Rect
 		button.Y = bounds.Y
 		button.W = bounds.H
 		button.H = bounds.H
@@ -1906,14 +1840,14 @@ func doSlider(out *widgetBuffer, bounds Rect, minval float64, val float64, maxva
 		/* decrement button */
 		button.X = bounds.X
 
-		if doButtonSymbol(out, button, style.DecSymbol, ButtonNormal, &style.DecButton, in) {
+		if doButton(win, label.S(style.DecSymbol), button, &style.DecButton, in, false) {
 			val -= step
 		}
 
 		/* increment button */
 		button.X = (bounds.X + bounds.W) - button.W
 
-		if doButtonSymbol(out, button, style.IncSymbol, ButtonNormal, &style.IncButton, in) {
+		if doButton(win, label.S(style.IncSymbol), button, &style.IncButton, in, false) {
 			val += step
 		}
 
@@ -1934,6 +1868,7 @@ func doSlider(out *widgetBuffer, bounds Rect, minval float64, val float64, maxva
 	cursor.X = bounds.X + int((float64(cursor.W) * cursor_offset))
 	cursor.Y = bounds.Y
 
+	out := &win.widgets
 	state := out.PrevState(bounds)
 	slider_value = sliderBehavior(&state, &cursor, in, style, bounds, minval, slider_value, maxval, step, slider_steps)
 	out.Add(state, bounds, &drawableSlider{state, style, bounds, cursor, minval, slider_value, maxval})
@@ -1951,7 +1886,7 @@ func (win *Window) SliderFloat(min_value float64, value *float64, max_value floa
 	in := win.inputMaybe(state)
 
 	old_value := *value
-	*value = doSlider(&win.widgets, bounds, min_value, old_value, max_value, value_step, &style.Slider, in, style.Font)
+	*value = doSlider(win, bounds, min_value, old_value, max_value, value_step, &style.Slider, in)
 	return old_value > *value || old_value < *value
 }
 
@@ -1968,16 +1903,16 @@ func (win *Window) SliderInt(min int, val *int, max int, step int) bool {
 // PROGRESS BAR
 ///////////////////////////////////////////////////////////////////////////////////
 
-func progressBehavior(state *WidgetStates, in *Input, r Rect, maxval int, value int, modifiable bool) int {
+func progressBehavior(state *types.WidgetStates, in *Input, r types.Rect, maxval int, value int, modifiable bool) int {
 	if !modifiable {
-		*state = WidgetStateInactive
+		*state = types.WidgetStateInactive
 		return value
 	}
 
 	exitstate := basicWidgetStateControl(state, in, r)
 
-	if *state == WidgetStateActive {
-		if !InputIsMouseDown(in, mouse.ButtonLeft) {
+	if *state == types.WidgetStateActive {
+		if !in.Mouse.Down(mouse.ButtonLeft) {
 			*state = exitstate
 		} else {
 			ratio := maxFloat(0, float64(in.Mouse.Pos.X-r.X)) / float64(r.W)
@@ -1994,9 +1929,9 @@ func progressBehavior(state *WidgetStates, in *Input, r Rect, maxval int, value 
 	return value
 }
 
-func doProgress(out *widgetBuffer, bounds Rect, value int, maxval int, modifiable bool, style *StyleProgress, in *Input) int {
+func doProgress(out *widgetBuffer, bounds types.Rect, value int, maxval int, modifiable bool, style *nstyle.Progress, in *Input) int {
 	var prog_scale float64
-	var cursor Rect
+	var cursor types.Rect
 
 	/* calculate progressbar cursor */
 	cursor = padRect(bounds, style.Padding)
@@ -2049,19 +1984,19 @@ func FilterFloat(c rune) bool {
 	return !((c < '0' || c > '9') && c != '.' && c != '-')
 }
 
-func (ed *TextEditor) propertyBehavior(ws *WidgetStates, in *Input, property Rect, label Rect, edit Rect, empty Rect) (drag bool, delta int) {
+func (ed *TextEditor) propertyBehavior(ws *types.WidgetStates, in *Input, property types.Rect, label types.Rect, edit types.Rect, empty types.Rect) (drag bool, delta int) {
 	if ed.propertyStatus == propertyDefault {
-		if buttonBehaviorDo(ws, edit, in, ButtonNormal) {
+		if buttonBehaviorDo(ws, edit, in, false) {
 			ed.propertyStatus = propertyEdit
-		} else if InputIsMouseClickDownInRect(in, mouse.ButtonLeft, label, true) {
+		} else if in.Mouse.IsClickDownInRect(mouse.ButtonLeft, label, true) {
 			ed.propertyStatus = propertyDrag
-		} else if InputIsMouseClickDownInRect(in, mouse.ButtonLeft, empty, true) {
+		} else if in.Mouse.IsClickDownInRect(mouse.ButtonLeft, empty, true) {
 			ed.propertyStatus = propertyDrag
 		}
 	}
 
 	if ed.propertyStatus == propertyDrag {
-		if InputIsMouseReleased(in, mouse.ButtonLeft) {
+		if in.Mouse.Released(mouse.ButtonLeft) {
 			ed.propertyStatus = propertyDefault
 		} else {
 			delta = in.Mouse.Delta.X
@@ -2070,13 +2005,13 @@ func (ed *TextEditor) propertyBehavior(ws *WidgetStates, in *Input, property Rec
 	}
 
 	if ed.propertyStatus == propertyDefault {
-		if InputIsMouseHoveringRect(in, property) {
-			*ws = WidgetStateHovered
+		if in.Mouse.HoveringRect(property) {
+			*ws = types.WidgetStateHovered
 		} else {
-			*ws = WidgetStateInactive
+			*ws = types.WidgetStateInactive
 		}
 	} else {
-		*ws = WidgetStateActive
+		*ws = types.WidgetStateActive
 	}
 
 	return
@@ -2092,28 +2027,28 @@ const (
 	doPropertySet
 )
 
-func (win *Window) doProperty(property Rect, name string, text string, filter FilterFunc, in *Input) (ret doPropertyRet, delta int, ed *TextEditor) {
+func (win *Window) doProperty(property types.Rect, name string, text string, filter FilterFunc, in *Input) (ret doPropertyRet, delta int, ed *TextEditor) {
 	ret = doPropertyStay
 	style := &win.ctx.Style.Property
 	font := win.ctx.Style.Font
 
 	// left decrement button
-	var left Rect
+	var left types.Rect
 	left.H = fontHeight(font) / 2
 	left.W = left.H
 	left.X = property.X + style.Border + style.Padding.X
 	left.Y = property.Y + style.Border + property.H/2.0 - left.H/2
 
 	// text label
-	size := fontWidth(font, name)
-	var label Rect
-	label.X = left.X + left.W + style.Padding.X
-	label.W = size + 2*style.Padding.X
-	label.Y = property.Y + style.Border
-	label.H = property.H - 2*style.Border
+	size := FontWidth(font, name)
+	var lblrect types.Rect
+	lblrect.X = left.X + left.W + style.Padding.X
+	lblrect.W = size + 2*style.Padding.X
+	lblrect.Y = property.Y + style.Border
+	lblrect.H = property.H - 2*style.Border
 
 	/* right increment button */
-	var right Rect
+	var right types.Rect
 	right.Y = left.Y
 	right.W = left.W
 	right.H = left.H
@@ -2121,7 +2056,7 @@ func (win *Window) doProperty(property Rect, name string, text string, filter Fi
 
 	ws := win.widgets.PrevState(property)
 	oldws := ws
-	if ws == WidgetStateActive {
+	if ws == types.WidgetStateActive {
 		ed = win.editor
 	} else {
 		ed = &TextEditor{}
@@ -2129,42 +2064,42 @@ func (win *Window) doProperty(property Rect, name string, text string, filter Fi
 		ed.Buffer = []rune(text)
 	}
 
-	size = fontWidth(font, string(ed.Buffer)) + style.Edit.CursorSize
+	size = FontWidth(font, string(ed.Buffer)) + style.Edit.CursorSize
 
 	/* edit */
-	var edit Rect
+	var edit types.Rect
 	edit.W = size + 2*style.Padding.X
 	edit.X = right.X - (edit.W + style.Padding.X)
 	edit.Y = property.Y + style.Border + 1
 	edit.H = property.H - (2*style.Border + 2)
 
 	/* empty left space activator */
-	var empty Rect
-	empty.W = edit.X - (label.X + label.W)
-	empty.X = label.X + label.W
+	var empty types.Rect
+	empty.W = edit.X - (lblrect.X + lblrect.W)
+	empty.X = lblrect.X + lblrect.W
 	empty.Y = property.Y
 	empty.H = property.H
 
 	/* update property */
 	old := ed.propertyStatus == propertyEdit
 
-	drag, delta := ed.propertyBehavior(&ws, in, property, label, edit, empty)
+	drag, delta := ed.propertyBehavior(&ws, in, property, lblrect, edit, empty)
 	if drag {
 		ret = doPropertyDrag
 	}
-	if ws == WidgetStateActive {
+	if ws == types.WidgetStateActive {
 		ed.Active = true
 		win.editor = ed
-	} else if oldws == WidgetStateActive {
+	} else if oldws == types.WidgetStateActive {
 		win.editor = nil
 	}
-	ed.win.widgets.Add(ws, property, &drawableProperty{style, property, label, ws, name})
+	ed.win.widgets.Add(ws, property, &drawableProperty{style, property, lblrect, ws, name})
 
 	/* execute right and left button  */
-	if doButtonSymbol(&ed.win.widgets, left, style.SymLeft, ButtonNormal, &style.DecButton, in) {
+	if doButton(ed.win, label.S(style.SymLeft), left, &style.DecButton, in, false) {
 		ret = doPropertyDec
 	}
-	if doButtonSymbol(&ed.win.widgets, right, style.SymRight, ButtonNormal, &style.IncButton, in) {
+	if doButton(ed.win, label.S(style.SymRight), right, &style.IncButton, in, false) {
 		ret = doPropertyInc
 	}
 
@@ -2172,13 +2107,12 @@ func (win *Window) doProperty(property Rect, name string, text string, filter Fi
 	if !old && active {
 		/* property has been activated so setup buffer */
 		ed.Cursor = len(ed.Buffer)
-		ed.Filter = filter
 	}
 	ed.Flags = EditAlwaysInsertMode | EditNoHorizontalScroll
 	ed.doEdit(edit, &style.Edit, in)
 	active = ed.Active
 
-	if active && InputIsKeyPressed(in, key.CodeReturnEnter) {
+	if active && in.Keyboard.Pressed(key.CodeReturnEnter) {
 		active = !active
 	}
 
@@ -2215,7 +2149,7 @@ func (win *Window) PropertyFloat(name string, min float64, val *float64, max, st
 	case doPropertyDrag:
 		*val += float64(delta) * inc_per_pixel
 	case doPropertySet:
-		*val, _ = strconv.ParseFloat(ed.String(), 64)
+		*val, _ = strconv.ParseFloat(string(ed.Buffer), 64)
 	}
 	changed = ret != doPropertyStay
 	if changed {
@@ -2241,7 +2175,7 @@ func (win *Window) PropertyInt(name string, min int, val *int, max, step, inc_pe
 	case doPropertyDrag:
 		*val += delta * inc_per_pixel
 	case doPropertySet:
-		*val, _ = strconv.Atoi(ed.String())
+		*val, _ = strconv.Atoi(string(ed.Buffer))
 	}
 	changed = ret != doPropertyStay
 	if changed {
@@ -2254,7 +2188,7 @@ func (win *Window) PropertyInt(name string, min int, val *int, max, step, inc_pe
 // POPUP
 ///////////////////////////////////////////////////////////////////////////////////
 
-func (ctx *context) nonblockOpen(flags WindowFlags, body Rect, header Rect, updateFn UpdateFn) {
+func (ctx *context) nonblockOpen(flags WindowFlags, body types.Rect, header types.Rect, updateFn UpdateFn) {
 	popup := createWindow(ctx, "")
 	popup.idx = len(ctx.Windows)
 	popup.updateFn = updateFn
@@ -2274,15 +2208,15 @@ func (ctx *context) nonblockOpen(flags WindowFlags, body Rect, header Rect, upda
 // Opens a popup window inside win. Will return true until the
 // popup window is closed.
 // The contents of the popup window will be updated by updateFn
-func (win *MasterWindow) PopupOpen(title string, flags WindowFlags, rect Rect, scale bool, updateFn UpdateFn) {
+func (mw *MasterWindow) PopupOpen(title string, flags WindowFlags, rect types.Rect, scale bool, updateFn UpdateFn) {
 	go func() {
-		win.uilock.Lock()
-		defer win.uilock.Unlock()
-		win.ctx.popupOpen(title, flags, rect, scale, updateFn)
+		mw.uilock.Lock()
+		defer mw.uilock.Unlock()
+		mw.ctx.popupOpen(title, flags, rect, scale, updateFn)
 	}()
 }
 
-func (ctx *context) popupOpen(title string, flags WindowFlags, rect Rect, scale bool, updateFn UpdateFn) {
+func (ctx *context) popupOpen(title string, flags WindowFlags, rect types.Rect, scale bool, updateFn UpdateFn) {
 	popup := createWindow(ctx, title)
 	popup.idx = len(ctx.Windows)
 	popup.updateFn = updateFn
@@ -2316,28 +2250,27 @@ func (win *Window) Close() {
 ///////////////////////////////////////////////////////////////////////////////////
 
 // Opens a contextual menu with maximum size equal to 'size'.
-func (win *Window) ContextualOpen(flags WindowFlags, size image.Point, trigger_bounds Rect, updateFn UpdateFn) {
+func (win *Window) ContextualOpen(flags WindowFlags, size image.Point, trigger_bounds types.Rect, updateFn UpdateFn) {
 	size.X = win.ctx.scale(size.X)
 	size.Y = win.ctx.scale(size.Y)
-	if !InputMouseClicked(win.Input(), mouse.ButtonRight, trigger_bounds) {
+	if !win.Input().Mouse.Clicked(mouse.ButtonRight, trigger_bounds) {
 		return
 	}
 
-	var body Rect
+	var body types.Rect
 	body.X = win.ctx.Input.Mouse.Pos.X
 	body.Y = win.ctx.Input.Mouse.Pos.Y
 	body.W = size.X
 	body.H = size.Y
 
 	atomic.AddInt32(&win.ctx.changed, 1)
-	win.ctx.nonblockOpen(flags|windowContextual|WindowNoScrollbar, body, Rect{}, updateFn)
+	win.ctx.nonblockOpen(flags|windowContextual|WindowNoScrollbar, body, types.Rect{}, updateFn)
 	popup := win.ctx.Windows[len(win.ctx.Windows)-1]
 	popup.triggerBounds = trigger_bounds
 }
 
-// ContextualItemText adds a text item to the contextual menu
-// (see ContextualBegin).
-func (win *Window) ContextualItemText(text string, alignment TextAlign) bool {
+// MenuItem adds a menu item
+func (win *Window) MenuItem(lbl label.Label) bool {
 	style := &win.ctx.Style
 	state, bounds := win.widgetFitting(style.ContextualButton.Padding)
 	if state == 0 {
@@ -2345,43 +2278,7 @@ func (win *Window) ContextualItemText(text string, alignment TextAlign) bool {
 	}
 
 	in := win.inputMaybe(state)
-	if doButtonText(&win.widgets, bounds, text, alignment, ButtonNormal, &style.ContextualButton, in) {
-		win.Close()
-		return true
-	}
-
-	return false
-}
-
-// ContextualItemImageText adds an image+text item to the contextual
-// menu (see ContextualBegin).
-func (win *Window) ContextualItemImageText(img *image.RGBA, text string, align TextAlign) bool {
-	style := &win.ctx.Style
-	state, bounds := win.widgetFitting(style.ContextualButton.Padding)
-	if state == 0 {
-		return false
-	}
-
-	in := win.inputMaybe(state)
-	if doButtonTextImage(&win.widgets, bounds, img, text, align, ButtonNormal, &style.ContextualButton, in) {
-		win.Close()
-		return true
-	}
-
-	return false
-}
-
-// ContextualItemSymbolText adds a symbol+text item to the contextual
-// menu (see ContextualBegin).
-func (win *Window) ContextualItemSymbolText(symbol SymbolType, text string, align TextAlign) bool {
-	style := &win.ctx.Style
-	state, bounds := win.widgetFitting(style.ContextualButton.Padding)
-	if state == 0 {
-		return false
-	}
-
-	in := win.inputMaybe(state)
-	if doButtonTextSymbol(&win.widgets, bounds, symbol, text, align, ButtonNormal, &style.ContextualButton, style.Font, in) {
+	if doButton(win, lbl, bounds, &style.ContextualButton, in, false) {
 		win.Close()
 		return true
 	}
@@ -2403,7 +2300,7 @@ func (win *Window) TooltipOpen(width int, scale bool, updateFn UpdateFn) {
 		width = win.ctx.scale(width)
 	}
 
-	var bounds Rect
+	var bounds types.Rect
 	bounds.W = width
 	bounds.H = nk_null_rect.H
 	bounds.X = (in.Mouse.Pos.X + 1) - win.layout.Clip.X
@@ -2423,13 +2320,13 @@ func (win *Window) Tooltip(text string) {
 	item_spacing := win.ctx.Style.TooltipWindow.Spacing
 
 	/* calculate size of the text and tooltip */
-	text_width := fontWidth(win.ctx.Style.Font, text)
+	text_width := FontWidth(win.ctx.Style.Font, text)
 	text_height := fontHeight(win.ctx.Style.Font)
 	text_width += win.ctx.scale(2*padding.X) + win.ctx.scale(2*item_spacing.X)
 
 	win.TooltipOpen(text_width, false, func(mw *MasterWindow, tw *Window) {
 		tw.LayoutRowDynamicScaled(text_height, 1)
-		tw.Label(text, TextLeft)
+		tw.Label(text, "LC")
 	})
 }
 
@@ -2437,24 +2334,24 @@ func (win *Window) Tooltip(text string) {
 // COMBO-BOX
 ///////////////////////////////////////////////////////////////////////////////////
 
-func (ctx *context) comboOpen(height int, is_clicked bool, header Rect, updateFn UpdateFn) {
+func (ctx *context) comboOpen(height int, is_clicked bool, header types.Rect, updateFn UpdateFn) {
 	height = ctx.scale(height)
 
 	if !is_clicked {
 		return
 	}
 
-	var body Rect
+	var body types.Rect
 	body.X = header.X
 	body.W = header.W
 	body.Y = header.Y + header.H - 1
 	body.H = height
 
-	ctx.nonblockOpen(windowCombo, body, Rect{0, 0, 0, 0}, updateFn)
+	ctx.nonblockOpen(windowCombo, body, types.Rect{0, 0, 0, 0}, updateFn)
 }
 
 // Adds a drop-down list to win.
-func (win *Window) ComboColor(color color.RGBA, height int, updateFn UpdateFn) {
+func (win *Window) Combo(lbl label.Label, height int, updateFn UpdateFn) {
 	var is_active bool = false
 
 	s, header := win.widget()
@@ -2464,123 +2361,31 @@ func (win *Window) ComboColor(color color.RGBA, height int, updateFn UpdateFn) {
 
 	in := win.inputMaybe(s)
 	state := win.widgets.PrevState(header)
-	if buttonBehaviorDo(&state, header, in, ButtonNormal) {
+	if buttonBehaviorDo(&state, header, in, false) {
 		is_active = true
 	}
 
-	win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Color: color, Fn: drawableComboColor})
-
-	win.ctx.comboOpen(height, is_active, header, updateFn)
-}
-
-// Adds a drop-down list to win.
-func (win *Window) ComboSymbol(symbol SymbolType, height int, updateFn UpdateFn) {
-	var is_active bool = false
-
-	s, header := win.widget()
-	if s == widgetInvalid {
-		return
+	switch lbl.Kind {
+	case label.ColorLabel:
+		win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Color: lbl.Color, Fn: drawableComboColor})
+	case label.ImageLabel:
+		win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Image: lbl.Img, Fn: drawableComboImage})
+	case label.ImageTextLabel:
+		win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Image: lbl.Img, Selected: lbl.Text, Fn: drawableComboImageText})
+	case label.SymbolLabel:
+		win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Symbol: lbl.Symbol, Fn: drawableComboSymbol})
+	case label.SymbolTextLabel:
+		win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Symbol: lbl.Symbol, Selected: lbl.Text, Fn: drawableComboSymbolText})
+	case label.TextLabel:
+		win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Selected: lbl.Text, Fn: drawableComboText})
 	}
-
-	in := win.inputMaybe(s)
-	state := win.widgets.PrevState(header)
-	if buttonBehaviorDo(&state, header, in, ButtonNormal) {
-		is_active = true
-	}
-
-	win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Symbol: symbol, Fn: drawableComboSymbol})
-
-	win.ctx.comboOpen(height, is_active, header, updateFn)
-}
-
-// Adds a drop-down list to win.
-func (win *Window) ComboSymbolText(selected string, symbol SymbolType, height int, updateFn UpdateFn) {
-	var is_active bool = false
-
-	s, header := win.widget()
-	if s == 0 {
-		return
-	}
-
-	in := win.inputMaybe(s)
-	state := win.widgets.PrevState(header)
-	if buttonBehaviorDo(&state, header, in, ButtonNormal) {
-		is_active = true
-	}
-
-	win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Symbol: symbol, Selected: selected, Fn: drawableComboSymbolText})
-
-	win.ctx.comboOpen(height, is_active, header, updateFn)
-}
-
-// Adds a drop-down list to win.
-func (win *Window) ComboImage(img *image.RGBA, height int, updateFn UpdateFn) {
-	var is_active bool = false
-
-	s, header := win.widget()
-	if s == widgetInvalid {
-		return
-	}
-
-	in := win.inputMaybe(s)
-	state := win.widgets.PrevState(header)
-	if buttonBehaviorDo(&state, header, in, ButtonNormal) {
-		is_active = true
-	}
-
-	win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Image: img, Fn: drawableComboImage})
-
-	win.ctx.comboOpen(height, is_active, header, updateFn)
-}
-
-// Adds a drop-down list to win.
-func (win *Window) ComboImageText(selected string, img *image.RGBA, height int, updateFn UpdateFn) {
-	var is_active bool = false
-
-	s, header := win.widget()
-	if s == 0 {
-		return
-	}
-
-	in := win.inputMaybe(s)
-	state := win.widgets.PrevState(header)
-	if buttonBehaviorDo(&state, header, in, ButtonNormal) {
-		is_active = true
-	}
-
-	win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Image: img, Selected: selected, Fn: drawableComboImageText})
-
-	win.ctx.comboOpen(height, is_active, header, updateFn)
-}
-
-// Adds a drop-down list to win.
-func (win *Window) ComboText(selected string, height int, updateFn UpdateFn) {
-	is_active := false
-
-	if selected == "" {
-		return
-	}
-
-	//style := &win.ctx.Style
-	s, header := win.widget()
-	if s == widgetInvalid {
-		return
-	}
-
-	in := win.inputMaybe(s)
-	state := win.widgets.PrevState(header)
-	if buttonBehaviorDo(&state, header, in, ButtonNormal) {
-		is_active = true
-	}
-
-	win.widgets.Add(state, header, &drawableCombo{State: state, Header: header, Active: is_active, Selected: selected, Fn: drawableComboText})
 
 	win.ctx.comboOpen(height, is_active, header, updateFn)
 }
 
 // Adds a drop-down list to win. The contents are specified by items,
 // with selected being the index of the selected item.
-func (win *Window) Combo(items []string, selected *int, item_height int) {
+func (win *Window) ComboSimple(items []string, selected *int, item_height int) {
 	if len(items) == 0 {
 		return
 	}
@@ -2588,10 +2393,10 @@ func (win *Window) Combo(items []string, selected *int, item_height int) {
 	item_padding := win.ctx.Style.Combo.ButtonPadding.Y
 	window_padding := win.style().Padding.Y
 	max_height := (len(items)+1)*item_height + item_padding*3 + window_padding*2
-	win.ComboText(items[*selected], max_height, func(mw *MasterWindow, w *Window) {
+	win.Combo(label.T(items[*selected]), max_height, func(mw *MasterWindow, w *Window) {
 		w.LayoutRowDynamic(item_height, 1)
 		for i := range items {
-			if w.ContextualItemText(items[i], TextLeft) {
+			if w.MenuItem(label.TA(items[i], "LC")) {
 				*selected = i
 			}
 		}
@@ -2602,14 +2407,14 @@ func (win *Window) Combo(items []string, selected *int, item_height int) {
 // MENU
 ///////////////////////////////////////////////////////////////////////////////////
 
-func (win *Window) menuOpen(is_clicked bool, header Rect, width int, updateFn UpdateFn) {
+func (win *Window) menuOpen(is_clicked bool, header types.Rect, width int, updateFn UpdateFn) {
 	width = win.ctx.scale(width)
 
 	if !is_clicked {
 		return
 	}
 
-	var body Rect
+	var body types.Rect
 	body.X = header.X
 	body.W = width
 	body.Y = header.Y + header.H
@@ -2619,74 +2424,17 @@ func (win *Window) menuOpen(is_clicked bool, header Rect, width int, updateFn Up
 }
 
 // Adds a menu to win with a text label.
-func (win *Window) MenuText(title string, align TextAlign, width int, updateFn UpdateFn) {
+func (win *Window) Menu(lbl label.Label, width int, updateFn UpdateFn) {
 	state, header := win.widget()
 	if state == 0 {
 		return
 	}
-	var in *Input
+	in := &Input{}
 	if !(state == widgetRom || !win.toplevel()) {
 		in = &win.ctx.Input
 	}
-	is_clicked := doButtonText(&win.widgets, header, title, align, ButtonNormal, &win.ctx.Style.MenuButton, in)
+	is_clicked := doButton(win, lbl, header, &win.ctx.Style.MenuButton, in, false)
 	win.menuOpen(is_clicked, header, width, updateFn)
-}
-
-// Adds a menu to win with an image label.
-func (win *Window) MenuImage(img *image.RGBA, width int, updateFn UpdateFn) {
-	state, header := win.widget()
-	if state == 0 {
-		return
-	}
-	in := win.inputMaybe(state)
-	is_clicked := doButtonImage(&win.widgets, header, img, ButtonNormal, &win.ctx.Style.MenuButton, in)
-	win.menuOpen(is_clicked, header, width, updateFn)
-}
-
-// Adds a menu to win with a symbol label.
-func (win *Window) MenuOpenSymbol(sym SymbolType, width int, updateFn UpdateFn) {
-	state, header := win.widget()
-	if state == 0 {
-		return
-	}
-	in := win.inputMaybe(state)
-	is_clicked := doButtonSymbol(&win.widgets, header, sym, ButtonNormal, &win.ctx.Style.MenuButton, in)
-	win.menuOpen(is_clicked, header, width, updateFn)
-}
-
-// Adds a menu to win with an image and text label.
-func (win *Window) MenuImageText(title string, align TextAlign, img *image.RGBA, width int, updateFn UpdateFn) {
-	state, header := win.widget()
-	if state == 0 {
-		return
-	}
-	in := win.inputMaybe(state)
-	is_clicked := doButtonTextImage(&win.widgets, header, img, title, align, ButtonNormal, &win.ctx.Style.MenuButton, in)
-	win.menuOpen(is_clicked, header, width, updateFn)
-}
-
-// Adds a menu to win with a symbol and text label.
-func (win *Window) MenuSymbolText(title string, size int, align TextAlign, sym SymbolType, width int, updateFn UpdateFn) {
-	state, header := win.widget()
-	if state == 0 {
-		return
-	}
-
-	in := win.inputMaybe(state)
-	is_clicked := doButtonTextSymbol(&win.widgets, header, sym, title, align, ButtonNormal, &win.ctx.Style.MenuButton, win.ctx.Style.Font, in)
-	win.menuOpen(is_clicked, header, width, updateFn)
-}
-
-func (win *Window) MenuItemText(title string, align TextAlign) bool {
-	return win.ContextualItemText(title, align)
-}
-
-func (win *Window) MenuItemImageText(img *image.RGBA, text string, align TextAlign) bool {
-	return win.ContextualItemImageText(img, text, align)
-}
-
-func (win *Window) MenuItemSymbolText(sym SymbolType, text string, align TextAlign) bool {
-	return win.ContextualItemSymbolText(sym, text, align)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -2710,7 +2458,7 @@ func (win *Window) GroupBegin(title string, flags WindowFlags) *Window {
 	} else {
 		sw.curNode = sw.rootNode
 		sw.widgets.reset()
-		sw.cmds.reset()
+		sw.cmds.Reset()
 	}
 
 	sw.widgets.Clip = win.widgets.Clip
@@ -2734,11 +2482,11 @@ func (win *Window) GroupBegin(title string, flags WindowFlags) *Window {
 }
 
 // Signals that you are done adding widgets to a group.
-func (sw *Window) GroupEnd() {
-	panelEnd(sw.ctx, sw)
-	sw.parent.widgets.prev = append(sw.parent.widgets.prev, sw.widgets.prev...)
-	sw.parent.widgets.cur = append(sw.parent.widgets.cur, sw.widgets.cur...)
+func (win *Window) GroupEnd() {
+	panelEnd(win.ctx, win)
+	win.parent.widgets.prev = append(win.parent.widgets.prev, win.widgets.prev...)
+	win.parent.widgets.cur = append(win.parent.widgets.cur, win.widgets.cur...)
 
 	// immediate drawing
-	sw.parent.cmds.Commands = append(sw.parent.cmds.Commands, sw.cmds.Commands...)
+	win.parent.cmds.Commands = append(win.parent.cmds.Commands, win.cmds.Commands...)
 }

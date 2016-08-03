@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/aarzilli/nucular"
+	"github.com/aarzilli/nucular/label"
+	ntypes "github.com/aarzilli/nucular/types"
 
 	"golang.org/x/mobile/event/key"
 )
@@ -546,7 +548,7 @@ func nameInitials(s string) string {
 const graphLineHeight = 20
 const graphThick = 2
 
-func shrinkRect(r nucular.Rect, amount int) (res nucular.Rect) {
+func shrinkRect(r ntypes.Rect, amount int) (res ntypes.Rect) {
 	res.X = r.X + amount
 	res.Y = r.Y + amount
 	res.W = r.W - 2*amount
@@ -554,7 +556,7 @@ func shrinkRect(r nucular.Rect, amount int) (res nucular.Rect) {
 	return res
 }
 
-func laneboundsOf(lnh int, bounds nucular.Rect, lane int) (r nucular.Rect) {
+func laneboundsOf(lnh int, bounds ntypes.Rect, lane int) (r ntypes.Rect) {
 	r.X = bounds.X + lnh*lane
 	r.W = lnh
 	r.Y = bounds.Y
@@ -575,7 +577,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	if lw.status == nil {
 		lw.status = gitStatus(lw.repodir)
 	}
-	w.Label(lw.status.Summary(), nucular.TextLeft)
+	w.Label(lw.status.Summary(), "LC")
 	w.MenubarEnd()
 
 	style, scaling := mw.Style()
@@ -623,7 +625,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	if updating {
 		w.LayoutRowDynamic(graphLineHeight, 1)
-		w.Label("Loading...", nucular.TextLeft)
+		w.Label("Loading...", "LC")
 		return
 	}
 
@@ -675,7 +677,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 			rem := len(lw.commits) - i
 			remh := rem*graphLineHeight + (rem-1)*style.GroupWindow.Spacing.Y
 			w.LayoutRowDynamic(remh, 1)
-			w.Label("More...", nucular.TextLeft)
+			w.Label("More...", "LC")
 			break
 		}
 
@@ -733,29 +735,29 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 		rowwidth := w.LayoutAvailableWidth()
 
-		bounds, out := w.Custom(nucular.WidgetStateInactive)
+		bounds, out := w.Custom(ntypes.WidgetStateInactive)
 		rowbounds := bounds
 		rowbounds.W = rowwidth
 
 		if len(lc.Refs) != 0 {
 			if ishead {
-				w.LabelColored(refstr, nucular.TextLeft, refsHeadColor)
+				w.LabelColored(refstr, "LC", refsHeadColor)
 			} else {
-				w.LabelColored(refstr, nucular.TextLeft, refsColor)
+				w.LabelColored(refstr, "LC", refsColor)
 			}
 		}
 
 		selected := lc.Id == lw.selectedId
 
 		if commitsz > 0 {
-			w.SelectableLabel(lc.ShortMessage(), nucular.TextLeft, &selected)
+			w.SelectableLabel(lc.ShortMessage(), "LC", &selected)
 		}
 
 		if includeAuthor {
-			w.SelectableLabel(authorstr, nucular.TextCentered, &selected)
+			w.SelectableLabel(authorstr, "CC", &selected)
 		}
 		if includeDate {
-			w.SelectableLabel(datestr, nucular.TextRight, &selected)
+			w.SelectableLabel(datestr, "RC", &selected)
 		}
 
 		if selected && lc.Id != lw.selectedId {
@@ -806,7 +808,8 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 			continue
 		}
 
-		w.ContextualOpen(0, image.Point{250, 300}, rowbounds, func(mw *nucular.MasterWindow, w *nucular.Window) { lw.commitMenu(lc, mw, w) })
+		cm := commitMenu{lw, lc}
+		w.ContextualOpen(0, image.Point{250, 300}, rowbounds, cm.Update)
 
 		// draws graph proper
 
@@ -919,7 +922,13 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	}
 }
 
-func (lw *LogWindow) commitMenu(lc LanedCommit, mw *nucular.MasterWindow, w *nucular.Window) {
+type commitMenu struct {
+	lw *LogWindow
+	lc LanedCommit
+}
+
+func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+	lw, lc := cm.lw, cm.lc
 	lw.selectedId = lc.Id
 	localRefs := []Ref{}
 	remoteRefs := []Ref{}
@@ -946,17 +955,17 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, mw *nucular.MasterWindow, w *nuc
 
 	w.LayoutRowDynamic(25, 1)
 	if _, bookmarked := bookmarks[lc.Id]; !bookmarked {
-		if w.MenuItemText("Bookmark", nucular.TextLeft) {
+		if w.MenuItem(label.TA("Bookmark", "LC")) {
 			bookmarks[lc.Id] = lc
 		}
 	}
 
-	if w.MenuItemText("View", nucular.TextLeft) {
+	if w.MenuItem(label.TA("View", "LC")) {
 		viewAction(lw, lc)
 	}
 
 	if !lc.IsHEAD {
-		if w.MenuItemText("Checkout", nucular.TextLeft) {
+		if w.MenuItem(label.TA("Checkout", "LC")) {
 			switch len(localRefs) {
 			case 0:
 				checkoutAction(lw, nil, lc.Id)
@@ -968,24 +977,24 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, mw *nucular.MasterWindow, w *nuc
 		}
 	}
 
-	if w.MenuItemText("New branch", nucular.TextLeft) {
+	if w.MenuItem(label.TA("New branch", "LC")) {
 		newNewBranchPopup(lw.mw, lc.Id)
 	}
 
 	if !lc.IsHEAD && lw.Headisref {
-		if w.MenuItemText(fmt.Sprintf("Reset %s here", lw.Head.Nice()), nucular.TextLeft) {
+		if w.MenuItem(label.TA(fmt.Sprintf("Reset %s here", lw.Head.Nice()), "LC")) {
 			newResetPopup(lw.mw, lc.Id, resetHard)
 		}
 	}
 
 	if !lc.IsHEAD {
-		if w.MenuItemText("Cherrypick", nucular.TextLeft) {
+		if w.MenuItem(label.TA("Cherrypick", "LC")) {
 			cherrypickAction(lw, lc.Id)
 		}
 	}
 
 	if len(remoteRefs) > 0 {
-		if w.MenuItemText("Fetch", nucular.TextLeft) {
+		if w.MenuItem(label.TA("Fetch", "LC")) {
 			if len(remotes) == 1 {
 				remoteAction(lw, "fetch", remotes[0])
 			} else {
@@ -995,7 +1004,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, mw *nucular.MasterWindow, w *nuc
 	}
 
 	if lc.IsHEAD && lw.Headisref && len(remoteRefs) > 0 {
-		if w.MenuItemText("Pull", nucular.TextLeft) {
+		if w.MenuItem(label.TA("Pull", "LC")) {
 			if len(remotes) == 1 {
 				remoteAction(lw, "pull", remotes[0])
 			} else {
@@ -1005,7 +1014,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, mw *nucular.MasterWindow, w *nuc
 	}
 
 	if lc.IsHEAD && lw.Headisref && len(remotes) > 0 {
-		if w.MenuItemText("Push", nucular.TextLeft) {
+		if w.MenuItem(label.TA("Push", "LC")) {
 			if len(remotes) == 1 {
 				pushAction(lw, false, remotes[0])
 			} else {
@@ -1015,13 +1024,13 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, mw *nucular.MasterWindow, w *nuc
 	}
 
 	if lc.IsHEAD && lw.Headisref {
-		if w.MenuItemText("Merge", nucular.TextLeft) {
+		if w.MenuItem(label.TA("Merge", "LC")) {
 			newMergePopup(lw.mw, lw.allrefs)
 		}
 	}
 
 	if lw.Headisref {
-		if w.MenuItemText(fmt.Sprintf("Rebase %s here", lw.Head.Nice()), nucular.TextLeft) {
+		if w.MenuItem(label.TA(fmt.Sprintf("Rebase %s here", lw.Head.Nice()), "LC")) {
 			if len(localRefs) > 0 {
 				rebaseAction(lw, localRefs[0].Nice())
 			} else {
@@ -1030,7 +1039,7 @@ func (lw *LogWindow) commitMenu(lc LanedCommit, mw *nucular.MasterWindow, w *nuc
 		}
 	}
 
-	if w.MenuItemText("Diff", nucular.TextLeft) {
+	if w.MenuItem(label.TA("Diff", "LC")) {
 		newDiffPopup(lw.mw, lw.allrefs, bookmarksAsSlice(), lc)
 	}
 }
@@ -1044,15 +1053,15 @@ func (lw *LogWindow) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
 	sw.LayoutAvailableHeight()
 	sw.LayoutRowStatic(25, 100, 2)
 	showDetails := !lw.showOutput
-	sw.SelectableLabel("Commit Details", nucular.TextLeft, &showDetails)
+	sw.SelectableLabel("Commit Details", "LC", &showDetails)
 	lw.showOutput = !showDetails
-	sw.SelectableLabel("Output", nucular.TextLeft, &lw.showOutput)
+	sw.SelectableLabel("Output", "LC", &lw.showOutput)
 
 	sw.LayoutRowDynamicScaled(sw.LayoutAvailableHeight()-style.NormalWindow.Spacing.Y, 1)
 	if lw.showOutput {
-		lw.edOutput.Edit(sw, -1, nucular.FilterDefault)
+		lw.edOutput.Edit(sw)
 	} else {
-		lw.edCommit.Edit(sw, -1, nucular.FilterDefault)
+		lw.edCommit.Edit(sw)
 	}
 }
 
@@ -1066,7 +1075,7 @@ func (lw *LogWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	h := w.LayoutAvailableHeight() - style.NormalWindow.Spacing.Y
 
 	w.LayoutRowDynamicScaled(int(float64(h)*0.7), 1)
-	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder); sw != nil {
+	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder|nucular.WindowNoHScrollbar); sw != nil {
 		lw.UpdateGraph(mw, sw)
 		sw.GroupEnd()
 	}
