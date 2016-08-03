@@ -2447,11 +2447,12 @@ func (win *Window) GroupBegin(title string, flags WindowFlags) *Window {
 		sw.Scrollbar.X = 0
 		sw.Scrollbar.Y = 0
 		sw.layout = &panel{}
-	} else {
-		sw.curNode = sw.rootNode
-		sw.widgets.reset()
-		sw.cmds.Reset()
 	}
+
+	sw.curNode = sw.rootNode
+	sw.widgets.reset()
+	sw.cmds.Reset()
+	sw.idx = win.idx
 
 	sw.widgets.Clip = win.widgets.Clip
 	sw.cmds.Clip = win.cmds.Clip

@@ -77,7 +77,7 @@ func mergeAction(lw *LogWindow, ref *Ref) {
 }
 
 func diffAction(lw *LogWindow, niceNameA, commitOrRefA, niceNameB, commitOrRefB string) {
-	fmt.Printf("diff\n")
+	NewDiffWindow(lw.repodir, niceNameA, commitOrRefA, niceNameB, commitOrRefB)
 }
 
 func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) error {

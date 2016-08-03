@@ -12,6 +12,10 @@ type ViewWindow struct {
 	repodir string
 	lc      LanedCommit
 
+	isdiff               bool
+	niceNameA, niceNameB string
+	commitA, commitB     string
+
 	tooLong bool
 	diff    Diff
 	width   int
@@ -28,12 +32,35 @@ func NewViewWindow(repodir string, lc LanedCommit) {
 	openTab(vw)
 }
 
+func NewDiffWindow(repodir string, niceNameA, commitA, niceNameB, commitB string) {
+	vw := &ViewWindow{}
+
+	vw.isdiff = true
+	vw.repodir = repodir
+	vw.niceNameA = niceNameA
+	vw.niceNameB = niceNameB
+	vw.commitA = commitA
+	vw.commitB = commitB
+
+	vw.parseDiff()
+
+	openTab(vw)
+}
+
 func (vw *ViewWindow) parseDiff() {
-	cmd := exec.Command("git", "show", vw.lc.Id, "--decorate=full", "--no-abbrev", "--color=never")
+	var cmd *exec.Cmd
+	if vw.isdiff {
+		cmd = exec.Command("git", "diff", "--color=never", vw.commitA, vw.commitB)
+	} else {
+		cmd = exec.Command("git", "show", vw.lc.Id, "--decorate=full", "--no-abbrev", "--color=never")
+	}
 	cmd.Dir = vw.repodir
 
 	bs, err := cmd.CombinedOutput()
-	must(err)
+	if err != nil {
+		closeTab(vw)
+		return
+	}
 
 	if len(bs) > 1*1024*1024 {
 		vw.tooLong = true
@@ -66,8 +93,15 @@ func (vw *ViewWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 func (vw *ViewWindow) updateView(mw *nucular.MasterWindow, w *nucular.Window) {
 	style, _ := mw.Style()
 
-	showCommit(style.Font.Size, w, vw.lc)
-	w.Label(" ", "LC")
+	if vw.isdiff {
+		w.LayoutRowDynamic(20, 1)
+		w.Label("Diff", "LC")
+		w.Label("    "+vw.niceNameA, "LC")
+		w.Label("    "+vw.niceNameB, "LC")
+	} else {
+		showCommit(style.Font.Size, w, vw.lc)
+		w.Label(" ", "LC")
+	}
 
 	showDiff(mw, w, vw.diff, &vw.width)
 }

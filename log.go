@@ -668,9 +668,13 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	var prevLanes [MaxLanes]bool
 
-	// TODO: do not draw commits outside of the viewable window
+	skip := w.Scrollbar.Y/(lnh+style.GroupWindow.Spacing.Y) - 2
 
-	for i, lc := range lw.commits {
+	if skip < 0 {
+		skip = 0
+	}
+
+	for i, lc := range lw.commits[skip:] {
 		if w.BelowTheFold() {
 			// fill the space that would be occupied by commits below the fold
 			// with a big row
@@ -1051,7 +1055,7 @@ func (lw *LogWindow) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
 	style, _ := mw.Style()
 
 	sw.LayoutAvailableHeight()
-	sw.LayoutRowStatic(25, 100, 2)
+	sw.LayoutRowStatic(25, 120, 2)
 	showDetails := !lw.showOutput
 	sw.SelectableLabel("Commit Details", "LC", &showDetails)
 	lw.showOutput = !showDetails

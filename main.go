@@ -342,6 +342,9 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 			go func() {
 				mw.Close()
 			}()
+
+		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeTab):
+			currentTab = (currentTab + 1) % len(tabs)
 		}
 	}
 

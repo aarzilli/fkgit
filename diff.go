@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"image/color"
 	"strings"
 	"unicode"
 
@@ -611,7 +610,7 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 						out.FillRect(dot, rounding, delsegBg)
 					}
 
-					out.DrawText(dot, chunk.Text, style.Font, color.RGBA{0x00, 0x00, 0x00, 0xff}, style.Text.Color)
+					out.DrawText(dot, chunk.Text, style.Font, style.Text.Color)
 					dot.X += dot.W
 
 					if dot.X > *width {

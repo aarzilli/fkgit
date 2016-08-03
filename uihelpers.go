@@ -66,7 +66,6 @@ func selectFromList(w *nucular.Window, name string, idx int, list []string) int 
 
 func okCancelKeys(w *nucular.Window) (ok, cancel bool) {
 	for _, e := range w.Input().Keyboard.Keys {
-		fmt.Printf("key: %v\n", e)
 		switch {
 		case (e.Modifiers == 0) && (e.Code == key.CodeReturnEnter):
 			return true, false

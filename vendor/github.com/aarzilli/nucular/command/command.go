@@ -76,7 +76,6 @@ func (c *Image) command() {}
 type Text struct {
 	types.Rect
 	Font       *types.Face
-	Background color.RGBA
 	Foreground color.RGBA
 	String     string
 }
@@ -166,10 +165,10 @@ func (b *Buffer) DrawImage(r types.Rect, img *image.RGBA) {
 	cmd.Img = img
 }
 
-func (b *Buffer) DrawText(r types.Rect, str string, font *types.Face, bg color.RGBA, fg color.RGBA) {
+func (b *Buffer) DrawText(r types.Rect, str string, font *types.Face, fg color.RGBA) {
 	cmd := &Text{}
 
-	if len(str) == 0 || (bg.A == 0 && fg.A == 0) {
+	if len(str) == 0 || (fg.A == 0) {
 		return
 	}
 	if b.UseClipping {
@@ -183,7 +182,6 @@ func (b *Buffer) DrawText(r types.Rect, str string, font *types.Face, bg color.R
 	}
 	b.Commands = append(b.Commands, cmd)
 	cmd.Rect = r
-	cmd.Background = bg
 	cmd.Foreground = fg
 	cmd.Font = font
 	cmd.String = str

@@ -76,7 +76,7 @@ func widgetText(o *command.Buffer, b types.Rect, str string, t *textWidget, a la
 	}
 	lblrect.H = fontHeight(f)
 
-	o.DrawText(lblrect, str, f, t.Background, t.Text)
+	o.DrawText(lblrect, str, f, t.Text)
 }
 
 func widgetTextWrap(o *command.Buffer, b types.Rect, str []rune, t *textWidget, f *types.Face) {
