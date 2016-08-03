@@ -928,14 +928,6 @@ func (win *Window) LayoutRowStatic(height int, item_width int, cols int) {
 	rowLayoutCtr(win, false, height, cols, item_width, true)
 }
 
-// Changes item width for of static layouts
-func (win *Window) LayoutStaticChange(itemWidth int, scaled bool) {
-	if !scaled {
-		itemWidth = win.ctx.scale(itemWidth)
-	}
-	win.layout.Row.ItemWidth = itemWidth
-}
-
 // Like LayoutRowStatic but height and item_width are specified in scaled units.
 func (win *Window) LayoutRowStaticScaled(height int, item_width int, cols int) {
 	rowLayoutCtr(win, false, height, cols, item_width, false)
