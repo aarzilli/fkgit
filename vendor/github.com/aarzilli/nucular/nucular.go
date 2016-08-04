@@ -760,7 +760,7 @@ func panelLayout(ctx *context, win *Window, height int, cols int) {
 
 	style := win.style()
 	item_spacing := style.Spacing
-	panel_padding := style.Padding
+	//panel_padding := style.Padding
 
 	/* update the current row and set the current row layout */
 	layout.Row.Index = 0
@@ -771,7 +771,7 @@ func panelLayout(ctx *context, win *Window, height int, cols int) {
 	layout.Row.ItemOffset = 0
 	if layout.Flags&WindowDynamic != 0 {
 		var drect drawableFillRect
-		drect.R = types.Rect{layout.Bounds.X, layout.AtY, layout.Bounds.W, height + panel_padding.Y}
+		drect.R = types.Rect{layout.Bounds.X, layout.AtY, layout.Bounds.W, height + item_spacing.Y}
 		drect.C = style.Background
 		win.widgets.Add(types.WidgetStateInactive, drect.R, &drect)
 	}

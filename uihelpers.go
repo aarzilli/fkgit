@@ -9,7 +9,7 @@ import (
 	"golang.org/x/mobile/event/key"
 )
 
-const popupFlags = nucular.WindowMovable | nucular.WindowTitle | nucular.WindowDynamic | nucular.WindowNoScrollbar | nucular.WindowScalable
+const popupFlags = nucular.WindowMovable | nucular.WindowTitle | nucular.WindowNoScrollbar | nucular.WindowDynamic
 
 type messagePopup struct {
 	Title string
@@ -81,6 +81,7 @@ func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []s
 	mw.PopupOpen(title, popupFlags, ntypes.Rect{20, 100, 640, 400}, true, func(mw *nucular.MasterWindow, w *nucular.Window) {
 		w.LayoutRowDynamic(25, 1)
 		w.Label(text, "LC")
+
 		w.LayoutRowDynamic(150, 1)
 
 		idx = selectFromList(w, title+"-listgroup", idx, list)

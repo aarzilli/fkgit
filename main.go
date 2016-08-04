@@ -312,14 +312,14 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 			conf.Scaling += 0.1
 			mw.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 			style, _ := mw.Style()
-			style.Selectable.Normal.Data.Color = style.NormalWindow.Background
+			fixStyle(style)
 			saveConfiguration()
 
 		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Rune == '-'):
 			conf.Scaling -= 0.1
 			mw.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 			style, _ := mw.Style()
-			style.Selectable.Normal.Data.Color = style.NormalWindow.Background
+			fixStyle(style)
 			saveConfiguration()
 
 		case (e.Modifiers == 0) && ((e.Code == key.CodeEscape) || (e.Code == key.CodeQ)):
@@ -349,7 +349,7 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 	}
 
 	closetab := -1
-	w.LayoutRowDynamic(25, len(tabs))
+	w.LayoutRowDynamic(20, len(tabs))
 	for i := range tabs {
 		selected := i == currentTab
 		bounds := w.WidgetBounds()
@@ -358,7 +358,7 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 				closetab = i
 			}
 		}
-		w.SelectableLabel(tabs[i].Title(), "CC", &selected)
+		w.SelectableLabel(tabs[i].Title(), "LC", &selected)
 		if selected {
 			currentTab = i
 		}
@@ -382,6 +382,15 @@ func (cb *Clipboard) Paste() string {
 	return clipboard.Get()
 }
 
+func fixStyle(style *nstyle.Style) {
+	style.Selectable.Normal.Data.Color = style.NormalWindow.Background
+	style.NormalWindow.Padding.Y = 0
+	style.GroupWindow.Padding.Y = 0
+	style.GroupWindow.FooterPadding.Y = 0
+	style.MenuWindow.FooterPadding.Y = 0
+	style.ContextualWindow.FooterPadding.Y = 0
+}
+
 func main() {
 	repodir := findRepository()
 
@@ -391,7 +400,7 @@ func main() {
 	wnd.SetClipboard(&Clipboard{})
 	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 	style, _ := wnd.Style()
-	style.Selectable.Normal.Data.Color = style.NormalWindow.Background
+	fixStyle(style)
 
 	lw.repodir = repodir
 	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly

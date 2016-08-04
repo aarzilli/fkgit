@@ -582,7 +582,11 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	style, scaling := mw.Style()
 
+	oldspacing := style.GroupWindow.Spacing.Y
 	style.GroupWindow.Spacing.Y = 0
+	defer func() {
+		style.GroupWindow.Spacing.Y = oldspacing
+	}()
 
 	lnh := int(graphLineHeight * scaling)
 	thick := int(graphThick * scaling)
@@ -674,14 +678,25 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		skip = 0
 	}
 
+	if maxskip := len(lw.commits) - 3; skip > maxskip {
+		skip = maxskip
+	}
+
+	emptyCommitRows := func(n int) {
+		if n > 0 {
+			w.LayoutRowDynamic(n*graphLineHeight+(n-1)*style.GroupWindow.Spacing.Y, 1)
+			// this will never be seen, I could use a Spacing but I want to be bugs noticeable
+			w.Label("More...", "LC")
+		}
+	}
+
+	emptyCommitRows(skip)
+
 	for i, lc := range lw.commits[skip:] {
 		if w.BelowTheFold() {
 			// fill the space that would be occupied by commits below the fold
 			// with a big row
-			rem := len(lw.commits) - i
-			remh := rem*graphLineHeight + (rem-1)*style.GroupWindow.Spacing.Y
-			w.LayoutRowDynamic(remh, 1)
-			w.Label("More...", "LC")
+			emptyCommitRows(len(lw.commits[skip:]) - i)
 			break
 		}
 
