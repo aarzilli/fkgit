@@ -693,7 +693,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	emptyCommitRows(skip)
 
 	for i, lc := range lw.commits[skip:] {
-		if w.BelowTheFold() {
+		if _, below := w.Invisible(); below {
 			// fill the space that would be occupied by commits below the fold
 			// with a big row
 			emptyCommitRows(len(lw.commits[skip:]) - i)

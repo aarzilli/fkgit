@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/aarzilli/nucular"
 	ntypes "github.com/aarzilli/nucular/types"
@@ -48,11 +50,65 @@ func showLines(w *nucular.Window, s string) {
 	}
 }
 
+type selectFromListSearchState struct {
+	name string
+	last time.Time
+	text string
+}
+
+var selectFromListSearch selectFromListSearchState
+
 func selectFromList(w *nucular.Window, name string, idx int, list []string) int {
 	if sw := w.GroupBegin(name, nucular.WindowNoHScrollbar|nucular.WindowBorder); sw != nil {
+		moveselection := false
+		kbd := sw.KeyboardOnHover(sw.Bounds)
+		for _, k := range kbd.Keys {
+			switch {
+			case (k.Modifiers == 0) && (k.Code == key.CodeDownArrow):
+				idx++
+				moveselection = true
+			case (k.Modifiers == 0) && (k.Code == key.CodeUpArrow):
+				idx--
+				moveselection = true
+			}
+			if idx < 0 {
+				idx = 0
+			}
+			if idx >= len(list) {
+				idx = len(list) - 1
+			}
+		}
+		if kbd.Text != "" {
+			now := time.Now()
+			if selectFromListSearch.name != name || now.Sub(selectFromListSearch.last) > 500*time.Millisecond {
+				selectFromListSearch.name = name
+				selectFromListSearch.text = ""
+			}
+
+			selectFromListSearch.last = now
+			selectFromListSearch.text += kbd.Text
+
+			for i := range list {
+				if strings.HasPrefix(list[i], selectFromListSearch.text) {
+					moveselection = idx != i
+					idx = i
+					break
+				}
+			}
+		}
+
 		sw.LayoutRowDynamic(25, 1)
 		for i := range list {
 			selected := idx == i
+
+			if moveselection && selected {
+				above, below := sw.Invisible()
+				if above || below {
+					// recenter around selection
+					sw.Scrollbar.Y = sw.At().Y
+				}
+			}
+
 			sw.SelectableLabel(list[i], "LC", &selected)
 			if selected {
 				idx = i

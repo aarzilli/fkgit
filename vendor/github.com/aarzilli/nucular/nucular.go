@@ -1077,12 +1077,16 @@ func (win *Window) LayoutAvailableWidth() int {
 	return win.layout.Clip.W - win.layout.AtX - win.style().Spacing.X
 }
 
-func (win *Window) BelowTheFold() bool {
-	return win.layout.AtY-win.layout.Offset.Y > (win.layout.Clip.Y + win.layout.Clip.H)
+// Will return (false, false) if the next widget is visible, (true,
+// false) if it is above the visible area, (false, true) if it is
+// below the visible area
+func (win *Window) Invisible() (above, below bool) {
+	y := win.layout.AtY-win.layout.Offset.Y
+	return y < win.layout.Clip.Y, y > (win.layout.Clip.Y + win.layout.Clip.H)
 }
 
 func (win *Window) At() image.Point {
-	return image.Point{win.layout.AtX, win.layout.AtY}
+	return image.Point{win.layout.AtX - win.layout.Clip.X, win.layout.AtY - win.layout.Clip.Y}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
