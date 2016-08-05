@@ -24,27 +24,27 @@
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular",
-			"Rev": "064d36863ddcee969ebc666c23844cc8165a530a"
+			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/command",
-			"Rev": "064d36863ddcee969ebc666c23844cc8165a530a"
+			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/internal/assets",
-			"Rev": "064d36863ddcee969ebc666c23844cc8165a530a"
+			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/label",
-			"Rev": "064d36863ddcee969ebc666c23844cc8165a530a"
+			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/style",
-			"Rev": "064d36863ddcee969ebc666c23844cc8165a530a"
+			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/types",
-			"Rev": "064d36863ddcee969ebc666c23844cc8165a530a"
+			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
 		},
 		{
 			"ImportPath": "github.com/golang/freetype",

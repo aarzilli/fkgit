@@ -130,6 +130,12 @@ func (w *MasterWindow) handleEventLocked(ei interface{}) bool {
 		w.updateLocked()
 
 	case lifecycle.Event:
+		// workaround for a bug in shiny, if we are already closing just exit
+		// the reason is that releasing the window results in us receiving a
+		// transition to StageFocused → StageVisible instead of StageDead
+		if w.closing {
+			return false
+		}
 		if e.To == lifecycle.StageDead {
 			w.closing = true
 			w.closeLocked()

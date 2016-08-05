@@ -147,6 +147,24 @@ func allRefs(repodir string) ([]Ref, error) {
 	return r, nil
 }
 
+func allRemotes(repodir string) map[string]string {
+	r := map[string]string{}
+	s, err := execCommand(repodir, "git", "remote", "-v")
+	must(err)
+	rlines := strings.Split(s, "\n")
+	for _, line := range rlines {
+		fields := strings.Split(line, "\t")
+		if len(fields) != 2 {
+			continue
+		}
+		name := fields[0]
+		fields = strings.Split(fields[1], " ")
+		url := fields[0]
+		r[name] = url
+	}
+	return r
+}
+
 func findRepository() string {
 	var path string
 	if len(os.Args) > 1 {
@@ -286,6 +304,7 @@ type Tab interface {
 
 var tabs []Tab
 var currentTab int
+var fixedTabsLimit int
 
 func openTab(tab Tab) {
 	tabs = append(tabs, tab)
@@ -301,6 +320,7 @@ func closeTab(tab Tab) {
 
 			copy(tabs[i:], tabs[i+1:])
 			tabs = tabs[:len(tabs)-1]
+			break
 		}
 	}
 }
@@ -323,7 +343,7 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 			saveConfiguration()
 
 		case (e.Modifiers == 0) && ((e.Code == key.CodeEscape) || (e.Code == key.CodeQ)):
-			if currentTab != graphTabIndex && currentTab != indexTabIndex {
+			if currentTab > fixedTabsLimit {
 				closeTab(tabs[currentTab])
 			}
 
@@ -339,9 +359,7 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 			}
 
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeW):
-			go func() {
-				mw.Close()
-			}()
+			go mw.Close()
 
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeTab):
 			currentTab = (currentTab + 1) % len(tabs)
@@ -354,7 +372,7 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 		selected := i == currentTab
 		bounds := w.WidgetBounds()
 		if w.Input().Mouse.Clicked(mouse.ButtonMiddle, bounds) {
-			if i >= 2 {
+			if i > fixedTabsLimit {
 				closetab = i
 			}
 		}
@@ -418,6 +436,10 @@ func main() {
 	idxmw.reload()
 
 	openTab(&idxmw)
+
+	fixedTabsLimit = 1
+
+	initGithubIntegration(wnd, repodir)
 
 	status := gitStatus(repodir)
 	if len(status.Lines) == 0 {

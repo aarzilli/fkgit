@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"sync"
 )
 
@@ -139,4 +140,28 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 	}
 
 	return nil
+}
+
+func importPR(lw *LogWindow, owner, repo, branch string) {
+	go func() {
+		localbranch := fmt.Sprintf("%s_%s", owner, branch)
+		err := execBackground(true, lw, "git", "checkout", "-b", localbranch, "master")
+		if err == nil {
+			execBackground(false, lw, "git", "pull", fmt.Sprintf("https://github.com/%s/%s.git", owner, repo), branch)
+		}
+	}()
+}
+
+func openUrl(url string) {
+	if runtime.GOOS == "windows" {
+		must(exec.Command("cmd.exe", "/C", "start "+url).Run())
+		return
+	}
+
+	if runtime.GOOS == "darwin" {
+		must(exec.Command("open", url).Run())
+		return
+	}
+
+	must(exec.Command("xdg-open", url).Run())
 }

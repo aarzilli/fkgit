@@ -827,8 +827,8 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 			continue
 		}
 
-		cm := commitMenu{lw, lc}
-		w.ContextualOpen(0, image.Point{250, 300}, rowbounds, cm.Update)
+		cm := &commitMenu{lw, lc}
+		w.ContextualOpen(0, image.Point{250, 200}, rowbounds, cm.Update)
 
 		// draws graph proper
 
@@ -972,7 +972,7 @@ func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 		remotes = append(remotes, remote)
 	}
 
-	w.LayoutRowDynamic(25, 1)
+	w.LayoutRowDynamic(20, 1)
 	if _, bookmarked := bookmarks[lc.Id]; !bookmarked {
 		if w.MenuItem(label.TA("Bookmark", "LC")) {
 			bookmarks[lc.Id] = lc
