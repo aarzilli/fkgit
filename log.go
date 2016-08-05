@@ -983,16 +983,14 @@ func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 		viewAction(lw, lc)
 	}
 
-	if !lc.IsHEAD {
-		if w.MenuItem(label.TA("Checkout", "LC")) {
-			switch len(localRefs) {
-			case 0:
-				checkoutAction(lw, nil, lc.Id)
-			case 1:
-				checkoutAction(lw, &localRefs[0], "")
-			default:
-				newCheckoutPopup(lw.mw, localRefs)
-			}
+	if w.MenuItem(label.TA("Checkout", "LC")) {
+		switch len(localRefs) {
+		case 0:
+			checkoutAction(lw, nil, lc.Id)
+		case 1:
+			checkoutAction(lw, &localRefs[0], "")
+		default:
+			newCheckoutPopup(lw.mw, localRefs)
 		}
 	}
 
