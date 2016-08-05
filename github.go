@@ -210,7 +210,7 @@ func (gs *GithubStuff) update(issues bool, mw *nucular.MasterWindow, w *nucular.
 					gs.selectedIssue = i
 				}
 				im := &issueMenu{gs, i, is}
-				w.ContextualOpen(0, image.Point{250, 300}, bounds, im.Update)
+				w.ContextualOpen(0, image.Point{200, 500}, bounds, im.Update)
 			} else {
 				pr := gs.prs[i]
 				sw.SelectableLabel(fmt.Sprintf("%d", pr.number), "RC", &selected)
@@ -219,7 +219,7 @@ func (gs *GithubStuff) update(issues bool, mw *nucular.MasterWindow, w *nucular.
 					gs.selectedPull = i
 				}
 				pm := &pullMenu{gs, i, pr}
-				w.ContextualOpen(0, image.Point{250, 200}, bounds, pm.Update)
+				w.ContextualOpen(0, image.Point{200, 500}, bounds, pm.Update)
 			}
 		}
 	}

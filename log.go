@@ -828,7 +828,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		}
 
 		cm := &commitMenu{lw, lc}
-		w.ContextualOpen(0, image.Point{250, 200}, rowbounds, cm.Update)
+		w.ContextualOpen(0, image.Point{200, 500}, rowbounds, cm.Update)
 
 		// draws graph proper
 
