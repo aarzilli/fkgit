@@ -1040,8 +1040,9 @@ func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 		}
 	}
 
-	if lc.IsHEAD && lw.Headisref {
+	if lw.Headisref {
 		if w.MenuItem(label.TA("Merge", "LC")) {
+			//TODO: show this commit as the default merge destination
 			newMergePopup(lw.mw, lw.allrefs)
 		}
 	}
