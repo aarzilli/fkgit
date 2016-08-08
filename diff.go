@@ -603,6 +603,11 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 				dot := bounds
 				for _, chunk := range linediff.Chunks {
 					dot.W = d.MeasureString(chunk.Text).Ceil()
+
+					if dot.W > *width {
+						*width = dot.W
+					}
+
 					switch chunk.Opts {
 					case Addseg:
 						out.FillRect(dot, rounding, addsegBg)
@@ -612,10 +617,6 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 
 					out.DrawText(dot, chunk.Text, style.Font, style.Text.Color)
 					dot.X += dot.W
-
-					if dot.X > *width {
-						*width = dot.X
-					}
 				}
 			}
 
