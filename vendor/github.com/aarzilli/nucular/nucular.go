@@ -66,20 +66,21 @@ type treeNode struct {
 }
 
 type panel struct {
-	Flags   WindowFlags
-	Bounds  types.Rect
-	Offset  *image.Point
-	AtX     int
-	AtY     int
-	MaxX    int
-	Width   int
-	Height  int
-	FooterH int
-	HeaderH int
-	Border  int
-	Clip    types.Rect
-	Menu    menuState
-	Row     rowLayout
+	Flags          WindowFlags
+	Bounds         types.Rect
+	Offset         *image.Point
+	AtX            int
+	AtY            int
+	MaxX           int
+	Width          int
+	Height         int
+	FooterH        int
+	HeaderH        int
+	Border         int
+	Clip           types.Rect
+	Menu           menuState
+	Row            rowLayout
+	ReservedHeight int
 }
 
 type menuState struct {
@@ -255,6 +256,7 @@ func panelBegin(ctx *context, win *Window, title string) bool {
 	layout.Row.ItemRatio = 0
 	layout.Row.TreeDepth = 0
 	layout.Flags = win.flags
+	layout.ReservedHeight = 0
 
 	/* calculate window header */
 	if win.flags&windowMinimized != 0 {
@@ -758,6 +760,10 @@ func panelLayout(ctx *context, win *Window, height int, cols int) {
 	/* prefetch some configuration data */
 	layout := win.layout
 
+	if height == 0 {
+		height = win.LayoutAvailableHeight() - layout.ReservedHeight
+	}
+
 	style := win.style()
 	item_spacing := style.Spacing
 	//panel_padding := style.Padding
@@ -781,7 +787,6 @@ const (
 	layoutDynamicFixed = iota
 	layoutDynamicFree
 	layoutDynamic
-	layoutStaticFixed
 	layoutStaticFree
 	layoutStatic
 	layoutInvalid
@@ -842,12 +847,6 @@ func layoutWidgetSpace(bounds *types.Rect, ctx *context, win *Window, modify boo
 			layout.Row.ItemOffset += item_width
 			layout.Row.Filled += ratio
 		}
-	case layoutStaticFixed:
-		/* non-scaling fixed widgets item width */
-		item_width = int(layout.Row.ItemWidth)
-
-		item_offset = layout.Row.Index * item_width
-		item_spacing = layout.Row.Index * spacing.X
 	case layoutStaticFree:
 		/* free widget placing */
 		bounds.X = layout.AtX + layout.Row.Item.X
@@ -865,7 +864,11 @@ func layoutWidgetSpace(bounds *types.Rect, ctx *context, win *Window, modify boo
 		/* non-scaling array of panel pixel width for every widget */
 		item_spacing = layout.Row.Index * spacing.X
 
-		item_width = layout.Row.WidthArr[layout.Row.Index]
+		if len(layout.Row.WidthArr) > 0 {
+			item_width = layout.Row.WidthArr[layout.Row.Index]
+		} else {
+			item_width = layout.Row.ItemWidth
+		}
 		item_offset = layout.Row.ItemOffset
 		if modify {
 			layout.Row.ItemOffset += item_width
@@ -891,18 +894,14 @@ func (ctx *context) scale(x int) int {
 	return int(float64(x) * ctx.Scaling)
 }
 
-func rowLayoutCtr(win *Window, dynamic bool, height int, cols int, width int, scale bool) {
+func rowLayoutCtr(win *Window, height int, cols int, width int, scale bool) {
 	/* update the current row and set the current row layout */
 	if scale {
 		height = win.ctx.scale(height)
 		width = win.ctx.scale(width)
 	}
 	panelLayout(win.ctx, win, height, cols)
-	if dynamic {
-		win.layout.Row.Type = layoutDynamicFixed
-	} else {
-		win.layout.Row.Type = layoutStaticFixed
-	}
+	win.layout.Row.Type = layoutDynamicFixed
 
 	win.layout.Row.ItemWidth = width
 	win.layout.Row.ItemRatio = 0.0
@@ -911,26 +910,30 @@ func rowLayoutCtr(win *Window, dynamic bool, height int, cols int, width int, sc
 	win.layout.Row.Filled = 0
 }
 
+// Reserves space for num rows of the specified height at the bottom
+// of the panel.
+// If a row of height == 0  is inserted it will take reserved space
+// into account.
+func (win *Window) LayoutReserveRow(height int, num int) {
+	win.LayoutReserveRow(win.ctx.scale(height), num)
+}
+
+// Like LayoutReserveRow but with a scaled height.
+func (win *Window) LayoutReserveRowScaled(height int, num int) {
+	win.layout.ReservedHeight += height*num + win.style().Spacing.Y*num
+}
+
 // Starts new row that has cols columns of equal width that automatically
 // resize to fill the available space.
+// If height == 0 all the row is stretched to fill all the remaining space.
 func (win *Window) LayoutRowDynamic(height int, cols int) {
-	rowLayoutCtr(win, true, height, cols, 0, true)
+	rowLayoutCtr(win, height, cols, 0, true)
 }
 
 // Like LayoutRowDynamic but height is specified in scaled units.
+// If height == 0 all the row is stretched to fill all the remaining space.
 func (win *Window) LayoutRowDynamicScaled(height int, cols int) {
-	rowLayoutCtr(win, true, height, cols, 0, false)
-}
-
-// Starts new row that has cols columns each item_width wide.
-// If cols is zero the row will never autowrap.
-func (win *Window) LayoutRowStatic(height int, item_width int, cols int) {
-	rowLayoutCtr(win, false, height, cols, item_width, true)
-}
-
-// Like LayoutRowStatic but height and item_width are specified in scaled units.
-func (win *Window) LayoutRowStaticScaled(height int, item_width int, cols int) {
-	rowLayoutCtr(win, false, height, cols, item_width, false)
+	rowLayoutCtr(win, height, cols, 0, false)
 }
 
 func (win *Window) LayoutRowRatio(height int, ratio ...float64) {
@@ -939,6 +942,7 @@ func (win *Window) LayoutRowRatio(height int, ratio ...float64) {
 
 // Starts new row with a fixed number of columns of width proportional
 // to the size of the window.
+// If height == 0 all the row is stretched to fill all the remaining space.
 func (win *Window) LayoutRowRatioScaled(height int, ratio ...float64) {
 	layout := win.layout
 	panelLayout(win.ctx, win, height, len(ratio))
@@ -967,12 +971,37 @@ func (win *Window) LayoutRowRatioScaled(height int, ratio ...float64) {
 	layout.Row.Filled = 0
 }
 
-func (win *Window) LayoutRowFixedScaled(height int, width ...int) {
+// Like LayoutRowStatic but with scaled sizes.
+func (win *Window) LayoutRowStaticScaled(height int, width ...int) {
 	layout := win.layout
 	panelLayout(win.ctx, win, height, len(width))
 
+	nzero := 0
+	used := 0
 	for i := range width {
-		width[i] = width[i]
+		if width[i] == 0 {
+			nzero++
+		}
+		used += width[i]
+	}
+
+	if nzero > 0 {
+		style := win.style()
+		spacing := style.Spacing
+		padding := style.Padding
+		panel_padding := 2 * padding.X
+		panel_spacing := int(float64(len(width)-1) * float64(spacing.X))
+		panel_space := layout.Width - panel_padding - panel_spacing
+
+		unused := panel_space - used
+
+		zerowidth := unused / nzero
+
+		for i := range width {
+			if width[i] == 0 {
+				width[i] = zerowidth
+			}
+		}
 	}
 
 	layout.Row.WidthArr = width
@@ -984,13 +1013,33 @@ func (win *Window) LayoutRowFixedScaled(height int, width ...int) {
 	layout.Row.Filled = 0
 }
 
+func (win *Window) LayoutSetWidth(width int) {
+	layout := win.layout
+	if layout.Row.Type != layoutStatic || len(layout.Row.WidthArr) > 0 {
+		panic(WrongLayoutErr)
+	}
+	layout.Row.ItemWidth = win.ctx.scale(width)
+}
+
+func (win *Window) LayoutSetWidthScaled(width int) {
+	layout := win.layout
+	if layout.Row.Type != layoutStatic || len(layout.Row.WidthArr) > 0 {
+		panic(WrongLayoutErr)
+	}
+	layout.Row.ItemWidth = width
+}
+
 // Starts new row with a fixed number of columns with the specfieid widths.
-func (win *Window) LayoutRowFixed(height int, width ...int) {
+// If no widths are specified the row will never autowrap
+// and the width of the next widget can be specified using
+// LayoutSetWidth/LayoutSetWidthScaled.
+// If height == 0 all the row is stretched to fill all the remaining space.
+func (win *Window) LayoutRowStatic(height int, width ...int) {
 	for i := range width {
 		width[i] = win.ctx.scale(width[i])
 	}
 
-	win.LayoutRowFixedScaled(win.ctx.scale(height), width...)
+	win.LayoutRowStaticScaled(win.ctx.scale(height), width...)
 }
 
 // Starts new row that will contain widget_count widgets.
@@ -1011,6 +1060,7 @@ func (win *Window) LayoutSpaceBegin(height int, widget_count int) {
 // Starts new row that will contain widget_count widgets.
 // The size and position of widgets inside this row will be specified
 // by callling LayoutSpacePushRatio.
+// If height == 0 all the row is stretched to fill all the remaining space.
 func (win *Window) LayoutSpaceBeginRatio(height int, widget_count int) {
 	layout := win.layout
 	panelLayout(win.ctx, win, win.ctx.scale(height), widget_count)
@@ -1074,14 +1124,15 @@ func (win *Window) LayoutAvailableHeight() int {
 }
 
 func (win *Window) LayoutAvailableWidth() int {
-	return win.layout.Clip.W - win.layout.AtX - win.style().Spacing.X
+	style := win.style()
+	return win.layout.Width - style.Padding.X*2 - style.Spacing.X - win.layout.AtX
 }
 
 // Will return (false, false) if the next widget is visible, (true,
 // false) if it is above the visible area, (false, true) if it is
 // below the visible area
 func (win *Window) Invisible() (above, below bool) {
-	y := win.layout.AtY-win.layout.Offset.Y
+	y := win.layout.AtY - win.layout.Offset.Y
 	return y < win.layout.Clip.Y, y > (win.layout.Clip.Y + win.layout.Clip.H)
 }
 
@@ -1268,7 +1319,7 @@ func (win *Window) Spacing(cols int) {
 	}
 
 	/* non table layout need to allocate space */
-	if layout.Row.Type != layoutDynamicFixed && layout.Row.Type != layoutStaticFixed {
+	if layout.Row.Type != layoutDynamicFixed {
 		for i = 0; i < cols; i++ {
 			panelAllocSpace(&nilrect, win)
 		}

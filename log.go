@@ -668,8 +668,6 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		}
 	}
 
-	szs := make([]int, 0, 5)
-
 	var prevLanes [MaxLanes]bool
 
 	skip := w.Scrollbar.Y/(lnh+style.GroupWindow.Spacing.Y) - 2
@@ -700,13 +698,19 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 			break
 		}
 
-		szs = szs[:0]
+		w.LayoutRowStaticScaled(lnh)
 
-		szs = append(szs, lnh*lc.Occupied())
-		commitsz := calcCommitsz(szs[0], includeAuthor, includeDate)
+		rowwidth := w.LayoutAvailableWidth()
+
+		w.LayoutSetWidthScaled(lnh * lc.Occupied())
+		bounds, out := w.Custom(ntypes.WidgetStateInactive)
+
+		commitsz := calcCommitsz(bounds.W, includeAuthor, includeDate)
 
 		refstr := ""
 		ishead := false
+
+		selected := lc.Id == lw.selectedId
 
 		if len(lc.Refs) != 0 || lc.IsHEAD {
 			var buf bytes.Buffer
@@ -730,53 +734,31 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 			if commitsz <= 0 {
 				refsz = origcommitsz
 				commitsz = 0
-				szs = append(szs, refsz)
-			} else {
-				szs = append(szs, refsz)
-				szs = append(szs, commitsz)
 			}
-		} else {
-			szs = append(szs, commitsz)
-		}
 
-		if includeAuthor {
-			szs = append(szs, authorsz)
-		}
-
-		if includeDate {
-			szs = append(szs, datesz)
-		}
-
-		datestr := lc.CommitterDate.Local().Format("2006-01-02 15:04")
-		authorstr := nameInitials(lc.Author)
-
-		w.LayoutRowFixedScaled(lnh, szs...)
-
-		rowwidth := w.LayoutAvailableWidth()
-
-		bounds, out := w.Custom(ntypes.WidgetStateInactive)
-		rowbounds := bounds
-		rowbounds.W = rowwidth
-
-		if len(lc.Refs) != 0 {
-			if ishead {
-				w.LabelColored(refstr, "LC", refsHeadColor)
-			} else {
-				w.LabelColored(refstr, "LC", refsColor)
+			if refsz > 0 {
+				w.LayoutSetWidthScaled(refsz)
+				if ishead {
+					w.LabelColored(refstr, "LC", refsHeadColor)
+				} else {
+					w.LabelColored(refstr, "LC", refsColor)
+				}
 			}
 		}
-
-		selected := lc.Id == lw.selectedId
 
 		if commitsz > 0 {
+			w.LayoutSetWidthScaled(commitsz)
 			w.SelectableLabel(lc.ShortMessage(), "LC", &selected)
 		}
 
 		if includeAuthor {
-			w.SelectableLabel(authorstr, "CC", &selected)
+			w.LayoutSetWidthScaled(authorsz)
+			w.SelectableLabel(nameInitials(lc.Author), "CC", &selected)
 		}
+
 		if includeDate {
-			w.SelectableLabel(datestr, "RC", &selected)
+			w.LayoutSetWidthScaled(datesz)
+			w.SelectableLabel(lc.CommitterDate.Local().Format("2006-01-02 15:04"), "RC", &selected)
 		}
 
 		if selected && lc.Id != lw.selectedId {
@@ -822,13 +804,15 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 			lw.edCommit.Cursor = 0
 		}
 
+		rowbounds := bounds
+		rowbounds.W = rowwidth
+		cm := &commitMenu{lw, lc}
+		w.ContextualOpen(0, image.Point{200, 500}, rowbounds, cm.Update)
+
 		if out == nil {
 			copy(prevLanes[:], lc.LanesAfter[:])
 			continue
 		}
-
-		cm := &commitMenu{lw, lc}
-		w.ContextualOpen(0, image.Point{200, 500}, rowbounds, cm.Update)
 
 		// draws graph proper
 
@@ -1066,16 +1050,13 @@ func (lw *LogWindow) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
-	style, _ := mw.Style()
-
-	sw.LayoutAvailableHeight()
-	sw.LayoutRowStatic(25, 120, 2)
+	sw.LayoutRowStatic(25, 120, 120)
 	showDetails := !lw.showOutput
 	sw.SelectableLabel("Commit Details", "LC", &showDetails)
 	lw.showOutput = !showDetails
 	sw.SelectableLabel("Output", "LC", &lw.showOutput)
 
-	sw.LayoutRowDynamicScaled(sw.LayoutAvailableHeight()-style.NormalWindow.Spacing.Y, 1)
+	sw.LayoutRowDynamic(0, 1)
 	if lw.showOutput {
 		lw.edOutput.Edit(sw)
 	} else {

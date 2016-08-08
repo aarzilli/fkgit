@@ -83,7 +83,7 @@ func (vw *ViewWindow) Title() string {
 }
 
 func (vw *ViewWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	w.LayoutRowDynamicScaled(w.LayoutAvailableHeight(), 1)
+	w.LayoutRowDynamic(0, 1)
 	if sw := w.GroupBegin("view-"+vw.lc.Id, 0); sw != nil {
 		vw.updateView(mw, sw)
 		sw.GroupEnd()

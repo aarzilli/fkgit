@@ -23,17 +23,13 @@ func newMessagePopup(mw *nucular.MasterWindow, title, message string) {
 	mp.Title = title
 	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
 	mp.ed.Buffer = []rune(message)
-	mw.PopupOpen(mp.Title, popupFlags, ntypes.Rect{20, 100, 640, 500}, true, mp.Update)
+	mw.PopupOpen(mp.Title, popupFlags, ntypes.Rect{20, 100, 480, 500}, true, mp.Update)
 }
 
 func (mp *messagePopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	w.LayoutRowDynamic(200, 1)
-	ok, cancel := okCancelKeys(w)
-	w.LayoutRowDynamic(25, 1)
 	mp.ed.Edit(w)
-	if w.ButtonText("OK") || ok || cancel {
-		w.Close()
-	}
+	okCancelButtons(w, true, "OK", false)
 }
 
 func showLines(w *nucular.Window, s string) {
@@ -120,21 +116,43 @@ func selectFromList(w *nucular.Window, name string, idx int, list []string) int 
 	return idx
 }
 
-func okCancelKeys(w *nucular.Window) (ok, cancel bool) {
-	for _, e := range w.Input().Keyboard.Keys {
-		switch {
-		case (e.Modifiers == 0) && (e.Code == key.CodeReturnEnter):
-			return true, false
-		case (e.Modifiers == 0) && (e.Code == key.CodeEscape):
-			return false, true
+func okCancelButtons(w *nucular.Window, dokeys bool, oktext string, showcancel bool) (ok, cancel bool) {
+	if dokeys {
+		for _, e := range w.Input().Keyboard.Keys {
+			switch {
+			case (e.Modifiers == 0) && (e.Code == key.CodeReturnEnter):
+				ok, cancel = true, false
+			case (e.Modifiers == 0) && (e.Code == key.CodeEscape):
+				ok, cancel = false, true
+			}
 		}
 	}
-	return false, false
+
+	w.LayoutRowStatic(25, 0, 100, 100)
+	w.Spacing(1)
+	if oktext != "" {
+		if !showcancel {
+			w.Spacing(1)
+		}
+		if w.ButtonText(oktext) || ok {
+			ok = true
+			w.Close()
+		}
+	} else {
+		w.Spacing(1)
+	}
+	if showcancel {
+		if w.ButtonText("Cancel") || cancel {
+			cancel = true
+			w.Close()
+		}
+	}
+	return
 }
 
 func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []string, onSelect func(idx int)) {
 	idx := -1
-	mw.PopupOpen(title, popupFlags, ntypes.Rect{20, 100, 640, 400}, true, func(mw *nucular.MasterWindow, w *nucular.Window) {
+	mw.PopupOpen(title, popupFlags, ntypes.Rect{20, 100, 480, 400}, true, func(mw *nucular.MasterWindow, w *nucular.Window) {
 		w.LayoutRowDynamic(25, 1)
 		w.Label(text, "LC")
 
@@ -142,19 +160,10 @@ func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []s
 
 		idx = selectFromList(w, title+"-listgroup", idx, list)
 
-		w.LayoutRowDynamic(25, 2)
-
-		ok, cancel := okCancelKeys(w)
-
-		if w.ButtonText("OK") || ok {
-			w.Close()
+		ok, _ := okCancelButtons(w, true, "OK", true)
+		if ok {
 			onSelect(idx)
 		}
-		if w.ButtonText("Cancel") || cancel {
-			w.Close()
-		}
-
-		w.LayoutRowDynamic(10, 1)
 	})
 }
 
@@ -168,26 +177,16 @@ func newNewBranchPopup(mw *nucular.MasterWindow, id string) {
 	np.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
 	np.ed.Active = true
 	np.ed.Maxlen = 128
-	mw.PopupOpen("New branch...", popupFlags, ntypes.Rect{20, 100, 640, 400}, true, np.Update)
+	mw.PopupOpen("New branch...", popupFlags, ntypes.Rect{20, 100, 480, 400}, true, np.Update)
 
 }
 
 func (np *newBranchPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	w.LayoutRowDynamic(25, 1)
-	active := np.ed.Edit(w)
-	w.LayoutRowDynamic(25, 2)
-	var ok, cancel bool
-	if !np.ed.Active {
-		ok, cancel = okCancelKeys(w)
-	}
-	if w.ButtonText("OK") || (active&nucular.EditCommitted != 0) || ok {
+	ok, _ := okCancelButtons(w, !np.ed.Active, "OK", true)
+	if ok {
 		newbranchAction(&lw, string(np.ed.Buffer), np.CommitId)
-		w.Close()
 	}
-	if w.ButtonText("Cancel") || cancel {
-		w.Close()
-	}
-	w.LayoutRowDynamic(10, 1)
 }
 
 type resetMode int
@@ -205,7 +204,7 @@ type resetPopup struct {
 
 func newResetPopup(mw *nucular.MasterWindow, id string, mode resetMode) {
 	rp := resetPopup{CommitId: id, ResetMode: mode}
-	mw.PopupOpen("Reset...", popupFlags, ntypes.Rect{20, 100, 640, 400}, true, rp.Update)
+	mw.PopupOpen("Reset...", popupFlags, ntypes.Rect{20, 100, 480, 400}, true, rp.Update)
 }
 
 func (rp *resetPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
@@ -219,16 +218,10 @@ func (rp *resetPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	if w.OptionText("Soft: leave working tree and index untouched", rp.ResetMode == resetSoft) {
 		rp.ResetMode = resetSoft
 	}
-	w.LayoutRowDynamic(25, 2)
-	ok, cancel := okCancelKeys(w)
-	if w.ButtonText("OK") || ok {
+	ok, _ := okCancelButtons(w, true, "OK", true)
+	if ok {
 		resetAction(&lw, rp.CommitId, rp.ResetMode)
-		w.Close()
 	}
-	if w.ButtonText("Cancel") || cancel {
-		w.Close()
-	}
-	w.LayoutRowDynamic(10, 1)
 }
 
 func newRemotesPopup(mw *nucular.MasterWindow, action string, remotes []string) {
@@ -286,7 +279,7 @@ func newDiffPopup(mw *nucular.MasterWindow, refs []Ref, bookmarks []LanedCommit,
 	for _, ref := range dp.Refs {
 		dp.names = append(dp.names, ref.Nice())
 	}
-	mw.PopupOpen("Diff...", popupFlags, ntypes.Rect{20, 100, 460, 400}, true, dp.Update)
+	mw.PopupOpen("Diff...", popupFlags, ntypes.Rect{20, 100, 480, 400}, true, dp.Update)
 }
 
 func (dp *diffPopup) idxToCommitOrRef(idx int) (name, id string) {
@@ -309,22 +302,14 @@ func (dp *diffPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	dp.Idx1 = selectFromList(w, "DiffA", dp.Idx1, dp.names)
 	dp.Idx2 = selectFromList(w, "DiffB", dp.Idx2, dp.names)
 
-	w.LayoutRowDynamic(25, 2)
+	ok, _ := okCancelButtons(w, true, "OK", true)
 
-	ok, cancel := okCancelKeys(w)
-
-	if w.ButtonText("OK") || ok {
-		w.Close()
-
+	if ok {
 		niceNameA, commitOrRefA := dp.idxToCommitOrRef(dp.Idx1)
 		niceNameB, commitOrRefB := dp.idxToCommitOrRef(dp.Idx2)
 
 		diffAction(&lw, niceNameA, commitOrRefA, niceNameB, commitOrRefB)
 	}
-	if w.ButtonText("Cancel") || cancel {
-		w.Close()
-	}
-	w.LayoutRowDynamic(10, 1)
 }
 
 func newCheckoutPopup(mw *nucular.MasterWindow, localRefs []Ref) {
@@ -349,19 +334,14 @@ func newForcePushPopup(mw *nucular.MasterWindow, repository string, buffer []run
 	fp.Repository = repository
 	fp.ed.Buffer = buffer
 	fp.ed.Flags = nucular.EditMultiline | nucular.EditReadOnly
-	mw.PopupOpen("Push error", popupFlags, ntypes.Rect{20, 100, 640, 500}, true, fp.Update)
+	mw.PopupOpen("Push error", popupFlags, ntypes.Rect{20, 100, 480, 500}, true, fp.Update)
 }
 
 func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	w.LayoutRowDynamic(200, 1)
 	fp.ed.Edit(w)
-	_, cancel := okCancelKeys(w)
-	w.LayoutRowDynamic(25, 2)
-	if w.ButtonText(fmt.Sprintf("Force Push %s", fp.Repository)) {
+	ok, _ := okCancelButtons(w, false, fmt.Sprintf("Force Push %s", fp.Repository), true)
+	if ok {
 		pushAction(&lw, true, fp.Repository)
-		w.Close()
-	}
-	if w.ButtonText("Cancel") || cancel {
-		w.Close()
 	}
 }

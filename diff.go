@@ -576,7 +576,7 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 			style.NormalWindow.Spacing.Y = 0
 
 			if *width > 0 {
-				w.LayoutRowStaticScaled(style.Font.Size, *width, 1)
+				w.LayoutRowStaticScaled(style.Font.Size, *width)
 			} else {
 				w.LayoutRowDynamicScaled(style.Font.Size, 1)
 			}

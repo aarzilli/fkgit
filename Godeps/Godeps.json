@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/aarzilli/fkgit",
-	"GoVersion": "go1.7",
+	"GoVersion": "go1.6",
 	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
@@ -24,27 +24,27 @@
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular",
-			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
+			"Rev": "b0f328fb848e61fd162638857be500acbb0e8301"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/command",
-			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
+			"Rev": "b0f328fb848e61fd162638857be500acbb0e8301"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/internal/assets",
-			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
+			"Rev": "b0f328fb848e61fd162638857be500acbb0e8301"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/label",
-			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
+			"Rev": "b0f328fb848e61fd162638857be500acbb0e8301"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/style",
-			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
+			"Rev": "b0f328fb848e61fd162638857be500acbb0e8301"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/types",
-			"Rev": "375de384eb5537eb04a058ebe8d3a7130be8b5da"
+			"Rev": "b0f328fb848e61fd162638857be500acbb0e8301"
 		},
 		{
 			"ImportPath": "github.com/golang/freetype",
@@ -60,6 +60,14 @@
 			"ImportPath": "github.com/golang/freetype/truetype",
 			"Comment": "release-128-gf9531a3",
 			"Rev": "f9531a36062a85d4cef2daae173a3c9a35ae9f17"
+		},
+		{
+			"ImportPath": "github.com/google/go-github/github",
+			"Rev": "56add9d4071bb1a06003a1239ebbc1500692b55d"
+		},
+		{
+			"ImportPath": "github.com/google/go-querystring/query",
+			"Rev": "9235644dd9e52eeae6fa48efd539fdc351a0af53"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver",

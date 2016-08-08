@@ -176,12 +176,11 @@ func (gs *GithubStuff) update(issues bool, mw *nucular.MasterWindow, w *nucular.
 
 	moveselection := false
 
-	w.LayoutRowDynamic(w.LayoutAvailableHeight(), 1)
+	w.LayoutRowDynamic(0, 1)
 	if sw := w.GroupBegin("issue-list", nucular.WindowNoHScrollbar); sw != nil {
 		defer sw.GroupEnd()
 
 		numsz := nucular.FontWidth(style.Font, "00000") + style.GroupWindow.Padding.X*2
-		titlesz := sw.LayoutAvailableWidth() - numsz - style.GroupWindow.Spacing.X
 
 		n := len(gs.iss)
 		if !issues {
@@ -189,7 +188,7 @@ func (gs *GithubStuff) update(issues bool, mw *nucular.MasterWindow, w *nucular.
 		}
 
 		for i := 0; i < n; i++ {
-			sw.LayoutRowFixedScaled(lnh, numsz, titlesz)
+			sw.LayoutRowStaticScaled(lnh, numsz, 0)
 			selected := gs.selectedIssue == i
 			if !issues {
 				selected = gs.selectedPull == i

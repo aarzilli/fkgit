@@ -50,12 +50,11 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 
 	style, scaling := mw.Style()
 
-	w.LayoutRowRatioScaled(w.LayoutAvailableHeight(), 0.3, 0.7)
+	w.LayoutRowRatio(0, 0.3, 0.7)
 
 	if sw := w.GroupBegin("index-files", nucular.WindowBorder); sw != nil {
-		w := sw.LayoutAvailableWidth()
 		cbw := min(int(25*scaling), style.Font.Size+style.Option.Padding.Y) + style.Option.Padding.X*2
-		sw.LayoutRowFixedScaled(int(25*scaling), cbw, w-cbw)
+		sw.LayoutRowStaticScaled(int(25*scaling), cbw, 0)
 
 		for i, line := range idxmw.status.Lines {
 			checked := line.Index != " " && line.WorkDir == " "
@@ -75,7 +74,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 	}
 
 	if sw := w.GroupBegin("index-right-column", nucular.WindowNoScrollbar); sw != nil {
-		sw.LayoutRowStatic(25, 100, 2)
+		sw.LayoutRowStatic(25, 100, 100)
 		oldamend := idxmw.amend
 		if sw.OptionText("New commit", idxmw.amend == false) {
 			idxmw.amend = false
@@ -96,7 +95,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 		idxmw.ed.Edit(sw)
 
 		sw.LayoutRowDynamic(5, 1)
-		sw.LayoutRowFixed(25, 100, 50, 50, 100)
+		sw.LayoutRowStatic(25, 100, 50, 50, 100)
 		sw.PropertyInt("fmt:", 10, &idxmw.fmtwidth, 150, 1, 1)
 		if sw.ButtonText("fmt") {
 			idxmw.formatmsg()
@@ -132,7 +131,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 		}
 		sw.LayoutRowDynamic(5, 1)
 
-		sw.LayoutRowDynamicScaled(sw.LayoutAvailableHeight(), 1)
+		sw.LayoutRowDynamic(0, 1)
 		diffbounds = sw.WidgetBounds()
 		if diffgroup := sw.GroupBegin("index-diff", nucular.WindowBorder); diffgroup != nil {
 			if idxmw.selected >= 0 {
