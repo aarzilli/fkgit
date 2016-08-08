@@ -95,7 +95,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 		idxmw.ed.Edit(sw)
 
 		sw.LayoutRowDynamic(5, 1)
-		sw.LayoutRowStatic(25, 100, 50, 50, 100)
+		sw.LayoutRowStatic(25, 100, 50, 0, 100)
 		sw.PropertyInt("fmt:", 10, &idxmw.fmtwidth, 150, 1, 1)
 		if sw.ButtonText("fmt") {
 			idxmw.formatmsg()
