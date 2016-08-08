@@ -305,6 +305,9 @@ func (dp *diffPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	ok, _ := okCancelButtons(w, true, "OK", true)
 
 	if ok {
+		if dp.Idx1 < 0 || dp.Idx2 < 0 {
+			return
+		}
 		niceNameA, commitOrRefA := dp.idxToCommitOrRef(dp.Idx1)
 		niceNameB, commitOrRefB := dp.idxToCommitOrRef(dp.Idx2)
 
