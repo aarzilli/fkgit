@@ -2107,7 +2107,7 @@ func (win *Window) doProperty(property types.Rect, name string, text string, fil
 		ed = win.editor
 	} else {
 		ed = &TextEditor{}
-		ed.initString(win)
+		ed.init(win)
 		ed.Buffer = []rune(text)
 	}
 

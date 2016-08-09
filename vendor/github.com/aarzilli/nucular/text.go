@@ -146,10 +146,12 @@ type TextEditor struct {
 	Undo                   textUndoState
 }
 
-func (ed *TextEditor) initString(win *Window) {
+func (ed *TextEditor) init(win *Window) {
 	if ed.win == nil || ed.win != win {
 		if ed.win == nil {
-			ed.Buffer = []rune{}
+			if ed.Buffer == nil {
+				ed.Buffer = []rune{}
+			}
 			ed.Filter = nil
 			ed.Cursor = 0
 			ed.clearState(TextEditSingleLine)
@@ -1642,7 +1644,7 @@ func (d *drawableTextEditor) Draw(z *nstyle.Style, out *command.Buffer) {
 // alwaysSet is specified the contents of the editor will be reset
 // to text.
 func (edit *TextEditor) Edit(win *Window) EditEvents {
-	edit.initString(win)
+	edit.init(win)
 	if edit.Filter == nil {
 		edit.Filter = FilterDefault
 	}

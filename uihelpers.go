@@ -21,7 +21,7 @@ type messagePopup struct {
 func newMessagePopup(mw *nucular.MasterWindow, title, message string) {
 	var mp messagePopup
 	mp.Title = title
-	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
+	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse
 	mp.ed.Buffer = []rune(message)
 	mw.PopupOpen(mp.Title, popupFlags, ntypes.Rect{20, 100, 480, 500}, true, mp.Update)
 }
