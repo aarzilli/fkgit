@@ -101,6 +101,8 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 		err := cmd.Start()
 
 		if err == nil {
+			lw.showOutput = true
+			lw.mw.Changed()
 			var wg sync.WaitGroup
 			filereader := func(fh io.ReadCloser) {
 				defer fh.Close()
