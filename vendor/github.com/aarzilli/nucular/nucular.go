@@ -2260,6 +2260,7 @@ func (mw *MasterWindow) PopupOpen(title string, flags WindowFlags, rect types.Re
 		mw.uilock.Lock()
 		defer mw.uilock.Unlock()
 		mw.ctx.popupOpen(title, flags, rect, scale, updateFn)
+		mw.Changed()
 	}()
 }
 
