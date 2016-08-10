@@ -25,7 +25,6 @@ type context struct {
 	Input   Input
 	Style   nstyle.Style
 	Windows []*Window
-	Clip    Clipboard
 	Scaling float64
 	changed int32
 }

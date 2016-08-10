@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aarzilli/fkgit/clipboard"
 	"github.com/aarzilli/nucular"
 	nstyle "github.com/aarzilli/nucular/style"
 
@@ -389,17 +388,6 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 	tabs[currentTab].Update(mw, w)
 }
 
-type Clipboard struct {
-}
-
-func (cb *Clipboard) Copy(text string) {
-	clipboard.Set(text)
-}
-
-func (cb *Clipboard) Paste() string {
-	return clipboard.Get()
-}
-
 func fixStyle(style *nstyle.Style) {
 	style.Selectable.Normal.Data.Color = style.NormalWindow.Background
 	style.NormalWindow.Padding.Y = 0
@@ -415,7 +403,6 @@ func main() {
 	loadConfiguration()
 
 	wnd := nucular.NewMasterWindow(guiUpdate, nucular.WindowNoScrollbar)
-	wnd.SetClipboard(&Clipboard{})
 	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 	style, _ := wnd.Style()
 	fixStyle(style)
@@ -449,8 +436,6 @@ func main() {
 	} else {
 		currentTab = indexTabIndex
 	}
-
-	clipboard.Start()
 
 	wnd.Main()
 }

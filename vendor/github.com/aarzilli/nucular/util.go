@@ -18,11 +18,6 @@ const (
 	Left
 )
 
-type Clipboard interface {
-	Paste() string
-	Copy(string)
-}
-
 func min(a, b int) int {
 	if a < b {
 		return a

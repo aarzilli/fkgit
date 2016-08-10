@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/image/math/fixed"
 
+	"github.com/aarzilli/nucular/clipboard"
 	"github.com/aarzilli/nucular/command"
 	"github.com/aarzilli/nucular/label"
 	nstyle "github.com/aarzilli/nucular/style"
@@ -1317,9 +1318,7 @@ func (ed *TextEditor) doEdit(bounds types.Rect, style *nstyle.Edit, inp *Input) 
 				begin = ed.SelectStart
 				end = ed.SelectEnd
 			}
-			if ed.win.ctx.Clip.Copy != nil {
-				ed.win.ctx.Clip.Copy(string(ed.Buffer[begin:end]))
-			}
+			clipboard.Set(string(ed.Buffer[begin:end]))
 			if cut {
 				ed.Cut()
 				cursor_follow = true
@@ -1327,8 +1326,8 @@ func (ed *TextEditor) doEdit(bounds types.Rect, style *nstyle.Edit, inp *Input) 
 		}
 
 		/* paste handler */
-		if paste && (ed.Flags&EditClipboard != 0) && ed.win.ctx.Clip.Paste != nil {
-			ed.Paste(ed.win.ctx.Clip.Paste())
+		if paste && (ed.Flags&EditClipboard != 0) {
+			ed.Paste(clipboard.Get())
 			cursor_follow = true
 		}
 

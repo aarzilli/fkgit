@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aarzilli/nucular/clipboard"
 	"github.com/aarzilli/nucular/command"
 	"github.com/aarzilli/nucular/internal/assets"
 	"github.com/aarzilli/nucular/types"
@@ -37,6 +38,9 @@ import (
 const perfUpdate = false
 
 var UnknownCommandErr = errors.New("unknown command")
+
+var clipboardStarted bool = false
+var clipboardMu sync.Mutex
 
 type MasterWindow struct {
 	screen screen.Screen
@@ -79,6 +83,13 @@ func NewMasterWindow(updatefn UpdateFn, flags WindowFlags) *MasterWindow {
 	wnd := &MasterWindow{ctx: ctx}
 	wnd.layout.Flags = flags
 
+	clipboardMu.Lock()
+	if !clipboardStarted {
+		clipboardStarted = true
+		clipboard.Start()
+	}
+	clipboardMu.Unlock()
+
 	ctx.Windows = append(ctx.Windows, createWindow(ctx, ""))
 	ctx.Windows[0].idx = 0
 	ctx.Windows[0].layout = &wnd.layout
@@ -87,11 +98,6 @@ func NewMasterWindow(updatefn UpdateFn, flags WindowFlags) *MasterWindow {
 	ctx.Windows[0].updateFn = updatefn
 
 	return wnd
-}
-
-// Configures clipboard access object
-func (mw *MasterWindow) SetClipboard(clipboard Clipboard) {
-	mw.ctx.Clip = clipboard
 }
 
 // Shows window, runs event loop
