@@ -423,6 +423,8 @@ func main() {
 	lw.repodir = repodir
 	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
 	lw.edCommit.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
+	lw.searchEd.Flags = nucular.EditSelectable | nucular.EditFocusFollowsMouse | nucular.EditSigEnter
+	lw.searchMode = noSearch
 	lw.needsMore = -1
 	lw.mw = wnd
 

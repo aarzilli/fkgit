@@ -467,9 +467,28 @@ type LogWindow struct {
 	allrefs []Ref
 	mw      *nucular.MasterWindow
 
+	searchCmd     *exec.Cmd
+	searchMode    searchMode
+	searchDone    bool
+	searchEd      nucular.TextEditor
+	searchIdx     int
+	searchResults []string
+
 	showOutput         bool
 	edCommit, edOutput nucular.TextEditor
 }
+
+type searchMode int
+
+const (
+	noSearch searchMode = iota
+	pathSearchSetup
+	grepSearchSetup
+	searchRunning
+	searchRestartMove
+	searchMove
+	searchAbort
+)
 
 func (lw *LogWindow) commitproc() {
 	defer func() {
@@ -564,6 +583,55 @@ func laneboundsOf(lnh int, bounds ntypes.Rect, lane int) (r ntypes.Rect) {
 	return
 }
 
+func (lw *LogWindow) selectCommit(lc *LanedCommit) {
+	if lc == nil {
+		lw.selectedId = ""
+		lw.edCommit.Buffer = []rune{}
+		lw.edCommit.Cursor = 0
+		return
+	}
+	lw.selectedId = lc.Id
+	lw.showOutput = false
+	var buf bytes.Buffer
+
+	fmt.Fprintf(&buf, "commit %s ", abbrev(lc.Id))
+	if len(lc.Parent) > 0 {
+		if len(lc.Parent) == 1 {
+			fmt.Fprintf(&buf, "parent ")
+		} else {
+			fmt.Fprintf(&buf, "parents ")
+		}
+		// TODO: make these clickable
+		for i := range lc.Parent {
+			if i == 0 {
+				fmt.Fprintf(&buf, "%s", abbrev(lc.Parent[i]))
+			} else {
+				fmt.Fprintf(&buf, ", %s", abbrev(lc.Parent[i]))
+			}
+		}
+		buf.Write([]byte{'\n'})
+	}
+
+	ad := lc.AuthorDate.Local().Format("2006-01-02 15:04")
+	cd := lc.CommitterDate.Local().Format("2006-01-02 15:04")
+
+	if lc.Author != lc.Committer {
+		fmt.Fprintf(&buf, "author %s on %s\n", lc.Author, ad)
+		fmt.Fprintf(&buf, "committer %s on %s\n", lc.Committer, cd)
+	} else {
+		if ad != cd {
+			fmt.Fprintf(&buf, "author %s on %s (committed %s)\n", lc.Author, ad, cd)
+		} else {
+			fmt.Fprintf(&buf, "author %s on %s\n", lc.Author, ad)
+		}
+	}
+	buf.WriteByte('\n')
+	buf.Write([]byte(lc.Message))
+
+	lw.edCommit.Buffer = []rune(buf.String())
+	lw.edCommit.Cursor = 0
+}
+
 var graphColor = color.RGBA{213, 204, 255, 0xff}
 var refsColor = color.RGBA{255, 182, 97, 0xff}
 var refsHeadColor = color.RGBA{233, 255, 97, 0xff}
@@ -572,12 +640,119 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
+	moveToSelected := false
+
 	w.MenubarBegin()
-	w.LayoutRowDynamic(25, 1)
+	switch lw.searchMode {
+	case noSearch:
+		w.LayoutRowStatic(25, 0, 120)
+	case pathSearchSetup, grepSearchSetup:
+		w.LayoutRowStatic(25, 0, 100, 300)
+	case searchRunning, searchAbort:
+		w.LayoutRowStatic(25, 0, 200)
+	case searchMove, searchRestartMove:
+		if lw.searchDone && len(lw.searchResults) == 0 {
+			w.LayoutRowStatic(25, 0, 100, 100)
+		} else {
+			w.LayoutRowStatic(25, 0, 100, 100, 100, 100)
+		}
+	}
 	if lw.status == nil {
 		lw.status = gitStatus(lw.repodir)
 	}
 	w.Label(lw.status.Summary(), "LC")
+
+	switch lw.searchMode {
+	case noSearch:
+		w.Menu(label.TA("Search", "RC"), 120, func(mw *nucular.MasterWindow, w *nucular.Window) {
+			lw.mu.Lock()
+			defer lw.mu.Unlock()
+			w.LayoutRowDynamic(20, 1)
+			if w.MenuItem(label.T("Path...")) {
+				lw.searchEd.Buffer = []rune{}
+				lw.searchMode = pathSearchSetup
+			}
+			if w.MenuItem(label.T("Grep...")) {
+				lw.searchEd.Buffer = []rune{}
+				lw.searchMode = grepSearchSetup
+			}
+		})
+	case pathSearchSetup:
+		w.Label("Path:", "RC")
+		active := lw.searchEd.Edit(w)
+		if active&nucular.EditCommitted != 0 {
+			if len(lw.searchEd.Buffer) != 0 {
+				lw.pathSearch(string(lw.searchEd.Buffer))
+			} else {
+				lw.searchMode = noSearch
+			}
+		}
+	case grepSearchSetup:
+		w.Label("Grep:", "RC")
+		active := lw.searchEd.Edit(w)
+		if active&nucular.EditCommitted != 0 {
+			if len(lw.searchEd.Buffer) != 0 {
+				lw.grepSearch(string(lw.searchEd.Buffer))
+			} else {
+				lw.searchMode = noSearch
+			}
+		}
+	case searchRunning:
+		w.Label("Searching...", "RC")
+	case searchRestartMove:
+		if lw.searchIdx >= len(lw.searchResults) && len(lw.searchResults) > 0 {
+			lw.searchIdx = len(lw.searchResults) - 1
+		}
+		// it could still be that we got no results back, hence this check
+		if lw.searchIdx < len(lw.searchResults) {
+			lw.selectedId = lw.searchResults[lw.searchIdx]
+			lw.searchMode = searchMove
+			moveToSelected = true
+		}
+		fallthrough
+	case searchMove:
+		if len(lw.searchResults) == 0 {
+			w.Label("No results", "RC")
+			if w.ButtonText("Exit") {
+				lw.searchMode = noSearch
+			}
+		} else {
+			w.Label(fmt.Sprintf("%d/%d", lw.searchIdx, len(lw.searchResults)), "RC")
+			if w.ButtonText("Next") {
+				lw.searchIdx++
+				if lw.searchIdx >= len(lw.searchResults) {
+					if lw.searchDone {
+						lw.searchIdx = len(lw.searchResults) - 1
+						lw.selectedId = lw.searchResults[lw.searchIdx]
+						moveToSelected = true
+					} else {
+						lw.searchMode = searchRunning
+					}
+				} else {
+					lw.selectedId = lw.searchResults[lw.searchIdx]
+					moveToSelected = true
+				}
+			}
+			if w.ButtonText("Prev") {
+				lw.searchIdx--
+				if lw.searchIdx < 0 {
+					lw.searchIdx = 0
+				}
+				lw.selectedId = lw.searchResults[lw.searchIdx]
+				moveToSelected = true
+			}
+			if w.ButtonText("Exit") {
+				if lw.searchDone {
+					lw.searchMode = noSearch
+				} else {
+					lw.searchMode = searchAbort
+				}
+			}
+		}
+	case searchAbort:
+		w.Label("Stopping search...", "RC")
+	}
+
 	w.MenubarEnd()
 
 	style, scaling := mw.Style()
@@ -596,15 +771,15 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
 			w.Scrollbar.Y = 0
 		case (e.Modifiers == 0) && (e.Code == key.CodeEnd):
-			w.Scrollbar.Y = (lnh * len(lw.commits)) - w.LayoutAvailableHeight()
+			w.Scrollbar.Y = (lnh * len(lw.commits)) - w.Bounds.H
 		case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
 			w.Scrollbar.Y -= lnh
 		case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
 			w.Scrollbar.Y += lnh
 		case (e.Modifiers == 0) && (e.Code == key.CodePageUp):
-			w.Scrollbar.Y -= w.LayoutAvailableHeight() / 2
+			w.Scrollbar.Y -= w.Bounds.H / 2
 		case (e.Modifiers == 0) && (e.Code == key.CodePageDown):
-			w.Scrollbar.Y += w.LayoutAvailableHeight() / 2
+			w.Scrollbar.Y += w.Bounds.H / 2
 		}
 		if w.Scrollbar.Y < 0 {
 			w.Scrollbar.Y = 0
@@ -635,9 +810,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	datesz := nucular.FontWidth(style.Font, "0000-00-00 00:000") + style.Text.Padding.X*2
 	authorsz := nucular.FontWidth(style.Font, "MMMM") + style.Text.Padding.X*2
-
 	availableWidth := w.LayoutAvailableWidth()
-
 	spacing := style.GroupWindow.Spacing
 
 	calcCommitsz := func(graphsz int, includeAuthor, includeDate bool) int {
@@ -680,6 +853,10 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		skip = maxskip
 	}
 
+	if moveToSelected {
+		skip = 0
+	}
+
 	emptyCommitRows := func(n int) {
 		if n > 0 {
 			w.LayoutRowDynamic(n*graphLineHeight+(n-1)*style.GroupWindow.Spacing.Y, 1)
@@ -691,11 +868,13 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	emptyCommitRows(skip)
 
 	for i, lc := range lw.commits[skip:] {
-		if _, below := w.Invisible(); below {
-			// fill the space that would be occupied by commits below the fold
-			// with a big row
-			emptyCommitRows(len(lw.commits[skip:]) - i)
-			break
+		if !moveToSelected {
+			if _, below := w.Invisible(); below {
+				// fill the space that would be occupied by commits below the fold
+				// with a big row
+				emptyCommitRows(len(lw.commits[skip:]) - i)
+				break
+			}
 		}
 
 		w.LayoutRowStaticScaled(lnh)
@@ -711,6 +890,17 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		ishead := false
 
 		selected := lc.Id == lw.selectedId
+
+		if selected && moveToSelected {
+			lw.selectCommit(&lc)
+			if above, below := w.Invisible(); above || below {
+				w.Scrollbar.Y = w.At().Y - w.Bounds.H/2
+				if w.Scrollbar.Y < 0 {
+					w.Scrollbar.Y = 0
+				}
+				moveToSelected = false
+			}
+		}
 
 		if len(lc.Refs) != 0 || lc.IsHEAD {
 			var buf bytes.Buffer
@@ -762,46 +952,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		}
 
 		if selected && lc.Id != lw.selectedId {
-			lw.selectedId = lc.Id
-			lw.showOutput = false
-			var buf bytes.Buffer
-
-			fmt.Fprintf(&buf, "commit %s ", abbrev(lc.Id))
-			if len(lc.Parent) > 0 {
-				if len(lc.Parent) == 1 {
-					fmt.Fprintf(&buf, "parent ")
-				} else {
-					fmt.Fprintf(&buf, "parents ")
-				}
-				// TODO: make these clickable
-				for i := range lc.Parent {
-					if i == 0 {
-						fmt.Fprintf(&buf, "%s", abbrev(lc.Parent[i]))
-					} else {
-						fmt.Fprintf(&buf, ", %s", abbrev(lc.Parent[i]))
-					}
-				}
-				buf.Write([]byte{'\n'})
-			}
-
-			ad := lc.AuthorDate.Local().Format("2006-01-02 15:04")
-			cd := lc.CommitterDate.Local().Format("2006-01-02 15:04")
-
-			if lc.Author != lc.Committer {
-				fmt.Fprintf(&buf, "author %s on %s\n", lc.Author, ad)
-				fmt.Fprintf(&buf, "committer %s on %s\n", lc.Committer, cd)
-			} else {
-				if ad != cd {
-					fmt.Fprintf(&buf, "author %s on %s (committed %s)\n", lc.Author, ad, cd)
-				} else {
-					fmt.Fprintf(&buf, "author %s on %s\n", lc.Author, ad)
-				}
-			}
-			buf.WriteByte('\n')
-			buf.Write([]byte(lc.Message))
-
-			lw.edCommit.Buffer = []rune(buf.String())
-			lw.edCommit.Cursor = 0
+			lw.selectCommit(&lc)
 		}
 
 		rowbounds := bounds
@@ -932,7 +1083,9 @@ type commitMenu struct {
 
 func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	lw, lc := cm.lw, cm.lc
-	lw.selectedId = lc.Id
+	if lw.selectedId != lc.Id {
+		lw.selectCommit(&lc)
+	}
 	localRefs := []Ref{}
 	remoteRefs := []Ref{}
 	for _, ref := range lc.Refs {
@@ -1089,7 +1242,7 @@ func (lw *LogWindow) reload() {
 	lw.commits = lw.commits[:0]
 	lw.maxOccupied = 0
 
-	lw.selectedId = ""
+	lw.selectCommit(nil)
 
 	lw.Headisref = false
 	lw.Head = nil
@@ -1098,4 +1251,66 @@ func (lw *LogWindow) reload() {
 	lw.done = false
 	lw.started = false
 	lw.status = nil
+}
+
+func (lw *LogWindow) pathSearch(path string) {
+	lw.searchMode = searchRunning
+	lw.searchIdx = 0
+	lw.searchDone = false
+	lw.searchResults = lw.searchResults[:0]
+	lw.searchCmd = exec.Command("git", "log", "--format=%H", "--color=never", "--", path)
+	lw.searchCmd.Dir = lw.repodir
+	lw.anySearch()
+}
+
+func (lw *LogWindow) grepSearch(pattern string) {
+	lw.searchCmd = exec.Command("git", "log", "--format=%H", "--color=never", "--grep="+pattern)
+	lw.searchCmd.Dir = lw.repodir
+	lw.anySearch()
+}
+
+func (lw *LogWindow) anySearch() {
+	lw.searchMode = searchRunning
+	lw.searchIdx = 0
+	lw.searchDone = false
+	lw.searchResults = lw.searchResults[:0]
+	go func() {
+		stdout, err := lw.searchCmd.StdoutPipe()
+		if err != nil {
+			return
+		}
+		lw.searchCmd.Start()
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			commitId := scanner.Text()
+			lw.mu.Lock()
+			if lw.searchMode == searchAbort {
+				lw.mu.Unlock()
+				stdout.Close()
+				lw.searchCmd.Wait()
+				lw.mu.Lock()
+				lw.searchMode = noSearch
+				lw.mu.Unlock()
+				return
+			}
+			lw.searchResults = append(lw.searchResults, commitId)
+			if lw.searchMode != searchMove {
+				lw.searchMode = searchRestartMove
+				lw.mw.Changed()
+			}
+			lw.mu.Unlock()
+		}
+
+		lw.searchCmd.Wait()
+
+		lw.mu.Lock()
+		if lw.searchMode == searchAbort {
+			lw.searchMode = noSearch
+		} else {
+			lw.searchMode = searchRestartMove
+			lw.searchDone = true
+		}
+		lw.mw.Changed()
+		lw.mu.Unlock()
+	}()
 }
