@@ -1228,6 +1228,30 @@ func (win *Window) TreePush(type_ TreeType, title string, initial_open bool) boo
 	}
 }
 
+func (win *Window) treeOpenClose(open bool, path []string) {
+	node := win.curNode
+	for i := range path {
+		var ok bool
+		node, ok = node.Children[path[i]]
+		if !ok {
+			return
+		}
+	}
+	if node != nil {
+		node.Open = open
+	}
+}
+
+// Opens the collapsable section specified by path
+func (win *Window) TreeOpen(path ...string) {
+	win.treeOpenClose(true, path)
+}
+
+// Closes the collapsable section specified by path
+func (win *Window) TreeClose(path ...string) {
+	win.treeOpenClose(false, path)
+}
+
 // TreePop signals that the program is done adding elements to the
 // current collapsable section.
 func (win *Window) TreePop() {
