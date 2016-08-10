@@ -594,6 +594,9 @@ func (state *TextEditor) prepSelectionAtCursor() {
 }
 
 func (edit *TextEditor) Cut() int {
+	if edit.Flags&EditReadOnly != 0 {
+		return 0
+	}
 	/* API cut: delete selection */
 	if textHasSelection(edit) {
 		edit.DeleteSelection() /* implicitly clamps */
@@ -606,6 +609,10 @@ func (edit *TextEditor) Cut() int {
 
 // Paste from clipboard
 func (edit *TextEditor) Paste(ctext string) {
+	if edit.Flags&EditReadOnly != 0 {
+		return
+	}
+
 	/* if there's a selection, the paste should delete it */
 	edit.clamp()
 
@@ -621,6 +628,10 @@ func (edit *TextEditor) Paste(ctext string) {
 }
 
 func (edit *TextEditor) Text(text []rune) {
+	if edit.Flags&EditReadOnly != 0 {
+		return
+	}
+
 	for i := range text {
 		/* can't add newline in single-line mode */
 		if text[i] == '\n' && edit.SingleLine {
@@ -649,9 +660,13 @@ func (edit *TextEditor) Text(text []rune) {
 }
 
 func (state *TextEditor) key(e key.Event, font *types.Face, row_height int) {
+	readOnly := state.Flags&EditReadOnly != 0
 retry:
 	switch e.Code {
 	case key.CodeZ:
+		if readOnly {
+			return
+		}
 		if e.Modifiers&key.ModControl != 0 {
 			if e.Modifiers&key.ModShift != 0 {
 				state.DoRedo()
@@ -868,6 +883,9 @@ retry:
 		}
 
 	case key.CodeDeleteForward:
+		if readOnly {
+			return
+		}
 		if textHasSelection(state) {
 			state.DeleteSelection()
 		} else {
@@ -879,6 +897,9 @@ retry:
 		state.HasPreferredX = false
 
 	case key.CodeDeleteBackspace:
+		if readOnly {
+			return
+		}
 		if textHasSelection(state) {
 			state.DeleteSelection()
 		} else {
@@ -1245,7 +1266,7 @@ func (ed *TextEditor) doEdit(bounds types.Rect, style *nstyle.Edit, inp *Input) 
 
 	/* handle user input */
 	var cursor_follow bool
-	if ed.Active && inp != nil && ed.Flags&EditReadOnly == 0 {
+	if ed.Active && inp != nil {
 		inpos := inp.Mouse.Pos
 		indelta := inp.Mouse.Delta
 		coord := image.Point{(inpos.X - area.X) + ed.Scrollbar.X, (inpos.Y - area.Y) + ed.Scrollbar.Y}
@@ -1677,10 +1698,6 @@ func (edit *TextEditor) Edit(win *Window) EditEvents {
 		return 0
 	}
 	in := edit.win.inputMaybe(widget_state)
-
-	if edit.Flags&EditReadOnly != 0 {
-		in = &Input{}
-	}
 
 	return edit.doEdit(bounds, &style.Edit, in)
 }
