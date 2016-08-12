@@ -399,6 +399,11 @@ func fixStyle(style *nstyle.Style) {
 
 func main() {
 	repodir := findRepository()
+	if repodir == "" {
+		fmt.Fprintf(os.Stderr, "could not find repository\n")
+		os.Exit(1)
+		return
+	}
 
 	loadConfiguration()
 
