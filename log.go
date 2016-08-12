@@ -645,16 +645,16 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	w.MenubarBegin()
 	switch lw.searchMode {
 	case noSearch:
-		w.LayoutRowStatic(25, 0, 120)
+		w.Row(25).Static(0, 120)
 	case pathSearchSetup, grepSearchSetup:
-		w.LayoutRowStatic(25, 0, 100, 300)
+		w.Row(25).Static(0, 100, 300)
 	case searchRunning, searchAbort:
-		w.LayoutRowStatic(25, 0, 200)
+		w.Row(25).Static(0, 200)
 	case searchMove, searchRestartMove:
 		if lw.searchDone && len(lw.searchResults) == 0 {
-			w.LayoutRowStatic(25, 0, 100, 100)
+			w.Row(25).Static(0, 100, 100)
 		} else {
-			w.LayoutRowStatic(25, 0, 100, 100, 100, 100)
+			w.Row(25).Static(0, 100, 100, 100, 100)
 		}
 	}
 	if lw.status == nil {
@@ -667,7 +667,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		w.Menu(label.TA("Search", "RC"), 120, func(mw *nucular.MasterWindow, w *nucular.Window) {
 			lw.mu.Lock()
 			defer lw.mu.Unlock()
-			w.LayoutRowDynamic(20, 1)
+			w.Row(20).Dynamic(1)
 			if w.MenuItem(label.T("Path...")) {
 				lw.searchEd.Buffer = []rune{}
 				lw.searchMode = pathSearchSetup
@@ -803,7 +803,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 	}
 
 	if updating {
-		w.LayoutRowDynamic(graphLineHeight, 1)
+		w.Row(graphLineHeight).Dynamic(1)
 		w.Label("Loading...", "LC")
 		return
 	}
@@ -855,7 +855,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	emptyCommitRows := func(n int) {
 		if n > 0 {
-			w.LayoutRowDynamic(n*graphLineHeight+(n-1)*style.GroupWindow.Spacing.Y, 1)
+			w.Row(n*graphLineHeight+(n-1)*style.GroupWindow.Spacing.Y).Dynamic(1)
 			// this will never be seen, I could use a Spacing but I want to be bugs noticeable
 			w.Label("More...", "LC")
 		}
@@ -873,7 +873,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 			}
 		}
 
-		w.LayoutRowStaticScaled(lnh)
+		w.RowScaled(lnh).Static()
 
 		rowwidth := w.LayoutAvailableWidth()
 
@@ -1105,7 +1105,7 @@ func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 		remotes = append(remotes, remote)
 	}
 
-	w.LayoutRowDynamic(20, 1)
+	w.Row(20).Dynamic(1)
 	if _, bookmarked := bookmarks[lc.Id]; !bookmarked {
 		if w.MenuItem(label.TA("Bookmark", "LC")) {
 			bookmarks[lc.Id] = lc
@@ -1199,13 +1199,13 @@ func (lw *LogWindow) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
-	sw.LayoutRowStatic(25, 120, 120)
+	sw.Row(25).Static(120, 120)
 	showDetails := !lw.showOutput
 	sw.SelectableLabel("Commit Details", "LC", &showDetails)
 	lw.showOutput = !showDetails
 	sw.SelectableLabel("Output", "LC", &lw.showOutput)
 
-	sw.LayoutRowDynamic(0, 1)
+	sw.Row(0).Dynamic(1)
 	if lw.showOutput {
 		lw.edOutput.Edit(sw)
 	} else {
@@ -1222,12 +1222,12 @@ func (lw *LogWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	h := w.LayoutAvailableHeight() - style.NormalWindow.Spacing.Y
 
-	w.LayoutRowDynamicScaled(int(float64(h)*0.7), 1)
+	w.RowScaled(int(float64(h)*0.7)).Dynamic(1)
 	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder|nucular.WindowNoHScrollbar); sw != nil {
 		lw.UpdateGraph(mw, sw)
 		sw.GroupEnd()
 	}
-	w.LayoutRowDynamicScaled(int(float64(h)*0.3), 1)
+	w.RowScaled(int(float64(h)*0.3)).Dynamic(1)
 	if sw := w.GroupBegin("log-group-bot", nucular.WindowBorder|nucular.WindowNoScrollbar); sw != nil {
 		lw.UpdateExtra(mw, sw)
 		sw.GroupEnd()

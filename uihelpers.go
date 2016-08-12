@@ -27,7 +27,7 @@ func newMessagePopup(mw *nucular.MasterWindow, title, message string) {
 }
 
 func (mp *messagePopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	w.LayoutRowDynamic(200, 1)
+	w.Row(200).Dynamic(1)
 	mp.ed.Edit(w)
 	okCancelButtons(w, true, "OK", false)
 }
@@ -93,7 +93,7 @@ func selectFromList(w *nucular.Window, name string, idx int, list []string) int 
 			}
 		}
 
-		sw.LayoutRowDynamic(25, 1)
+		sw.Row(25).Dynamic(1)
 		for i := range list {
 			selected := idx == i
 
@@ -128,7 +128,7 @@ func okCancelButtons(w *nucular.Window, dokeys bool, oktext string, showcancel b
 		}
 	}
 
-	w.LayoutRowStatic(25, 0, 100, 100)
+	w.Row(25).Static(0, 100, 100)
 	w.Spacing(1)
 	if oktext != "" {
 		if !showcancel {
@@ -153,10 +153,10 @@ func okCancelButtons(w *nucular.Window, dokeys bool, oktext string, showcancel b
 func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []string, onSelect func(idx int)) {
 	idx := -1
 	mw.PopupOpen(title, popupFlags, ntypes.Rect{20, 100, 480, 400}, true, func(mw *nucular.MasterWindow, w *nucular.Window) {
-		w.LayoutRowDynamic(25, 1)
+		w.Row(25).Dynamic(1)
 		w.Label(text, "LC")
 
-		w.LayoutRowDynamic(150, 1)
+		w.Row(150).Dynamic(1)
 
 		idx = selectFromList(w, title+"-listgroup", idx, list)
 
@@ -182,7 +182,7 @@ func newNewBranchPopup(mw *nucular.MasterWindow, id string) {
 }
 
 func (np *newBranchPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	w.LayoutRowDynamic(25, 1)
+	w.Row(25).Dynamic(1)
 	ok, _ := okCancelButtons(w, !np.ed.Active, "OK", true)
 	if ok {
 		newbranchAction(&lw, string(np.ed.Buffer), np.CommitId)
@@ -208,7 +208,7 @@ func newResetPopup(mw *nucular.MasterWindow, id string, mode resetMode) {
 }
 
 func (rp *resetPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	w.LayoutRowDynamic(25, 1)
+	w.Row(25).Dynamic(1)
 	if w.OptionText("Hard: reset working tree and index", rp.ResetMode == resetHard) {
 		rp.ResetMode = resetHard
 	}
@@ -298,7 +298,7 @@ func (dp *diffPopup) idxToCommitOrRef(idx int) (name, id string) {
 }
 
 func (dp *diffPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	w.LayoutRowDynamic(150, 2)
+	w.Row(150).Dynamic(2)
 	dp.Idx1 = selectFromList(w, "DiffA", dp.Idx1, dp.names)
 	dp.Idx2 = selectFromList(w, "DiffB", dp.Idx2, dp.names)
 
@@ -341,7 +341,7 @@ func newForcePushPopup(mw *nucular.MasterWindow, repository string, buffer []run
 }
 
 func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	w.LayoutRowDynamic(200, 1)
+	w.Row(200).Dynamic(1)
 	fp.ed.Edit(w)
 	ok, _ := okCancelButtons(w, false, fmt.Sprintf("Force Push %s", fp.Repository), true)
 	if ok {

@@ -576,9 +576,9 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 			style.NormalWindow.Spacing.Y = 0
 
 			if *width > 0 {
-				w.LayoutRowStaticScaled(style.Font.Size, *width)
+				w.RowScaled(style.Font.Size).StaticScaled(*width)
 			} else {
-				w.LayoutRowDynamicScaled(style.Font.Size, 1)
+				w.RowScaled(style.Font.Size).Dynamic(1)
 			}
 
 			for _, hdr := range filediff.Headers[1:] {

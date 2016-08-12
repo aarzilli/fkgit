@@ -83,7 +83,7 @@ func (vw *ViewWindow) Title() string {
 }
 
 func (vw *ViewWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	w.LayoutRowDynamic(0, 1)
+	w.Row(0).Dynamic(1)
 	if sw := w.GroupBegin("view-"+vw.lc.Id, 0); sw != nil {
 		vw.updateView(mw, sw)
 		sw.GroupEnd()
@@ -94,7 +94,7 @@ func (vw *ViewWindow) updateView(mw *nucular.MasterWindow, w *nucular.Window) {
 	style, _ := mw.Style()
 
 	if vw.isdiff {
-		w.LayoutRowDynamic(20, 1)
+		w.Row(20).Dynamic(1)
 		w.Label("Diff", "LC")
 		w.Label("    "+vw.niceNameA, "LC")
 		w.Label("    "+vw.niceNameB, "LC")
@@ -107,7 +107,7 @@ func (vw *ViewWindow) updateView(mw *nucular.MasterWindow, w *nucular.Window) {
 }
 
 func showCommit(lnh int, w *nucular.Window, lc LanedCommit) {
-	w.LayoutRowDynamicScaled(lnh, 1)
+	w.RowScaled(lnh).Dynamic(1)
 	w.Label(fmt.Sprintf("commit %s\n", lc.Id), "LC")
 	for i := range lc.Parent {
 		w.Label(fmt.Sprintf("parent %s\n", lc.Parent[i]), "LC")

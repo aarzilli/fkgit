@@ -366,7 +366,7 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 	}
 
 	closetab := -1
-	w.LayoutRowDynamic(20, len(tabs))
+	w.Row(20).Dynamic(len(tabs))
 	for i := range tabs {
 		selected := i == currentTab
 		bounds := w.WidgetBounds()

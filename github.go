@@ -164,19 +164,19 @@ func (gs *GithubStuff) update(issues bool, mw *nucular.MasterWindow, w *nucular.
 	defer gs.mu.Unlock()
 
 	if !gs.loaded {
-		w.LayoutRowDynamic(25, 1)
+		w.Row(25).Dynamic(1)
 		w.Label("Updating...", "LC")
 		return
 	}
 
 	if gs.loaderr {
-		w.LayoutRowDynamic(25, 1)
+		w.Row(25).Dynamic(1)
 		w.Label("Loading error", "LC")
 	}
 
 	moveselection := false
 
-	w.LayoutRowDynamic(0, 1)
+	w.Row(0).Dynamic(1)
 	if sw := w.GroupBegin("issue-list", nucular.WindowNoHScrollbar); sw != nil {
 		defer sw.GroupEnd()
 
@@ -188,7 +188,7 @@ func (gs *GithubStuff) update(issues bool, mw *nucular.MasterWindow, w *nucular.
 		}
 
 		for i := 0; i < n; i++ {
-			sw.LayoutRowStaticScaled(lnh, numsz, 0)
+			sw.RowScaled(lnh).StaticScaled(numsz, 0)
 			selected := gs.selectedIssue == i
 			if !issues {
 				selected = gs.selectedPull == i
@@ -240,7 +240,7 @@ type issueMenu struct {
 
 func (im *issueMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	im.gs.selectedIssue = im.i
-	w.LayoutRowDynamic(20, 1)
+	w.Row(20).Dynamic(1)
 	if w.MenuItem(label.TA("Open", "LC")) {
 		openUrl(im.is.url)
 	}
@@ -257,7 +257,7 @@ type pullMenu struct {
 
 func (pm *pullMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	pm.gs.selectedPull = pm.i
-	w.LayoutRowDynamic(20, 1)
+	w.Row(20).Dynamic(1)
 	if w.MenuItem(label.TA("Open", "LC")) {
 		openUrl(pm.pr.url)
 	}
