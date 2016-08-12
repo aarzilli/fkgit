@@ -845,15 +845,11 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	skip := w.Scrollbar.Y/(lnh+style.GroupWindow.Spacing.Y) - 2
 
-	if skip < 0 {
-		skip = 0
-	}
-
 	if maxskip := len(lw.commits) - 3; skip > maxskip {
 		skip = maxskip
 	}
 
-	if moveToSelected {
+	if skip < 0 || moveToSelected {
 		skip = 0
 	}
 
