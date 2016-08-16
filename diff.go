@@ -568,6 +568,7 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 
 	rounding := uint16(4 * scaling)
 
+	lnh := nucular.FontHeight(style.Font)
 	d := font.Drawer{Face: style.Font.Face}
 
 	for _, filediff := range diff {
@@ -576,9 +577,9 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 			style.NormalWindow.Spacing.Y = 0
 
 			if *width > 0 {
-				w.RowScaled(style.Font.Size).StaticScaled(*width)
+				w.RowScaled(lnh).StaticScaled(*width)
 			} else {
-				w.RowScaled(style.Font.Size).Dynamic(1)
+				w.RowScaled(lnh).Dynamic(1)
 			}
 
 			for _, hdr := range filediff.Headers[1:] {
@@ -635,9 +636,9 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 			w.Scrollbar.X = 0
 			w.Scrollbar.Y = w.At().Y
 		case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
-			w.Scrollbar.Y -= style.Font.Size
+			w.Scrollbar.Y -= lnh
 		case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
-			w.Scrollbar.Y += style.Font.Size
+			w.Scrollbar.Y += lnh
 		case (e.Modifiers == 0) && (e.Code == key.CodeLeftArrow):
 			w.Scrollbar.X -= w.Bounds.W / 10
 		case (e.Modifiers == 0) && (e.Code == key.CodeRightArrow):
