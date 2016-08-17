@@ -413,9 +413,9 @@ func main() {
 	fixStyle(style)
 
 	lw.repodir = repodir
-	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
-	lw.edCommit.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly
-	lw.searchEd.Flags = nucular.EditSelectable | nucular.EditFocusFollowsMouse | nucular.EditSigEnter
+	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly | nucular.EditClipboard
+	lw.edCommit.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly | nucular.EditClipboard
+	lw.searchEd.Flags = nucular.EditSelectable | nucular.EditFocusFollowsMouse | nucular.EditSigEnter | nucular.EditClipboard
 	lw.searchMode = noSearch
 	lw.needsMore = -1
 	lw.mw = wnd
