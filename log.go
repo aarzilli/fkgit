@@ -17,7 +17,8 @@ import (
 
 	"github.com/aarzilli/nucular"
 	"github.com/aarzilli/nucular/label"
-	ntypes "github.com/aarzilli/nucular/types"
+	"github.com/aarzilli/nucular/rect"
+	nstyle "github.com/aarzilli/nucular/style"
 
 	"golang.org/x/mobile/event/key"
 )
@@ -567,7 +568,7 @@ func nameInitials(s string) string {
 const graphLineHeight = 20
 const graphThick = 2
 
-func shrinkRect(r ntypes.Rect, amount int) (res ntypes.Rect) {
+func shrinkRect(r rect.Rect, amount int) (res rect.Rect) {
 	res.X = r.X + amount
 	res.Y = r.Y + amount
 	res.W = r.W - 2*amount
@@ -575,7 +576,7 @@ func shrinkRect(r ntypes.Rect, amount int) (res ntypes.Rect) {
 	return res
 }
 
-func laneboundsOf(lnh int, bounds ntypes.Rect, lane int) (r ntypes.Rect) {
+func laneboundsOf(lnh int, bounds rect.Rect, lane int) (r rect.Rect) {
 	r.X = bounds.X + lnh*lane
 	r.W = lnh
 	r.Y = bounds.Y
@@ -878,7 +879,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 		rowwidth := w.LayoutAvailableWidth()
 
 		w.LayoutSetWidthScaled(lnh * lc.Occupied())
-		bounds, out := w.Custom(ntypes.WidgetStateInactive)
+		bounds, out := w.Custom(nstyle.WidgetStateInactive)
 
 		commitsz := calcCommitsz(bounds.W, includeAuthor, includeDate)
 

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/aarzilli/nucular"
-	ntypes "github.com/aarzilli/nucular/types"
+	"github.com/aarzilli/nucular/rect"
 
 	"golang.org/x/mobile/event/key"
 )
@@ -23,7 +23,7 @@ func newMessagePopup(mw *nucular.MasterWindow, title, message string) {
 	mp.Title = title
 	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse
 	mp.ed.Buffer = []rune(message)
-	mw.PopupOpen(mp.Title, popupFlags, ntypes.Rect{20, 100, 480, 500}, true, mp.Update)
+	mw.PopupOpen(mp.Title, popupFlags, rect.Rect{20, 100, 480, 500}, true, mp.Update)
 }
 
 func (mp *messagePopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
@@ -152,7 +152,7 @@ func okCancelButtons(w *nucular.Window, dokeys bool, oktext string, showcancel b
 
 func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []string, onSelect func(idx int)) {
 	idx := -1
-	mw.PopupOpen(title, popupFlags, ntypes.Rect{20, 100, 480, 400}, true, func(mw *nucular.MasterWindow, w *nucular.Window) {
+	mw.PopupOpen(title, popupFlags, rect.Rect{20, 100, 480, 400}, true, func(mw *nucular.MasterWindow, w *nucular.Window) {
 		w.Row(25).Dynamic(1)
 		w.Label(text, "LC")
 
@@ -177,7 +177,7 @@ func newNewBranchPopup(mw *nucular.MasterWindow, id string) {
 	np.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
 	np.ed.Active = true
 	np.ed.Maxlen = 128
-	mw.PopupOpen("New branch...", popupFlags, ntypes.Rect{20, 100, 480, 400}, true, np.Update)
+	mw.PopupOpen("New branch...", popupFlags, rect.Rect{20, 100, 480, 400}, true, np.Update)
 
 }
 
@@ -204,7 +204,7 @@ type resetPopup struct {
 
 func newResetPopup(mw *nucular.MasterWindow, id string, mode resetMode) {
 	rp := resetPopup{CommitId: id, ResetMode: mode}
-	mw.PopupOpen("Reset...", popupFlags, ntypes.Rect{20, 100, 480, 400}, true, rp.Update)
+	mw.PopupOpen("Reset...", popupFlags, rect.Rect{20, 100, 480, 400}, true, rp.Update)
 }
 
 func (rp *resetPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
@@ -279,7 +279,7 @@ func newDiffPopup(mw *nucular.MasterWindow, refs []Ref, bookmarks []LanedCommit,
 	for _, ref := range dp.Refs {
 		dp.names = append(dp.names, ref.Nice())
 	}
-	mw.PopupOpen("Diff...", popupFlags, ntypes.Rect{20, 100, 480, 400}, true, dp.Update)
+	mw.PopupOpen("Diff...", popupFlags, rect.Rect{20, 100, 480, 400}, true, dp.Update)
 }
 
 func (dp *diffPopup) idxToCommitOrRef(idx int) (name, id string) {
@@ -337,7 +337,7 @@ func newForcePushPopup(mw *nucular.MasterWindow, repository string, buffer []run
 	fp.Repository = repository
 	fp.ed.Buffer = buffer
 	fp.ed.Flags = nucular.EditMultiline | nucular.EditReadOnly
-	mw.PopupOpen("Push error", popupFlags, ntypes.Rect{20, 100, 480, 500}, true, fp.Update)
+	mw.PopupOpen("Push error", popupFlags, rect.Rect{20, 100, 480, 500}, true, fp.Update)
 }
 
 func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {

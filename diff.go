@@ -8,7 +8,7 @@ import (
 	"unicode"
 
 	"github.com/aarzilli/nucular"
-	ntypes "github.com/aarzilli/nucular/types"
+	nstyle "github.com/aarzilli/nucular/style"
 
 	"golang.org/x/image/font"
 	"golang.org/x/mobile/event/key"
@@ -569,7 +569,7 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 	rounding := uint16(4 * scaling)
 
 	lnh := nucular.FontHeight(style.Font)
-	d := font.Drawer{Face: style.Font.Face}
+	d := font.Drawer{Face: style.Font}
 
 	for _, filediff := range diff {
 		if w.TreePush(nucular.TreeTab, filediff.Filename, len(diff) == 1) {
@@ -589,7 +589,7 @@ func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int
 			w.Spacing(1)
 
 			for _, linediff := range filediff.Lines {
-				bounds, out := w.Custom(ntypes.WidgetStateInactive)
+				bounds, out := w.Custom(nstyle.WidgetStateInactive)
 				if out == nil {
 					continue
 				}

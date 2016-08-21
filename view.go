@@ -99,7 +99,7 @@ func (vw *ViewWindow) updateView(mw *nucular.MasterWindow, w *nucular.Window) {
 		w.Label("    "+vw.niceNameA, "LC")
 		w.Label("    "+vw.niceNameB, "LC")
 	} else {
-		showCommit(style.Font.Size, w, vw.lc)
+		showCommit(nucular.FontHeight(style.Font), w, vw.lc)
 		w.Label(" ", "LC")
 	}
 

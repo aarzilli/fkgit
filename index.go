@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/aarzilli/nucular"
-	ntypes "github.com/aarzilli/nucular/types"
+	"github.com/aarzilli/nucular/rect"
 
 	"golang.org/x/mobile/event/key"
 )
@@ -40,7 +40,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 	idxmw.mu.Lock()
 	defer idxmw.mu.Unlock()
 
-	var diffbounds ntypes.Rect
+	var diffbounds rect.Rect
 
 	if idxmw.updating {
 		w.Row(25).Dynamic(1)
@@ -53,7 +53,7 @@ func (idxmw *IndexManagerWindow) Update(mw *nucular.MasterWindow, w *nucular.Win
 	w.Row(0).Ratio(0.3, 0.7)
 
 	if sw := w.GroupBegin("index-files", nucular.WindowBorder); sw != nil {
-		cbw := min(int(25*scaling), style.Font.Size+style.Option.Padding.Y) + style.Option.Padding.X*2
+		cbw := min(int(25*scaling), nucular.FontHeight(style.Font)+style.Option.Padding.Y) + style.Option.Padding.X*2
 		sw.Row(25).StaticScaled(cbw, 0)
 
 		for i, line := range idxmw.status.Lines {

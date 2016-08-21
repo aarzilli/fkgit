@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/aarzilli/fkgit",
-	"GoVersion": "go1.6",
+	"GoVersion": "go1.7",
 	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
@@ -24,31 +24,31 @@
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular",
-			"Rev": "2d03982845edfb55fa74d49014268aeeabe2b09f"
+			"Rev": "bfad20c589e40e77f621467b726c54da6cd0ec04"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/clipboard",
-			"Rev": "2d03982845edfb55fa74d49014268aeeabe2b09f"
+			"Rev": "bfad20c589e40e77f621467b726c54da6cd0ec04"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/command",
-			"Rev": "2d03982845edfb55fa74d49014268aeeabe2b09f"
+			"Rev": "bfad20c589e40e77f621467b726c54da6cd0ec04"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/internal/assets",
-			"Rev": "2d03982845edfb55fa74d49014268aeeabe2b09f"
+			"Rev": "bfad20c589e40e77f621467b726c54da6cd0ec04"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/label",
-			"Rev": "2d03982845edfb55fa74d49014268aeeabe2b09f"
+			"Rev": "bfad20c589e40e77f621467b726c54da6cd0ec04"
+		},
+		{
+			"ImportPath": "github.com/aarzilli/nucular/rect",
+			"Rev": "bfad20c589e40e77f621467b726c54da6cd0ec04"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/style",
-			"Rev": "2d03982845edfb55fa74d49014268aeeabe2b09f"
-		},
-		{
-			"ImportPath": "github.com/aarzilli/nucular/types",
-			"Rev": "2d03982845edfb55fa74d49014268aeeabe2b09f"
+			"Rev": "bfad20c589e40e77f621467b726c54da6cd0ec04"
 		},
 		{
 			"ImportPath": "github.com/golang/freetype",
