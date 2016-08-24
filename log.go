@@ -1142,6 +1142,9 @@ func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 		if w.MenuItem(label.TA("Cherrypick", "LC")) {
 			cherrypickAction(lw, lc.Id)
 		}
+		if w.MenuItem(label.TA("Revert", "LC")) {
+			revertAction(lw, lc.Id)
+		}
 	}
 
 	if len(remoteRefs) > 0 {

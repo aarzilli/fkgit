@@ -29,6 +29,10 @@ func cherrypickAction(lw *LogWindow, commitId string) {
 	execBackground(false, lw, "git", "cherry-pick", commitId)
 }
 
+func revertAction(lw *LogWindow, commitId string) {
+	execBackground(false, lw, "git", "revert", commitId)
+}
+
 func pushAction(lw *LogWindow, force bool, repository string) {
 	if force {
 		execBackground(false, lw, "git", "push", "--force", repository)
