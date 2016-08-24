@@ -856,7 +856,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	emptyCommitRows := func(n int) {
 		if n > 0 {
-			w.Row(n*graphLineHeight+(n-1)*style.GroupWindow.Spacing.Y).Dynamic(1)
+			w.Row(n*graphLineHeight + (n-1)*style.GroupWindow.Spacing.Y).Dynamic(1)
 			// this will never be seen, I could use a Spacing but I want to be bugs noticeable
 			w.Label("More...", "LC")
 		}
@@ -1223,12 +1223,12 @@ func (lw *LogWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	h := w.LayoutAvailableHeight() - style.NormalWindow.Spacing.Y
 
-	w.RowScaled(int(float64(h)*0.7)).Dynamic(1)
+	w.RowScaled(int(float64(h) * 0.7)).Dynamic(1)
 	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder|nucular.WindowNoHScrollbar); sw != nil {
 		lw.UpdateGraph(mw, sw)
 		sw.GroupEnd()
 	}
-	w.RowScaled(int(float64(h)*0.3)).Dynamic(1)
+	w.RowScaled(int(float64(h) * 0.3)).Dynamic(1)
 	if sw := w.GroupBegin("log-group-bot", nucular.WindowBorder|nucular.WindowNoScrollbar); sw != nil {
 		lw.UpdateExtra(mw, sw)
 		sw.GroupEnd()

@@ -86,6 +86,10 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 	if wait {
 		done = make(chan struct{})
 	}
+
+	lw.edOutput.Buffer = lw.edOutput.Buffer[:0]
+	lw.showOutput = true
+
 	var returnerror error
 	go func() {
 		if wait {
@@ -101,7 +105,6 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 		err := cmd.Start()
 
 		if err == nil {
-			lw.showOutput = true
 			lw.mw.Changed()
 			var wg sync.WaitGroup
 			filereader := func(fh io.ReadCloser) {
@@ -129,7 +132,9 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 
 		if err != nil {
 			returnerror = err
-			newMessagePopup(lw.mw, "Error", fmt.Sprintf("Error: %v\n", err))
+			if !wait {
+				newMessagePopup(lw.mw, "Error", fmt.Sprintf("Error: %v\n", err))
+			}
 			return
 		}
 
