@@ -183,6 +183,7 @@ func newNewBranchPopup(mw *nucular.MasterWindow, id string) {
 
 func (np *newBranchPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	w.Row(25).Dynamic(1)
+	np.ed.Edit(w)
 	ok, _ := okCancelButtons(w, !np.ed.Active, "OK", true)
 	if ok {
 		newbranchAction(&lw, string(np.ed.Buffer), np.CommitId)
