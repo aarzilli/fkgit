@@ -24,46 +24,46 @@
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular",
-			"Rev": "0403ee04b9cc1d4d10b1de2bab0f6b0739aa306c"
+			"Rev": "108829449c4da6305115b3cb8bc46ab79e08be00"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/clipboard",
-			"Rev": "0403ee04b9cc1d4d10b1de2bab0f6b0739aa306c"
+			"Rev": "108829449c4da6305115b3cb8bc46ab79e08be00"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/command",
-			"Rev": "0403ee04b9cc1d4d10b1de2bab0f6b0739aa306c"
+			"Rev": "108829449c4da6305115b3cb8bc46ab79e08be00"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/internal/assets",
-			"Rev": "0403ee04b9cc1d4d10b1de2bab0f6b0739aa306c"
+			"Rev": "108829449c4da6305115b3cb8bc46ab79e08be00"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/label",
-			"Rev": "0403ee04b9cc1d4d10b1de2bab0f6b0739aa306c"
+			"Rev": "108829449c4da6305115b3cb8bc46ab79e08be00"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/rect",
-			"Rev": "0403ee04b9cc1d4d10b1de2bab0f6b0739aa306c"
+			"Rev": "108829449c4da6305115b3cb8bc46ab79e08be00"
 		},
 		{
 			"ImportPath": "github.com/aarzilli/nucular/style",
-			"Rev": "0403ee04b9cc1d4d10b1de2bab0f6b0739aa306c"
+			"Rev": "108829449c4da6305115b3cb8bc46ab79e08be00"
 		},
 		{
 			"ImportPath": "github.com/golang/freetype",
-			"Comment": "release-128-gf9531a3",
-			"Rev": "f9531a36062a85d4cef2daae173a3c9a35ae9f17"
+			"Comment": "release-131-g38b4c39",
+			"Rev": "38b4c392adc5eed94207994c4848fff99f4ac234"
 		},
 		{
 			"ImportPath": "github.com/golang/freetype/raster",
-			"Comment": "release-128-gf9531a3",
-			"Rev": "f9531a36062a85d4cef2daae173a3c9a35ae9f17"
+			"Comment": "release-131-g38b4c39",
+			"Rev": "38b4c392adc5eed94207994c4848fff99f4ac234"
 		},
 		{
 			"ImportPath": "github.com/golang/freetype/truetype",
-			"Comment": "release-128-gf9531a3",
-			"Rev": "f9531a36062a85d4cef2daae173a3c9a35ae9f17"
+			"Comment": "release-131-g38b4c39",
+			"Rev": "38b4c392adc5eed94207994c4848fff99f4ac234"
 		},
 		{
 			"ImportPath": "github.com/google/go-github/github",
@@ -74,52 +74,60 @@
 			"Rev": "9235644dd9e52eeae6fa48efd539fdc351a0af53"
 		},
 		{
+			"ImportPath": "github.com/hashicorp/golang-lru",
+			"Rev": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/golang-lru/simplelru",
+			"Rev": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
+		},
+		{
 			"ImportPath": "golang.org/x/exp/shiny/driver",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/gldriver",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/internal/drawer",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/internal/errscreen",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/internal/event",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/internal/lifecycler",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/internal/swizzle",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/internal/win32",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/internal/x11key",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/windriver",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/driver/x11driver",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/exp/shiny/screen",
-			"Rev": "6d0cd9fcdd20d0ab35a705e8d2f4fd4d76a0bc54"
+			"Rev": "325d5821a8d876702cbc82b93fec4ede356d498b"
 		},
 		{
 			"ImportPath": "golang.org/x/image/font",
