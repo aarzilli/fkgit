@@ -120,6 +120,7 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 					if n > 0 {
 						lw.mu.Lock()
 						lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(string(bsr[:n]))...)
+						lw.mw.Changed()
 						lw.mu.Unlock()
 					}
 					if err != nil {
