@@ -419,6 +419,7 @@ func main() {
 	lw.searchEd.Flags = nucular.EditSelectable | nucular.EditFocusFollowsMouse | nucular.EditSigEnter | nucular.EditClipboard
 	lw.searchMode = noSearch
 	lw.needsMore = -1
+	lw.split.Size = 250
 	lw.split.MinSize = 20
 	lw.split.Spacing = 5
 	lw.mw = wnd

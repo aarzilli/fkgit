@@ -445,7 +445,7 @@ func laneCommits(headcommit string, refs []Ref, commitchan <-chan Commit, out ch
 
 type LogWindow struct {
 	mu sync.Mutex
-	
+
 	split nucular.ScalableSplit
 
 	commits     []LanedCommit
@@ -764,7 +764,8 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 	lnh := int(graphLineHeight * scaling)
 	thick := int(graphThick * scaling)
 
-	for _, e := range w.KeyboardOnHover(w.Bounds).Keys {
+	kbd := w.KeyboardOnHover(w.Bounds)
+	for _, e := range kbd.Keys {
 		switch {
 		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
 			w.Scrollbar.Y = 0
@@ -782,6 +783,18 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 		if w.Scrollbar.Y < 0 {
 			w.Scrollbar.Y = 0
 		}
+	}
+	switch kbd.Text {
+	case "h":
+		for _, lc := range lw.commits {
+			if lc.IsHEAD {
+				lw.selectedId = lc.Id
+				moveToSelected = true
+				break
+			}
+		}
+	case " ":
+		moveToSelected = true
 	}
 
 	// number of commits needed before we can show up anything
@@ -1200,11 +1213,12 @@ func (lw *LogWindow) UpdateExtra(sw *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
-	sw.Row(25).Static(120, 120)
+	sw.Row(25).Static(120, 120, 0)
 	showDetails := !lw.showOutput
 	sw.SelectableLabel("Commit Details", "LC", &showDetails)
 	lw.showOutput = !showDetails
 	sw.SelectableLabel("Output", "LC", &lw.showOutput)
+	sw.Label("space: center on selection, h: center on HEAD", "RC")
 
 	sw.Row(0).Dynamic(1)
 	if lw.showOutput {
@@ -1218,11 +1232,11 @@ func (lw *LogWindow) Title() string {
 	return "Graph"
 }
 
-func (lw *LogWindow) Update(w *nucular.Window) {	
+func (lw *LogWindow) Update(w *nucular.Window) {
 	w.Row(0).SpaceBegin(0)
-	
+
 	b0, b1 := lw.split.Horizontal(w, rect.Rect{0, 0, w.LayoutAvailableWidth(), w.LayoutAvailableHeight()})
-	
+
 	w.LayoutSpacePushScaled(b0)
 	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder|nucular.WindowNoHScrollbar); sw != nil {
 		lw.UpdateGraph(sw)

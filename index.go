@@ -20,7 +20,7 @@ type IndexManagerWindow struct {
 	selected int
 	status   *GitStatus
 	diff     Diff
-	
+
 	splitv nucular.ScalableSplit
 	splith nucular.ScalableSplit
 
@@ -50,9 +50,9 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 		w.Label("Updating...", "LC")
 		return
 	}
-	
+
 	style, scaling := w.Master().Style()
-	
+
 	w.Row(0).SpaceBegin(0)
 	leftbounds, rightbounds := idxmw.splitv.Vertical(w, rect.Rect{0, 0, w.LayoutAvailableWidth(), w.LayoutAvailableHeight()})
 	viewbounds, commitbounds := idxmw.splith.Horizontal(w, rightbounds)
@@ -86,7 +86,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 		}
 		diffgroup.GroupEnd()
 	}
-	
+
 	w.LayoutSpacePushScaled(commitbounds)
 	if sw := w.GroupBegin("index-right-column", nucular.WindowNoScrollbar|nucular.WindowBorder); sw != nil {
 		sw.Row(25).Static(100, 100)
@@ -104,7 +104,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 			}
 			idxmw.loadCommitMsg()
 		}
-		
+
 		sw.LayoutReserveRow(25, 1)
 
 		sw.Row(0).Dynamic(1)
