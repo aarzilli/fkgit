@@ -156,8 +156,8 @@ func (pw *GithubPullWindow) Title() string {
 	return "Github pull requests"
 }
 
-func (gs *GithubStuff) update(issues bool, mw *nucular.MasterWindow, w *nucular.Window) {
-	style, scaling := mw.Style()
+func (gs *GithubStuff) update(issues bool, w *nucular.Window) {
+	style, scaling := w.Master().Style()
 	lnh := int(scaling * 20)
 
 	gs.mu.Lock()
@@ -224,12 +224,12 @@ func (gs *GithubStuff) update(issues bool, mw *nucular.MasterWindow, w *nucular.
 	}
 }
 
-func (pw *GithubPullWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	pw.gs.update(false, mw, w)
+func (pw *GithubPullWindow) Update(w *nucular.Window) {
+	pw.gs.update(false, w)
 }
 
-func (iw *GithubIssuesWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	iw.gs.update(true, mw, w)
+func (iw *GithubIssuesWindow) Update(w *nucular.Window) {
+	iw.gs.update(true, w)
 }
 
 type issueMenu struct {
@@ -238,7 +238,7 @@ type issueMenu struct {
 	is issue
 }
 
-func (im *issueMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (im *issueMenu) Update(w *nucular.Window) {
 	im.gs.selectedIssue = im.i
 	w.Row(20).Dynamic(1)
 	if w.MenuItem(label.TA("Open", "LC")) {
@@ -255,7 +255,7 @@ type pullMenu struct {
 	pr pull
 }
 
-func (pm *pullMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (pm *pullMenu) Update(w *nucular.Window) {
 	pm.gs.selectedPull = pm.i
 	w.Row(20).Dynamic(1)
 	if w.MenuItem(label.TA("Open", "LC")) {

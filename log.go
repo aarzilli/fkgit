@@ -437,11 +437,6 @@ func laneCommits(headcommit string, refs []Ref, commitchan <-chan Commit, out ch
 			lc.LanesAfter[i] = lanes[i] != ""
 		}
 
-		// 		lc.Print()
-		// 		for i := range lanes {
-		// 			fmt.Printf("[%s] ", abbrev(lanes[i]))
-		// 		}
-		// 		fmt.Printf("\n")
 		lc.ShiftLeftFrom = -1
 
 		out <- lc
@@ -450,6 +445,8 @@ func laneCommits(headcommit string, refs []Ref, commitchan <-chan Commit, out ch
 
 type LogWindow struct {
 	mu sync.Mutex
+	
+	split nucular.ScalableSplit
 
 	commits     []LanedCommit
 	maxOccupied int
@@ -637,7 +634,7 @@ var graphColor = color.RGBA{213, 204, 255, 0xff}
 var refsColor = color.RGBA{255, 182, 97, 0xff}
 var refsHeadColor = color.RGBA{233, 255, 97, 0xff}
 
-func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
+func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
@@ -665,7 +662,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	switch lw.searchMode {
 	case noSearch:
-		w.Menu(label.TA("Search", "RC"), 120, func(mw *nucular.MasterWindow, w *nucular.Window) {
+		w.Menu(label.TA("Search", "RC"), 120, func(w *nucular.Window) {
 			lw.mu.Lock()
 			defer lw.mu.Unlock()
 			w.Row(20).Dynamic(1)
@@ -756,7 +753,7 @@ func (lw *LogWindow) UpdateGraph(mw *nucular.MasterWindow, w *nucular.Window) {
 
 	w.MenubarEnd()
 
-	style, scaling := mw.Style()
+	style, scaling := w.Master().Style()
 
 	oldspacing := style.GroupWindow.Spacing.Y
 	style.GroupWindow.Spacing.Y = 0
@@ -1078,7 +1075,7 @@ type commitMenu struct {
 	lc LanedCommit
 }
 
-func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (cm *commitMenu) Update(w *nucular.Window) {
 	lw, lc := cm.lw, cm.lc
 	if lw.selectedId != lc.Id {
 		lw.selectCommit(&lc)
@@ -1199,7 +1196,7 @@ func (cm *commitMenu) Update(mw *nucular.MasterWindow, w *nucular.Window) {
 	}
 }
 
-func (lw *LogWindow) UpdateExtra(mw *nucular.MasterWindow, sw *nucular.Window) {
+func (lw *LogWindow) UpdateExtra(sw *nucular.Window) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
@@ -1221,19 +1218,19 @@ func (lw *LogWindow) Title() string {
 	return "Graph"
 }
 
-func (lw *LogWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
-	style, _ := mw.Style()
-
-	h := w.LayoutAvailableHeight() - style.NormalWindow.Spacing.Y
-
-	w.RowScaled(int(float64(h) * 0.7)).Dynamic(1)
+func (lw *LogWindow) Update(w *nucular.Window) {	
+	w.Row(0).SpaceBegin(0)
+	
+	b0, b1 := lw.split.Horizontal(w, rect.Rect{0, 0, w.LayoutAvailableWidth(), w.LayoutAvailableHeight()})
+	
+	w.LayoutSpacePushScaled(b0)
 	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder|nucular.WindowNoHScrollbar); sw != nil {
-		lw.UpdateGraph(mw, sw)
+		lw.UpdateGraph(sw)
 		sw.GroupEnd()
 	}
-	w.RowScaled(int(float64(h) * 0.3)).Dynamic(1)
+	w.LayoutSpacePushScaled(b1)
 	if sw := w.GroupBegin("log-group-bot", nucular.WindowBorder|nucular.WindowNoScrollbar); sw != nil {
-		lw.UpdateExtra(mw, sw)
+		lw.UpdateExtra(sw)
 		sw.GroupEnd()
 	}
 }

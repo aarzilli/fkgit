@@ -298,7 +298,7 @@ const (
 
 type Tab interface {
 	Title() string
-	Update(mw *nucular.MasterWindow, w *nucular.Window)
+	Update(w *nucular.Window)
 }
 
 var tabs []Tab
@@ -324,7 +324,8 @@ func closeTab(tab Tab) {
 	}
 }
 
-func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
+func guiUpdate(w *nucular.Window) {
+	mw := w.Master()
 	for _, e := range w.Input().Keyboard.Keys {
 		switch {
 		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Rune == '+') || (e.Rune == '='):
@@ -385,14 +386,14 @@ func guiUpdate(mw *nucular.MasterWindow, w *nucular.Window) {
 		closeTab(tabs[closetab])
 	}
 
-	tabs[currentTab].Update(mw, w)
+	tabs[currentTab].Update(w)
 }
 
 func fixStyle(style *nstyle.Style) {
 	style.Selectable.Normal.Data.Color = style.NormalWindow.Background
-	style.NormalWindow.Padding.Y = 0
-	style.GroupWindow.Padding.Y = 0
-	style.GroupWindow.FooterPadding.Y = 0
+	//style.NormalWindow.Padding.Y = 0
+	//style.GroupWindow.Padding.Y = 0
+	//style.GroupWindow.FooterPadding.Y = 0
 	style.MenuWindow.FooterPadding.Y = 0
 	style.ContextualWindow.FooterPadding.Y = 0
 }
@@ -418,12 +419,20 @@ func main() {
 	lw.searchEd.Flags = nucular.EditSelectable | nucular.EditFocusFollowsMouse | nucular.EditSigEnter | nucular.EditClipboard
 	lw.searchMode = noSearch
 	lw.needsMore = -1
+	lw.split.MinSize = 20
+	lw.split.Spacing = 5
 	lw.mw = wnd
 
 	openTab(&lw)
 
 	idxmw.repodir = repodir
 	idxmw.selected = -1
+	idxmw.splitv.MinSize = 100
+	idxmw.splitv.Size = 250
+	idxmw.splitv.Spacing = 5
+	idxmw.splith.MinSize = 100
+	idxmw.splith.Size = 300
+	idxmw.splith.Spacing = 5
 	idxmw.mw = wnd
 	idxmw.fmtwidth = 70
 	idxmw.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditClipboard

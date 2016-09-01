@@ -26,7 +26,7 @@ func newMessagePopup(mw *nucular.MasterWindow, title, message string) {
 	mw.PopupOpen(mp.Title, popupFlags, rect.Rect{20, 100, 480, 500}, true, mp.Update)
 }
 
-func (mp *messagePopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (mp *messagePopup) Update(w *nucular.Window) {
 	w.Row(200).Dynamic(1)
 	mp.ed.Edit(w)
 	okCancelButtons(w, true, "OK", false)
@@ -152,7 +152,7 @@ func okCancelButtons(w *nucular.Window, dokeys bool, oktext string, showcancel b
 
 func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []string, onSelect func(idx int)) {
 	idx := -1
-	mw.PopupOpen(title, popupFlags, rect.Rect{20, 100, 480, 400}, true, func(mw *nucular.MasterWindow, w *nucular.Window) {
+	mw.PopupOpen(title, popupFlags, rect.Rect{20, 100, 480, 400}, true, func(w *nucular.Window) {
 		w.Row(25).Dynamic(1)
 		w.Label(text, "LC")
 
@@ -181,7 +181,7 @@ func newNewBranchPopup(mw *nucular.MasterWindow, id string) {
 
 }
 
-func (np *newBranchPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (np *newBranchPopup) Update(w *nucular.Window) {
 	w.Row(25).Dynamic(1)
 	np.ed.Edit(w)
 	ok, _ := okCancelButtons(w, !np.ed.Active, "OK", true)
@@ -208,7 +208,7 @@ func newResetPopup(mw *nucular.MasterWindow, id string, mode resetMode) {
 	mw.PopupOpen("Reset...", popupFlags, rect.Rect{20, 100, 480, 400}, true, rp.Update)
 }
 
-func (rp *resetPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (rp *resetPopup) Update(w *nucular.Window) {
 	w.Row(25).Dynamic(1)
 	if w.OptionText("Hard: reset working tree and index", rp.ResetMode == resetHard) {
 		rp.ResetMode = resetHard
@@ -298,7 +298,7 @@ func (dp *diffPopup) idxToCommitOrRef(idx int) (name, id string) {
 	return dp.Refs[idx].Nice(), dp.Refs[idx].CommitId
 }
 
-func (dp *diffPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (dp *diffPopup) Update(w *nucular.Window) {
 	w.Row(150).Dynamic(2)
 	dp.Idx1 = selectFromList(w, "DiffA", dp.Idx1, dp.names)
 	dp.Idx2 = selectFromList(w, "DiffB", dp.Idx2, dp.names)
@@ -341,7 +341,7 @@ func newForcePushPopup(mw *nucular.MasterWindow, repository string, buffer []run
 	mw.PopupOpen("Push error", popupFlags, rect.Rect{20, 100, 480, 500}, true, fp.Update)
 }
 
-func (fp *ForcePushPopup) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (fp *ForcePushPopup) Update(w *nucular.Window) {
 	w.Row(200).Dynamic(1)
 	fp.ed.Edit(w)
 	ok, _ := okCancelButtons(w, false, fmt.Sprintf("Force Push %s", fp.Repository), true)

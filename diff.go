@@ -563,8 +563,8 @@ func wordSplit(in string) []string {
 	return r
 }
 
-func showDiff(mw *nucular.MasterWindow, w *nucular.Window, diff Diff, width *int) {
-	style, scaling := mw.Style()
+func showDiff(w *nucular.Window, diff Diff, width *int) {
+	style, scaling := w.Master().Style()
 
 	rounding := uint16(4 * scaling)
 

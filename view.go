@@ -82,16 +82,16 @@ func (vw *ViewWindow) Title() string {
 	return vw.lc.NiceWithAbbrev()
 }
 
-func (vw *ViewWindow) Update(mw *nucular.MasterWindow, w *nucular.Window) {
+func (vw *ViewWindow) Update(w *nucular.Window) {
 	w.Row(0).Dynamic(1)
 	if sw := w.GroupBegin("view-"+vw.lc.Id, 0); sw != nil {
-		vw.updateView(mw, sw)
+		vw.updateView(sw)
 		sw.GroupEnd()
 	}
 }
 
-func (vw *ViewWindow) updateView(mw *nucular.MasterWindow, w *nucular.Window) {
-	style, _ := mw.Style()
+func (vw *ViewWindow) updateView(w *nucular.Window) {
+	style, _ := w.Master().Style()
 
 	if vw.isdiff {
 		w.Row(20).Dynamic(1)
@@ -103,7 +103,7 @@ func (vw *ViewWindow) updateView(mw *nucular.MasterWindow, w *nucular.Window) {
 		w.Label(" ", "LC")
 	}
 
-	showDiff(mw, w, vw.diff, &vw.width)
+	showDiff(w, vw.diff, &vw.width)
 }
 
 func showCommit(lnh int, w *nucular.Window, lc LanedCommit) {
