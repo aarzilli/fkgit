@@ -428,8 +428,8 @@ func main() {
 
 	idxmw.repodir = repodir
 	idxmw.selected = -1
-	idxmw.splitv.MinSize = 100
-	idxmw.splitv.Size = 250
+	idxmw.splitv.MinSize = 80
+	idxmw.splitv.Size = 120
 	idxmw.splitv.Spacing = 5
 	idxmw.splith.MinSize = 100
 	idxmw.splith.Size = 300

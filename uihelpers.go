@@ -54,10 +54,15 @@ type selectFromListSearchState struct {
 
 var selectFromListSearch selectFromListSearchState
 
-func selectFromList(w *nucular.Window, name string, idx int, list []string) int {
+func selectFromList(w *nucular.Window, name string, idx int, list []string, keysonhover bool) int {
 	if sw := w.GroupBegin(name, nucular.WindowNoHScrollbar|nucular.WindowBorder); sw != nil {
 		moveselection := false
-		kbd := sw.KeyboardOnHover(sw.Bounds)
+		var kbd nucular.KeyboardInput
+		if keysonhover {
+			kbd = sw.KeyboardOnHover(sw.Bounds)
+		} else {
+			kbd = sw.Input().Keyboard
+		}
 		for _, k := range kbd.Keys {
 			switch {
 			case (k.Modifiers == 0) && (k.Code == key.CodeDownArrow):
@@ -158,7 +163,7 @@ func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []s
 
 		w.Row(150).Dynamic(1)
 
-		idx = selectFromList(w, title+"-listgroup", idx, list)
+		idx = selectFromList(w, title+"-listgroup", idx, list, false)
 
 		ok, _ := okCancelButtons(w, true, "OK", true)
 		if ok {
@@ -300,8 +305,8 @@ func (dp *diffPopup) idxToCommitOrRef(idx int) (name, id string) {
 
 func (dp *diffPopup) Update(w *nucular.Window) {
 	w.Row(150).Dynamic(2)
-	dp.Idx1 = selectFromList(w, "DiffA", dp.Idx1, dp.names)
-	dp.Idx2 = selectFromList(w, "DiffB", dp.Idx2, dp.names)
+	dp.Idx1 = selectFromList(w, "DiffA", dp.Idx1, dp.names, true)
+	dp.Idx2 = selectFromList(w, "DiffB", dp.Idx2, dp.names, true)
 
 	ok, _ := okCancelButtons(w, true, "OK", true)
 
