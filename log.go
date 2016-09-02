@@ -1142,7 +1142,7 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 		newNewBranchPopup(lw.mw, lc.Id)
 	}
 
-	if !lc.IsHEAD && lw.Headisref {
+	if lw.Headisref {
 		if w.MenuItem(label.TA(fmt.Sprintf("Reset %s here", lw.Head.Nice()), "LC")) {
 			newResetPopup(lw.mw, lc.Id, resetHard)
 		}
