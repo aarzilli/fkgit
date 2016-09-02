@@ -10,7 +10,7 @@ import (
 )
 
 func viewAction(lw *LogWindow, lc LanedCommit) {
-	NewViewWindow(lw.repodir, lc)
+	NewViewWindow(lw.repodir, lc, true)
 }
 
 func newbranchAction(lw *LogWindow, branchname, commitId string) {

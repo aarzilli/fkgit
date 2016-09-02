@@ -459,7 +459,8 @@ type LogWindow struct {
 	done      bool
 	started   bool
 
-	selectedId string
+	selectedId   string
+	selectedView *ViewWindow
 
 	repodir string
 	allrefs []Ref
@@ -472,8 +473,8 @@ type LogWindow struct {
 	searchIdx     int
 	searchResults []string
 
-	showOutput         bool
-	edCommit, edOutput nucular.TextEditor
+	showOutput bool
+	edOutput   nucular.TextEditor
 }
 
 type searchMode int
@@ -584,50 +585,11 @@ func laneboundsOf(lnh int, bounds rect.Rect, lane int) (r rect.Rect) {
 func (lw *LogWindow) selectCommit(lc *LanedCommit) {
 	if lc == nil {
 		lw.selectedId = ""
-		lw.edCommit.Buffer = []rune{}
-		lw.edCommit.Cursor = 0
 		return
 	}
 	lw.selectedId = lc.Id
 	lw.showOutput = false
-	var buf bytes.Buffer
-
-	fmt.Fprintf(&buf, "commit %s ", abbrev(lc.Id))
-	if len(lc.Parent) > 0 {
-		if len(lc.Parent) == 1 {
-			fmt.Fprintf(&buf, "parent ")
-		} else {
-			fmt.Fprintf(&buf, "parents ")
-		}
-		// TODO: make these clickable
-		for i := range lc.Parent {
-			if i == 0 {
-				fmt.Fprintf(&buf, "%s", abbrev(lc.Parent[i]))
-			} else {
-				fmt.Fprintf(&buf, ", %s", abbrev(lc.Parent[i]))
-			}
-		}
-		buf.Write([]byte{'\n'})
-	}
-
-	ad := lc.AuthorDate.Local().Format("2006-01-02 15:04")
-	cd := lc.CommitterDate.Local().Format("2006-01-02 15:04")
-
-	if lc.Author != lc.Committer {
-		fmt.Fprintf(&buf, "author %s on %s\n", lc.Author, ad)
-		fmt.Fprintf(&buf, "committer %s on %s\n", lc.Committer, cd)
-	} else {
-		if ad != cd {
-			fmt.Fprintf(&buf, "author %s on %s (committed %s)\n", lc.Author, ad, cd)
-		} else {
-			fmt.Fprintf(&buf, "author %s on %s\n", lc.Author, ad)
-		}
-	}
-	buf.WriteByte('\n')
-	buf.Write([]byte(lc.Message))
-
-	lw.edCommit.Buffer = []rune(buf.String())
-	lw.edCommit.Cursor = 0
+	lw.selectedView = NewViewWindow(lw.repodir, *lc, false)
 }
 
 var graphColor = color.RGBA{213, 204, 255, 0xff}
@@ -1220,11 +1182,13 @@ func (lw *LogWindow) UpdateExtra(sw *nucular.Window) {
 	sw.SelectableLabel("Output", "LC", &lw.showOutput)
 	sw.Label("space: center on selection, h: center on HEAD", "RC")
 
-	sw.Row(0).Dynamic(1)
 	if lw.showOutput {
+		sw.Row(0).Dynamic(1)
 		lw.edOutput.Edit(sw)
 	} else {
-		lw.edCommit.Edit(sw)
+		if lw.selectedView != nil {
+			lw.selectedView.Update(sw)
+		}
 	}
 }
 

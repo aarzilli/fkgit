@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/aarzilli/nucular"
+	"github.com/aarzilli/nucular/clipboard"
 )
 
 type ViewWindow struct {
@@ -21,7 +22,7 @@ type ViewWindow struct {
 	width   int
 }
 
-func NewViewWindow(repodir string, lc LanedCommit) {
+func NewViewWindow(repodir string, lc LanedCommit, opentab bool) *ViewWindow {
 	vw := &ViewWindow{}
 
 	vw.repodir = repodir
@@ -29,7 +30,11 @@ func NewViewWindow(repodir string, lc LanedCommit) {
 
 	vw.parseDiff()
 
-	openTab(vw)
+	if opentab {
+		openTab(vw)
+	}
+
+	return vw
 }
 
 func NewDiffWindow(repodir string, niceNameA, commitA, niceNameB, commitB string) {
@@ -107,11 +112,20 @@ func (vw *ViewWindow) updateView(w *nucular.Window) {
 }
 
 func showCommit(lnh int, w *nucular.Window, lc LanedCommit) {
-	w.RowScaled(lnh).Dynamic(1)
+	style, scaling := w.Master().Style()
+	zeroWidth := nucular.FontWidth(style.Font, "0")
+	w.Row(20).StaticScaled(zeroWidth*48+style.Text.Padding.X*2, int(80*scaling))
 	w.Label(fmt.Sprintf("commit %s\n", lc.Id), "LC")
+	if w.ButtonText("Copy") {
+		clipboard.Set(lc.Id)
+	}
 	for i := range lc.Parent {
 		w.Label(fmt.Sprintf("parent %s\n", lc.Parent[i]), "LC")
+		if w.ButtonText("Copy") {
+			clipboard.Set(lc.Parent[i])
+		}
 	}
+	w.RowScaled(lnh).Dynamic(1)
 	w.Label(fmt.Sprintf("author %s on %s\n", lc.Author, lc.AuthorDate.Local().Format("2006-01-02 15:04")), "LC")
 	w.Label(fmt.Sprintf("committer %s on %s\n", lc.Committer, lc.CommitterDate.Local().Format("2006-01-02 15:04")), "LC")
 	w.Spacing(1)
