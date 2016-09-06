@@ -937,7 +937,7 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 		// draws graph proper
 
 		lanebounds := laneboundsOf(lnh, bounds, lc.Lane)
-		circle := shrinkRect(lanebounds, lnh/4)
+		circle := shrinkRect(lanebounds, int(float64(lnh) * 0.28))
 
 		out.FillCircle(circle, graphColor)
 
