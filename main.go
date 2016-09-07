@@ -328,14 +328,14 @@ func guiUpdate(w *nucular.Window) {
 	mw := w.Master()
 	for _, e := range w.Input().Keyboard.Keys {
 		switch {
-		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Rune == '+') || (e.Rune == '='):
+		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Code == key.CodeEqualSign):
 			conf.Scaling += 0.1
 			mw.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 			style, _ := mw.Style()
 			fixStyle(style)
 			saveConfiguration()
 
-		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Rune == '-'):
+		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Code == key.CodeHyphenMinus):
 			conf.Scaling -= 0.1
 			mw.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
 			style, _ := mw.Style()
