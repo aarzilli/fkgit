@@ -53,8 +53,8 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 
 	style, scaling := w.Master().Style()
 
-	w.Row(0).SpaceBegin(0)
-	leftbounds, rightbounds := idxmw.splitv.Vertical(w, rect.Rect{0, 0, w.LayoutAvailableWidth(), w.LayoutAvailableHeight()})
+	area := w.Row(0).SpaceBegin(0)
+	leftbounds, rightbounds := idxmw.splitv.Vertical(w, area)
 	viewbounds, commitbounds := idxmw.splith.Horizontal(w, rightbounds)
 
 	w.LayoutSpacePushScaled(leftbounds)

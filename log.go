@@ -1197,9 +1197,8 @@ func (lw *LogWindow) Title() string {
 }
 
 func (lw *LogWindow) Update(w *nucular.Window) {
-	w.Row(0).SpaceBegin(0)
-
-	b0, b1 := lw.split.Horizontal(w, rect.Rect{0, 0, w.LayoutAvailableWidth(), w.LayoutAvailableHeight()})
+	area := w.Row(0).SpaceBegin(0)
+	b0, b1 := lw.split.Horizontal(w, area)
 
 	w.LayoutSpacePushScaled(b0)
 	if sw := w.GroupBegin("log-group-top", nucular.WindowBorder|nucular.WindowNoHScrollbar); sw != nil {
