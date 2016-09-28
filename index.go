@@ -160,7 +160,11 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 			case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
 				idxmw.selected++
 				if idxmw.selected >= len(idxmw.status.Lines) {
-					idxmw.selected = 0
+					if len(idxmw.status.Lines) == 0 {
+						idxmw.selected = -1
+					} else {
+						idxmw.selected = 0
+					}
 				}
 				idxmw.loadDiff()
 			}
