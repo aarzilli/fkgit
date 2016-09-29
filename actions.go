@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 )
 
@@ -92,6 +93,7 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 	}
 
 	lw.edOutput.Buffer = lw.edOutput.Buffer[:0]
+	lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(fmt.Sprintf("$ %s %s", cmdname, strings.Join(args, " ")))...)
 	lw.showOutput = true
 
 	var returnerror error
