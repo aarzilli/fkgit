@@ -314,4 +314,6 @@ func (idxmw *IndexManagerWindow) formatmsg() {
 	idxmw.ed.Buffer = idxmw.ed.Buffer[:fmtstart]
 	idxmw.ed.Buffer = append(idxmw.ed.Buffer, out...)
 	idxmw.ed.Buffer = append(idxmw.ed.Buffer, end...)
+	idxmw.ed.CursorFollow = true
+	go idxmw.mw.Changed()
 }
