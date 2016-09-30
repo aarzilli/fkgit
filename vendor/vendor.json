@@ -19,18 +19,20 @@
 			"revision": "e13605d223ac0bca1fc3948d9782db9545c331e8"
 		},
 		{
-			"checksumSHA1": "NrKIOg8+sTXa3H9c/4P+5ZMB/6s=",
+			"checksumSHA1": "5NDXJtx8A4vOuulCx7XlD0/gKUk=",
 			"path": "github.com/aarzilli/nucular",
-			"revision": "dedc92cda3cb9dbc69b7b46e51df2da495c7d758",
-			"revisionTime": "2016-09-29T16:41:45Z"
+			"revision": "f96f22b33f4e16a86e27f920943b881cac5510f0",
+			"revisionTime": "2016-09-30T12:19:51Z"
 		},
 		{
 			"path": "github.com/aarzilli/nucular/clipboard",
 			"revision": "daec26f471a36bc60cd26016b5dd02de1c530233"
 		},
 		{
+			"checksumSHA1": "Ap5VBJOhmg06hl9vH4X9bMQw5QU=",
 			"path": "github.com/aarzilli/nucular/command",
-			"revision": "daec26f471a36bc60cd26016b5dd02de1c530233"
+			"revision": "f96f22b33f4e16a86e27f920943b881cac5510f0",
+			"revisionTime": "2016-09-30T12:19:51Z"
 		},
 		{
 			"path": "github.com/aarzilli/nucular/internal/assets",
