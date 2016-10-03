@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -349,7 +348,7 @@ func newForcePushPopup(mw *nucular.MasterWindow, repository string, buffer []run
 func (fp *ForcePushPopup) Update(w *nucular.Window) {
 	w.Row(200).Dynamic(1)
 	fp.ed.Edit(w)
-	ok, _ := okCancelButtons(w, false, fmt.Sprintf("Force Push %s", fp.Repository), true)
+	ok, _ := okCancelButtons(w, false, "Force Push", true)
 	if ok {
 		pushAction(&lw, true, fp.Repository)
 	}
