@@ -16,10 +16,11 @@ import (
 )
 
 type IndexManagerWindow struct {
-	repodir  string
-	selected int
-	status   *GitStatus
-	diff     Diff
+	repodir             string
+	selected            int
+	status              *GitStatus
+	diff                Diff
+	resetDiffViewScroll bool
 
 	splitv nucular.ScalableSplit
 	splith nucular.ScalableSplit
@@ -81,6 +82,11 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 
 	w.LayoutSpacePushScaled(viewbounds)
 	if diffgroup := w.GroupBegin("index-diff", nucular.WindowBorder); diffgroup != nil {
+		if idxmw.resetDiffViewScroll {
+			idxmw.resetDiffViewScroll = false
+			diffgroup.Scrollbar.X = 0
+			diffgroup.Scrollbar.Y = 0
+		}
 		if idxmw.selected >= 0 {
 			showDiff(diffgroup, idxmw.diff, &idxmw.diffwidth)
 		}
@@ -241,6 +247,7 @@ func (idxmw *IndexManagerWindow) loadDiff() {
 		bs, err = execCommand(idxmw.repodir, "git", "diff", "--color=never", "--", line.Path)
 	}
 	must(err)
+	idxmw.resetDiffViewScroll = true
 	idxmw.diff = parseDiff([]byte(bs))
 }
 
