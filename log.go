@@ -926,7 +926,7 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 
 		rowbounds := bounds
 		rowbounds.W = rowwidth
-		cm := &commitMenu{lw, lc}
+		cm := &commitMenu{lw, lc, w}
 		w.ContextualOpen(0, image.Point{200, 500}, rowbounds, cm.Update)
 
 		if out == nil {
@@ -1046,8 +1046,9 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 }
 
 type commitMenu struct {
-	lw *LogWindow
-	lc LanedCommit
+	lw    *LogWindow
+	lc    LanedCommit
+	mainw *nucular.Window
 }
 
 func (cm *commitMenu) Update(w *nucular.Window) {
@@ -1096,7 +1097,7 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 		case 1:
 			checkoutAction(lw, &localRefs[0], "")
 		default:
-			newCheckoutPopup(lw.mw, localRefs)
+			newCheckoutPopup(cm.mainw, localRefs)
 		}
 	}
 
@@ -1106,7 +1107,7 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 
 	if lw.Headisref {
 		if w.MenuItem(label.TA(fmt.Sprintf("Reset %s here", lw.Head.Nice()), "LC")) {
-			newResetPopup(lw.mw, lc.Id, resetHard)
+			newResetPopup(cm.mainw, lc.Id, resetHard)
 		}
 	}
 
@@ -1124,7 +1125,7 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 			if len(remotes) == 1 {
 				remoteAction(lw, "fetch", remotes[0])
 			} else {
-				newRemotesPopup(lw.mw, "fetch", remotes)
+				newRemotesPopup(cm.mainw, "fetch", remotes)
 			}
 		}
 	}
@@ -1134,7 +1135,7 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 			if len(remotes) == 1 {
 				remoteAction(lw, "pull", remotes[0])
 			} else {
-				newRemotesPopup(lw.mw, "pull", remotes)
+				newRemotesPopup(cm.mainw, "pull", remotes)
 			}
 		}
 	}
@@ -1144,7 +1145,7 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 			if len(remotes) == 1 {
 				pushAction(lw, false, remotes[0])
 			} else {
-				newRemotesPopup(lw.mw, "push", remotes)
+				newRemotesPopup(cm.mainw, "push", remotes)
 			}
 		}
 	}
@@ -1152,7 +1153,7 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 	if lw.Headisref {
 		if w.MenuItem(label.TA("Merge", "LC")) {
 			//TODO: show this commit as the default merge destination
-			newMergePopup(lw.mw, lw.allrefs)
+			newMergePopup(cm.mainw, lw.allrefs)
 		}
 	}
 

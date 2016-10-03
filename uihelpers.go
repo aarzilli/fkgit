@@ -1,10 +1,12 @@
 package main
 
 import (
+	"image"
 	"strings"
 	"time"
 
 	"github.com/aarzilli/nucular"
+	"github.com/aarzilli/nucular/label"
 	"github.com/aarzilli/nucular/rect"
 
 	"golang.org/x/mobile/event/key"
@@ -154,21 +156,36 @@ func okCancelButtons(w *nucular.Window, dokeys bool, oktext string, showcancel b
 	return
 }
 
-func selectFromListWindow(mw *nucular.MasterWindow, title, text string, list []string, onSelect func(idx int)) {
-	idx := -1
-	mw.PopupOpen(title, popupFlags, rect.Rect{20, 100, 480, 400}, true, func(w *nucular.Window) {
-		w.Row(25).Dynamic(1)
-		w.Label(text, "LC")
+func selectFromListWindow(w *nucular.Window, title, text string, list []string, onSelect func(idx int)) {
+	const (
+		H = 480
+		W = 400
+	)
+	if len(list) < 10 {
+		w.ContextualOpen(0, image.Point{H, W}, rect.Rect{0, 0, 0, 0}, func(w *nucular.Window) {
+			w.Row(25).Dynamic(1)
+			for i := range list {
+				if w.MenuItem(label.TA(list[i], "LC")) {
+					onSelect(i)
+				}
+			}
+		})
+	} else {
+		idx := -1
+		w.Master().PopupOpen(title, popupFlags, rect.Rect{20, 100, H, W}, true, func(w *nucular.Window) {
+			w.Row(25).Dynamic(1)
+			w.Label(text, "LC")
 
-		w.Row(150).Dynamic(1)
+			w.Row(150).Dynamic(1)
 
-		idx = selectFromList(w, title+"-listgroup", idx, list, false)
+			idx = selectFromList(w, title+"-listgroup", idx, list, false)
 
-		ok, _ := okCancelButtons(w, true, "OK", true)
-		if ok {
-			onSelect(idx)
-		}
-	})
+			ok, _ := okCancelButtons(w, true, "OK", true)
+			if ok {
+				onSelect(idx)
+			}
+		})
+	}
 }
 
 type newBranchPopup struct {
@@ -203,33 +220,28 @@ const (
 )
 
 type resetPopup struct {
-	CommitId  string
-	ResetMode resetMode
+	CommitId string
 }
 
-func newResetPopup(mw *nucular.MasterWindow, id string, mode resetMode) {
-	rp := resetPopup{CommitId: id, ResetMode: mode}
-	mw.PopupOpen("Reset...", popupFlags, rect.Rect{20, 100, 480, 400}, true, rp.Update)
+func newResetPopup(w *nucular.Window, id string, mode resetMode) {
+	rp := resetPopup{CommitId: id}
+	w.ContextualOpen(0, image.Point{480, 400}, rect.Rect{0, 0, 0, 0}, rp.Update)
 }
 
 func (rp *resetPopup) Update(w *nucular.Window) {
 	w.Row(25).Dynamic(1)
-	if w.OptionText("Hard: reset working tree and index", rp.ResetMode == resetHard) {
-		rp.ResetMode = resetHard
+	if w.MenuItem(label.TA("Hard: reset working tree and index", "LC")) {
+		resetAction(&lw, rp.CommitId, resetHard)
 	}
-	if w.OptionText("Mixed: leave working tree untouched, reset index", rp.ResetMode == resetMixed) {
-		rp.ResetMode = resetMixed
+	if w.MenuItem(label.TA("Mixed: leave working tree untouched, reset index", "LC")) {
+		resetAction(&lw, rp.CommitId, resetMixed)
 	}
-	if w.OptionText("Soft: leave working tree and index untouched", rp.ResetMode == resetSoft) {
-		rp.ResetMode = resetSoft
-	}
-	ok, _ := okCancelButtons(w, true, "OK", true)
-	if ok {
-		resetAction(&lw, rp.CommitId, rp.ResetMode)
+	if w.MenuItem(label.TA("Soft: leave working tree and index untouched", "LC")) {
+		resetAction(&lw, rp.CommitId, resetSoft)
 	}
 }
 
-func newRemotesPopup(mw *nucular.MasterWindow, action string, remotes []string) {
+func newRemotesPopup(w *nucular.Window, action string, remotes []string) {
 	var title, text string
 
 	switch action {
@@ -244,20 +256,20 @@ func newRemotesPopup(mw *nucular.MasterWindow, action string, remotes []string) 
 		text = "Pick a repository to push to:"
 	}
 
-	selectFromListWindow(mw, title, text, remotes, func(idx int) {
+	selectFromListWindow(w, title, text, remotes, func(idx int) {
 		if idx >= 0 {
 			remoteAction(&lw, action, remotes[idx])
 		}
 	})
 }
 
-func newMergePopup(mw *nucular.MasterWindow, allrefs []Ref) {
+func newMergePopup(w *nucular.Window, allrefs []Ref) {
 	refnames := make([]string, len(allrefs))
 	for i := range allrefs {
 		refnames[i] = allrefs[i].Nice()
 	}
 
-	selectFromListWindow(mw, "Merge...", "Select a branch to merge:", refnames, func(idx int) {
+	selectFromListWindow(w, "Merge...", "Select a branch to merge:", refnames, func(idx int) {
 		if idx >= 0 {
 			mergeAction(&lw, &allrefs[idx])
 		}
@@ -320,12 +332,12 @@ func (dp *diffPopup) Update(w *nucular.Window) {
 	}
 }
 
-func newCheckoutPopup(mw *nucular.MasterWindow, localRefs []Ref) {
+func newCheckoutPopup(w *nucular.Window, localRefs []Ref) {
 	localRefsNames := make([]string, len(localRefs))
 	for i := range localRefs {
 		localRefsNames[i] = localRefs[i].Nice()
 	}
-	selectFromListWindow(mw, "Checkout...", "Pick a branch to checkout:", localRefsNames, func(idx int) {
+	selectFromListWindow(w, "Checkout...", "Pick a branch to checkout:", localRefsNames, func(idx int) {
 		if idx >= 0 {
 			checkoutAction(&lw, &localRefs[idx], "")
 		}
