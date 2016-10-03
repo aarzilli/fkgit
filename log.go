@@ -21,6 +21,7 @@ import (
 	nstyle "github.com/aarzilli/nucular/style"
 
 	"golang.org/x/mobile/event/key"
+	"golang.org/x/mobile/event/mouse"
 )
 
 const LookaheadSize = 128
@@ -926,8 +927,10 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 
 		rowbounds := bounds
 		rowbounds.W = rowwidth
-		cm := &commitMenu{lw, lc, w}
-		w.ContextualOpen(0, image.Point{200, 500}, rowbounds, cm.Update)
+		if w.Input().Mouse.Clicked(mouse.ButtonRight, rowbounds) {
+			cm := NewCommitMenu(lw, lc, w)
+			w.ContextualOpen(0, image.Point{200, 500}, rowbounds, cm.Update)
+		}
 
 		if out == nil {
 			copy(prevLanes[:], lc.LanesAfter[:])
@@ -1049,13 +1052,13 @@ type commitMenu struct {
 	lw    *LogWindow
 	lc    LanedCommit
 	mainw *nucular.Window
+
+	localRefs, remoteRefs []Ref
+	remotes               []string
+	requiresForcePush     []bool
 }
 
-func (cm *commitMenu) Update(w *nucular.Window) {
-	lw, lc := cm.lw, cm.lc
-	if lw.selectedId != lc.Id {
-		lw.selectCommit(&lc)
-	}
+func NewCommitMenu(lw *LogWindow, lc LanedCommit, mainw *nucular.Window) *commitMenu {
 	localRefs := []Ref{}
 	remoteRefs := []Ref{}
 	for _, ref := range lc.Refs {
@@ -1079,6 +1082,60 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 		remotes = append(remotes, remote)
 	}
 
+	requiresForcePush := make([]bool, len(remotes))
+
+	if lc.IsHEAD {
+		var headref *Ref
+
+		for i := range lc.Refs {
+			ref := &lc.Refs[i]
+			if ref.IsHEAD && ref.Kind == LocalRef {
+				headref = ref
+			}
+		}
+
+		if headref != nil {
+			reqmap := map[string]bool{}
+
+			for _, ref := range lw.allrefs {
+				if ref.Kind != RemoteRef || ref.IsHEAD {
+					continue
+				}
+				remote := ref.Remote()
+				name := ref.RemoteName()
+				if name != headref.nice {
+					continue
+				}
+
+				base, err := execCommand(lw.repodir, "git", "merge-base", headref.nice, ref.Nice())
+				if err != nil {
+					continue
+				}
+
+				base = strings.TrimSpace(base)
+
+				if base != ref.CommitId {
+					reqmap[remote] = true
+				}
+			}
+
+			for i := range remotes {
+				if _, ok := reqmap[remotes[i]]; ok {
+					requiresForcePush[i] = true
+				}
+			}
+		}
+	}
+
+	return &commitMenu{lw: lw, lc: lc, mainw: mainw, localRefs: localRefs, remoteRefs: remoteRefs, remotes: remotes, requiresForcePush: requiresForcePush}
+}
+
+func (cm *commitMenu) Update(w *nucular.Window) {
+	lw, lc := cm.lw, cm.lc
+	if lw.selectedId != lc.Id {
+		lw.selectCommit(&lc)
+	}
+
 	w.Row(20).Dynamic(1)
 	if _, bookmarked := bookmarks[lc.Id]; !bookmarked {
 		if w.MenuItem(label.TA("Bookmark", "LC")) {
@@ -1091,13 +1148,13 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 	}
 
 	if w.MenuItem(label.TA("Checkout", "LC")) {
-		switch len(localRefs) {
+		switch len(cm.localRefs) {
 		case 0:
 			checkoutAction(lw, nil, lc.Id)
 		case 1:
-			checkoutAction(lw, &localRefs[0], "")
+			checkoutAction(lw, &cm.localRefs[0], "")
 		default:
-			newCheckoutPopup(cm.mainw, localRefs)
+			newCheckoutPopup(cm.mainw, cm.localRefs)
 		}
 	}
 
@@ -1120,32 +1177,40 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 		}
 	}
 
-	if len(remoteRefs) > 0 {
+	if len(cm.remoteRefs) > 0 {
 		if w.MenuItem(label.TA("Fetch", "LC")) {
-			if len(remotes) == 1 {
-				remoteAction(lw, "fetch", remotes[0])
+			if len(cm.remotes) == 1 {
+				remoteAction(lw, "fetch", cm.remotes[0])
 			} else {
-				newRemotesPopup(cm.mainw, "fetch", remotes)
+				newRemotesPopup(cm.mainw, "fetch", cm.remotes)
 			}
 		}
 	}
 
-	if lc.IsHEAD && lw.Headisref && len(remoteRefs) > 0 {
+	if lc.IsHEAD && lw.Headisref && len(cm.remoteRefs) > 0 {
 		if w.MenuItem(label.TA("Pull", "LC")) {
-			if len(remotes) == 1 {
-				remoteAction(lw, "pull", remotes[0])
+			if len(cm.remotes) == 1 {
+				remoteAction(lw, "pull", cm.remotes[0])
 			} else {
-				newRemotesPopup(cm.mainw, "pull", remotes)
+				newRemotesPopup(cm.mainw, "pull", cm.remotes)
 			}
 		}
 	}
 
-	if lc.IsHEAD && lw.Headisref && len(remotes) > 0 {
-		if w.MenuItem(label.TA("Push", "LC")) {
-			if len(remotes) == 1 {
-				pushAction(lw, false, remotes[0])
+	if lc.IsHEAD && lw.Headisref && len(cm.remotes) > 0 {
+		if len(cm.remotes) == 1 {
+			if cm.requiresForcePush[0] {
+				if w.MenuItem(label.TA("Force Push", "LC")) {
+					pushAction(lw, true, cm.remotes[0])
+				}
 			} else {
-				newRemotesPopup(cm.mainw, "push", remotes)
+				if w.MenuItem(label.TA("Push", "LC")) {
+					pushAction(lw, false, cm.remotes[0])
+				}
+			}
+		} else {
+			if w.MenuItem(label.TA("Push...", "LC")) {
+				newPushPopup(cm.mainw, cm.remotes, cm.requiresForcePush)
 			}
 		}
 	}
@@ -1159,8 +1224,8 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 
 	if lw.Headisref {
 		if w.MenuItem(label.TA(fmt.Sprintf("Rebase %s here", lw.Head.Nice()), "LC")) {
-			if len(localRefs) > 0 {
-				rebaseAction(lw, localRefs[0].Nice())
+			if len(cm.localRefs) > 0 {
+				rebaseAction(lw, cm.localRefs[0].Nice())
 			} else {
 				rebaseAction(lw, lc.Id)
 			}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"strings"
 	"time"
@@ -259,6 +260,24 @@ func newRemotesPopup(w *nucular.Window, action string, remotes []string) {
 	selectFromListWindow(w, title, text, remotes, func(idx int) {
 		if idx >= 0 {
 			remoteAction(&lw, action, remotes[idx])
+		}
+	})
+}
+
+func newPushPopup(w *nucular.Window, remotes []string, requiresForcePush []bool) {
+	list := make([]string, len(remotes))
+
+	for i := range remotes {
+		if requiresForcePush[i] {
+			list[i] = fmt.Sprintf("%s (force)", remotes[i])
+		} else {
+			list[i] = remotes[i]
+		}
+	}
+
+	selectFromListWindow(w, "Push...", "Pick a repository to push to:", list, func(idx int) {
+		if idx >= 0 {
+			pushAction(&lw, requiresForcePush[idx], remotes[idx])
 		}
 	})
 }

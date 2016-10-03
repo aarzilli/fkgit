@@ -19,38 +19,46 @@
 			"revision": "e13605d223ac0bca1fc3948d9782db9545c331e8"
 		},
 		{
-			"checksumSHA1": "5NDXJtx8A4vOuulCx7XlD0/gKUk=",
+			"checksumSHA1": "U0iAI+ZRrcfH4KlbBHuuK4MIHJM=",
 			"path": "github.com/aarzilli/nucular",
-			"revision": "f96f22b33f4e16a86e27f920943b881cac5510f0",
-			"revisionTime": "2016-09-30T12:19:51Z"
+			"revision": "cd148b9b0389c35ab1b82e78a0fba9c388199960",
+			"revisionTime": "2016-10-03T07:57:14Z"
 		},
 		{
+			"checksumSHA1": "zF1XMVtzm4anTw0i8NFZM5YE5UI=",
 			"path": "github.com/aarzilli/nucular/clipboard",
-			"revision": "daec26f471a36bc60cd26016b5dd02de1c530233"
+			"revision": "cd148b9b0389c35ab1b82e78a0fba9c388199960",
+			"revisionTime": "2016-10-03T07:57:14Z"
 		},
 		{
 			"checksumSHA1": "Ap5VBJOhmg06hl9vH4X9bMQw5QU=",
 			"path": "github.com/aarzilli/nucular/command",
-			"revision": "f96f22b33f4e16a86e27f920943b881cac5510f0",
-			"revisionTime": "2016-09-30T12:19:51Z"
+			"revision": "cd148b9b0389c35ab1b82e78a0fba9c388199960",
+			"revisionTime": "2016-10-03T07:57:14Z"
 		},
 		{
+			"checksumSHA1": "47lBVDBqAFbchBI+NCLCgVOvyEs=",
 			"path": "github.com/aarzilli/nucular/internal/assets",
-			"revision": "daec26f471a36bc60cd26016b5dd02de1c530233"
+			"revision": "cd148b9b0389c35ab1b82e78a0fba9c388199960",
+			"revisionTime": "2016-10-03T07:57:14Z"
 		},
 		{
+			"checksumSHA1": "svGZnpPShuy1pTCje04fmt6/Qf8=",
 			"path": "github.com/aarzilli/nucular/label",
-			"revision": "daec26f471a36bc60cd26016b5dd02de1c530233"
+			"revision": "cd148b9b0389c35ab1b82e78a0fba9c388199960",
+			"revisionTime": "2016-10-03T07:57:14Z"
 		},
 		{
+			"checksumSHA1": "mFSGcXcbDshN9tYLLSqRM6QHlzY=",
 			"path": "github.com/aarzilli/nucular/rect",
-			"revision": "daec26f471a36bc60cd26016b5dd02de1c530233"
+			"revision": "cd148b9b0389c35ab1b82e78a0fba9c388199960",
+			"revisionTime": "2016-10-03T07:57:14Z"
 		},
 		{
 			"checksumSHA1": "mWjEvHYdhvF05SygdT/5Se2+FiM=",
 			"path": "github.com/aarzilli/nucular/style",
-			"revision": "d4c7761e59648fb778a8af744260ca9a62a74a7c",
-			"revisionTime": "2016-09-16T16:02:52Z"
+			"revision": "cd148b9b0389c35ab1b82e78a0fba9c388199960",
+			"revisionTime": "2016-10-03T07:57:14Z"
 		},
 		{
 			"path": "github.com/golang/freetype",
@@ -171,6 +179,10 @@
 		{
 			"path": "golang.org/x/sys/windows",
 			"revision": "eb2c74142fd19a79b3f237334c7384d5167b1b46"
+		},
+		{
+			"path": "home/a/n/go/src/github.com/aarzilli/nucular",
+			"revision": ""
 		}
 	],
 	"rootPath": "github.com/aarzilli/fkgit"

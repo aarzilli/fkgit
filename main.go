@@ -88,6 +88,10 @@ func (ref *Ref) Remote() string {
 	return ref.remote
 }
 
+func (ref *Ref) RemoteName() string {
+	return ref.nice[len(ref.remote)+1:]
+}
+
 func getHead(repodir string) (isref bool, reforid string, err error) {
 	const refPrefix = "ref: "
 	bs, err := ioutil.ReadFile(filepath.Join(filepath.Join(repodir, ".git"), "HEAD"))
