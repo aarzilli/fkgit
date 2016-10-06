@@ -378,7 +378,23 @@ func guiUpdate(w *nucular.Window) {
 		tabwidths[i+1] = 0
 	}
 	w.Row(20).Static(tabwidths...)
-	w.Menu(label.TA("More...", "CC"), 200, moreButton)
+	if w := w.Menu(label.TA("More...", "CC"), 200, nil); w != nil {
+		w.Row(20).Dynamic(1)
+		if w.MenuItem(label.TA("Remotes", "LC")) {
+			newRemotesTab(lw.repodir)
+		}
+		if w.MenuItem(label.TA("Refs", "LC")) {
+			newRefsTab(lw.repodir)
+		}
+		if githubStuff != nil {
+			if w.MenuItem(label.TA("Github Issues", "LC")) {
+				NewGithubIssuesWindow(githubStuff)
+			}
+			if w.MenuItem(label.TA("Github Pull Requests", "LC")) {
+				NewGithubPullWindow(githubStuff)
+			}
+		}
+	}
 	for i := range tabs {
 		selected := i == currentTab
 		bounds := w.WidgetBounds()
@@ -398,24 +414,6 @@ func guiUpdate(w *nucular.Window) {
 	}
 
 	tabs[currentTab].Update(w)
-}
-
-func moreButton(w *nucular.Window) {
-	w.Row(20).Dynamic(1)
-	if w.MenuItem(label.TA("Remotes", "LC")) {
-		newRemotesTab(lw.repodir)
-	}
-	if w.MenuItem(label.TA("Refs", "LC")) {
-		newRefsTab(lw.repodir)
-	}
-	if githubStuff != nil {
-		if w.MenuItem(label.TA("Github Issues", "LC")) {
-			NewGithubIssuesWindow(githubStuff)
-		}
-		if w.MenuItem(label.TA("Github Pull Requests", "LC")) {
-			NewGithubPullWindow(githubStuff)
-		}
-	}
 }
 
 func fixStyle(style *nstyle.Style) {

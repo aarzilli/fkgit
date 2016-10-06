@@ -205,8 +205,16 @@ func (gs *GithubStuff) update(issues bool, w *nucular.Window) {
 				if selected {
 					gs.selectedIssue = i
 				}
-				im := &issueMenu{gs, i, is}
-				w.ContextualOpen(0, image.Point{200, 500}, bounds, im.Update)
+				if w := w.ContextualOpen(0, image.Point{200, 500}, bounds, nil); w != nil {
+					gs.selectedIssue = i
+					w.Row(20).Dynamic(1)
+					if w.MenuItem(label.TA("Open", "LC")) {
+						openUrl(is.url)
+					}
+					if w.MenuItem(label.TA("Create Fix Branch", "LC")) {
+						newbranchAction(&lw, fmt.Sprintf("fix-%d", is.number), "master")
+					}
+				}
 			} else {
 				pr := gs.prs[i]
 				sw.SelectableLabel(fmt.Sprintf("%d", pr.number), "RC", &selected)
@@ -214,8 +222,16 @@ func (gs *GithubStuff) update(issues bool, w *nucular.Window) {
 				if selected {
 					gs.selectedPull = i
 				}
-				pm := &pullMenu{gs, i, pr}
-				w.ContextualOpen(0, image.Point{200, 500}, bounds, pm.Update)
+				if w := w.ContextualOpen(0, image.Point{200, 500}, bounds, nil); w != nil {
+					gs.selectedPull = i
+					w.Row(20).Dynamic(1)
+					if w.MenuItem(label.TA("Open", "LC")) {
+						openUrl(pr.url)
+					}
+					if w.MenuItem(label.TA("Import", "LC")) {
+						importPR(&lw, pr.owner, gs.repo, pr.branch)
+					}
+				}
 			}
 		}
 	}
@@ -227,38 +243,4 @@ func (pw *GithubPullWindow) Update(w *nucular.Window) {
 
 func (iw *GithubIssuesWindow) Update(w *nucular.Window) {
 	iw.gs.update(true, w)
-}
-
-type issueMenu struct {
-	gs *GithubStuff
-	i  int
-	is issue
-}
-
-func (im *issueMenu) Update(w *nucular.Window) {
-	im.gs.selectedIssue = im.i
-	w.Row(20).Dynamic(1)
-	if w.MenuItem(label.TA("Open", "LC")) {
-		openUrl(im.is.url)
-	}
-	if w.MenuItem(label.TA("Create Fix Branch", "LC")) {
-		newbranchAction(&lw, fmt.Sprintf("fix-%d", im.is.number), "master")
-	}
-}
-
-type pullMenu struct {
-	gs *GithubStuff
-	i  int
-	pr pull
-}
-
-func (pm *pullMenu) Update(w *nucular.Window) {
-	pm.gs.selectedPull = pm.i
-	w.Row(20).Dynamic(1)
-	if w.MenuItem(label.TA("Open", "LC")) {
-		openUrl(pm.pr.url)
-	}
-	if w.MenuItem(label.TA("Import", "LC")) {
-		importPR(&lw, pm.pr.owner, pm.gs.repo, pm.pr.branch)
-	}
 }
