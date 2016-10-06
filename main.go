@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aarzilli/nucular"
+	"github.com/aarzilli/nucular/label"
 	nstyle "github.com/aarzilli/nucular/style"
 
 	"golang.org/x/mobile/event/key"
@@ -371,7 +372,13 @@ func guiUpdate(w *nucular.Window) {
 	}
 
 	closetab := -1
-	w.Row(20).Dynamic(len(tabs))
+	tabwidths := make([]int, len(tabs)+1)
+	tabwidths[0] = 90
+	for i := range tabs {
+		tabwidths[i+1] = 0
+	}
+	w.Row(20).Static(tabwidths...)
+	w.Menu(label.TA("More...", "CC"), 200, moreButton)
 	for i := range tabs {
 		selected := i == currentTab
 		bounds := w.WidgetBounds()
@@ -391,6 +398,24 @@ func guiUpdate(w *nucular.Window) {
 	}
 
 	tabs[currentTab].Update(w)
+}
+
+func moreButton(w *nucular.Window) {
+	w.Row(20).Dynamic(1)
+	if w.MenuItem(label.TA("Remotes", "LC")) {
+		newRemotesTab(lw.repodir)
+	}
+	if w.MenuItem(label.TA("Branches", "LC")) {
+		newBranchesTab(lw.repodir)
+	}
+	if githubStuff != nil {
+		if w.MenuItem(label.TA("Github Issues", "LC")) {
+			NewGithubIssuesWindow(githubStuff)
+		}
+		if w.MenuItem(label.TA("Github Pull Requests", "LC")) {
+			NewGithubPullWindow(githubStuff)
+		}
+	}
 }
 
 func fixStyle(style *nstyle.Style) {

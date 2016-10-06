@@ -11,6 +11,8 @@ import (
 	"github.com/google/go-github/github"
 )
 
+var githubStuff *GithubStuff
+
 func initGithubIntegration(mw *nucular.MasterWindow, repodir string) {
 	const prefix = "git@github.com:"
 	const suffix = ".git"
@@ -29,12 +31,7 @@ func initGithubIntegration(mw *nucular.MasterWindow, repodir string) {
 	owner := v[0]
 	repo := v[1]
 
-	fixedTabsLimit = 3
-
-	gs := NewGithubStuff(mw, repodir, owner, repo)
-
-	NewGithubIssuesWindow(gs)
-	NewGithubPullWindow(gs)
+	githubStuff = NewGithubStuff(mw, repodir, owner, repo)
 }
 
 type issue struct {
