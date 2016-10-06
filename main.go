@@ -405,8 +405,8 @@ func moreButton(w *nucular.Window) {
 	if w.MenuItem(label.TA("Remotes", "LC")) {
 		newRemotesTab(lw.repodir)
 	}
-	if w.MenuItem(label.TA("Branches", "LC")) {
-		newBranchesTab(lw.repodir)
+	if w.MenuItem(label.TA("Refs", "LC")) {
+		newRefsTab(lw.repodir)
 	}
 	if githubStuff != nil {
 		if w.MenuItem(label.TA("Github Issues", "LC")) {
