@@ -136,7 +136,7 @@ func parseAuthor(in string) (string, time.Time) {
 	return in[:endauthor], time.Date(tutc.Year(), tutc.Month(), tutc.Day(), tutc.Hour(), tutc.Minute(), tutc.Second(), 0, loc)
 }
 
-func (fetcher *CommitFetcher) readCommit(in io.Reader) (commit Commit, ok bool) {
+func readCommit(in io.Reader) (commit Commit, ok bool, err error) {
 	const (
 		commitHeader    = "commit "
 		parentHeader    = "parent "
@@ -181,7 +181,7 @@ headerLoop:
 
 	if err := scanner.Err(); err != nil {
 		fmt.Printf("[exiting for error %v]\n", err)
-		fetcher.Err = err
+		return commit, false, err
 	} else {
 		commit.Message = bs.String()
 		ok = true
@@ -233,7 +233,10 @@ func allCommits(repodir string) *CommitFetcher {
 		zdr := zeroDelimitedReader{In: stdout}
 		for {
 			zdr.reset()
-			commit, ok := fetcher.readCommit(&zdr)
+			commit, ok, err := readCommit(&zdr)
+			if err != nil {
+				fetcher.Err = err
+			}
 			if !ok {
 				break
 			}
