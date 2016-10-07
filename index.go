@@ -2,14 +2,17 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"io"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/aarzilli/nucular"
+	"github.com/aarzilli/nucular/label"
 	"github.com/aarzilli/nucular/rect"
 
 	"golang.org/x/mobile/event/key"
@@ -72,6 +75,17 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 
 			selected := idxmw.selected == i
 			sw.SelectableLabel(idxmw.status.Lines[i].Path, "LC", &selected)
+
+			if idxmw.status.Lines[i].Index == "?" && idxmw.status.Lines[i].WorkDir == "?" {
+				if w := sw.ContextualOpen(0, image.Point{200, 500}, sw.LastWidgetBounds, nil); w != nil {
+					w.Row(20).Dynamic(1)
+					selected = true
+					if w.MenuItem(label.TA("Ignore", "LC")) {
+						idxmw.ignoreIndex(i)
+					}
+				}
+			}
+
 			if selected && idxmw.selected != i {
 				idxmw.selected = i
 				idxmw.loadDiff()
@@ -194,6 +208,17 @@ func (idxmw *IndexManagerWindow) addRemoveIndex(add bool, i int) {
 	} else {
 		execCommand(idxmw.repodir, "git", "reset", "-q", "--", idxmw.status.Lines[i].Path)
 	}
+	idxmw.updating = true
+	go idxmw.reload()
+}
+
+func (idxmw *IndexManagerWindow) ignoreIndex(i int) {
+	fh, err := os.OpenFile(filepath.Join(idxmw.repodir, ".git/info/exclude"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		return
+	}
+	defer fh.Close()
+	fmt.Fprintf(fh, "\n%s\n", idxmw.status.Lines[i].Path)
 	idxmw.updating = true
 	go idxmw.reload()
 }
