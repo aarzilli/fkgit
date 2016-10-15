@@ -564,9 +564,9 @@ func wordSplit(in string) []string {
 }
 
 func showDiff(w *nucular.Window, diff Diff, width *int) {
-	style, scaling := w.Master().Style()
+	style := w.Master().Style()
 
-	rounding := uint16(4 * scaling)
+	rounding := uint16(4 * style.Scaling)
 
 	lnh := nucular.FontHeight(style.Font)
 	d := font.Drawer{Face: style.Font}

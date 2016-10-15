@@ -719,7 +719,8 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 
 	w.MenubarEnd()
 
-	style, scaling := w.Master().Style()
+	style := w.Master().Style()
+	scaling := style.Scaling
 
 	oldspacing := style.GroupWindow.Spacing.Y
 	style.GroupWindow.Spacing.Y = 0

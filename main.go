@@ -335,16 +335,12 @@ func guiUpdate(w *nucular.Window) {
 		switch {
 		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Code == key.CodeEqualSign):
 			conf.Scaling += 0.1
-			mw.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
-			style, _ := mw.Style()
-			fixStyle(style)
+			mw.Style().Scale(conf.Scaling)
 			saveConfiguration()
 
 		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Code == key.CodeHyphenMinus):
 			conf.Scaling -= 0.1
-			mw.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
-			style, _ := mw.Style()
-			fixStyle(style)
+			mw.Style().Scale(conf.Scaling)
 			saveConfiguration()
 
 		case (e.Modifiers == 0) && ((e.Code == key.CodeEscape) || (e.Code == key.CodeQ)):
@@ -436,9 +432,8 @@ func main() {
 	loadConfiguration()
 
 	wnd := nucular.NewMasterWindow(guiUpdate, nucular.WindowNoScrollbar)
-	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme), nil, conf.Scaling)
-	style, _ := wnd.Style()
-	fixStyle(style)
+	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme, conf.Scaling))
+	fixStyle(wnd.Style())
 
 	lw.repodir = repodir
 	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly | nucular.EditClipboard

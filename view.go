@@ -96,7 +96,7 @@ func (vw *ViewWindow) Update(w *nucular.Window) {
 }
 
 func (vw *ViewWindow) updateView(w *nucular.Window) {
-	style, _ := w.Master().Style()
+	style := w.Master().Style()
 
 	if vw.isdiff {
 		w.Row(20).Dynamic(1)
@@ -112,9 +112,9 @@ func (vw *ViewWindow) updateView(w *nucular.Window) {
 }
 
 func showCommit(lnh int, w *nucular.Window, lc LanedCommit) {
-	style, scaling := w.Master().Style()
+	style := w.Master().Style()
 	zeroWidth := nucular.FontWidth(style.Font, "0")
-	w.Row(20).StaticScaled(zeroWidth*48+style.Text.Padding.X*2, int(80*scaling))
+	w.Row(20).StaticScaled(zeroWidth*48+style.Text.Padding.X*2, int(80*style.Scaling))
 	w.Label(fmt.Sprintf("commit %s\n", lc.Id), "LC")
 	if w.ButtonText("Copy") {
 		clipboard.Set(lc.Id)

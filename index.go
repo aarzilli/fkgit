@@ -55,7 +55,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 		return
 	}
 
-	style, scaling := w.Master().Style()
+	style := w.Master().Style()
 
 	area := w.Row(0).SpaceBegin(0)
 	leftbounds, rightbounds := idxmw.splitv.Vertical(w, area)
@@ -63,7 +63,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 
 	w.LayoutSpacePushScaled(leftbounds)
 	if sw := w.GroupBegin("index-files", nucular.WindowBorder); sw != nil {
-		cbw := min(int(25*scaling), nucular.FontHeight(style.Font)+style.Option.Padding.Y) + style.Option.Padding.X*2
+		cbw := min(int(25*style.Scaling), nucular.FontHeight(style.Font)+style.Option.Padding.Y) + style.Option.Padding.X*2
 		sw.Row(25).StaticScaled(cbw, 0)
 
 		for i, line := range idxmw.status.Lines {

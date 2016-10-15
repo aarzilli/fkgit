@@ -149,7 +149,7 @@ func (rt *refsTab) Update(w *nucular.Window) {
 
 	needle := string(rt.ed.Buffer)
 
-	style, _ := w.Master().Style()
+	style := w.Master().Style()
 
 	datesz := nucular.FontWidth(style.Font, "0000-00-00 00:000") + style.Text.Padding.X*2
 	idsz := nucular.FontWidth(style.Font, "0000000") + style.Text.Padding.X*2

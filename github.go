@@ -154,8 +154,8 @@ func (pw *GithubPullWindow) Title() string {
 }
 
 func (gs *GithubStuff) update(issues bool, w *nucular.Window) {
-	style, scaling := w.Master().Style()
-	lnh := int(scaling * 20)
+	style := w.Master().Style()
+	lnh := int(style.Scaling * 20)
 
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
