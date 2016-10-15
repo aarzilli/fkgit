@@ -1147,10 +1147,6 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 		}
 	}
 
-	if w.MenuItem(label.TA("View", "LC")) {
-		viewAction(lw, lc)
-	}
-
 	if w.MenuItem(label.TA("Checkout", "LC")) {
 		switch len(cm.localRefs) {
 		case 0:
@@ -1176,9 +1172,9 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 		if w.MenuItem(label.TA("Cherrypick", "LC")) {
 			cherrypickAction(lw, lc.Id)
 		}
-		if w.MenuItem(label.TA("Revert", "LC")) {
-			revertAction(lw, lc.Id)
-		}
+	}
+	if w.MenuItem(label.TA("Revert", "LC")) {
+		revertAction(lw, lc.Id)
 	}
 
 	if len(cm.remoteRefs) > 0 {

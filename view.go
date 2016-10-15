@@ -12,6 +12,7 @@ import (
 type ViewWindow struct {
 	repodir string
 	lc      LanedCommit
+	viewInTabButton bool
 
 	isdiff               bool
 	niceNameA, niceNameB string
@@ -32,6 +33,8 @@ func NewViewWindow(repodir string, lc LanedCommit, opentab bool) *ViewWindow {
 
 	if opentab {
 		openTab(vw)
+	} else {
+		vw.viewInTabButton = true
 	}
 
 	return vw
@@ -104,20 +107,30 @@ func (vw *ViewWindow) updateView(w *nucular.Window) {
 		w.Label("    "+vw.niceNameA, "LC")
 		w.Label("    "+vw.niceNameB, "LC")
 	} else {
-		showCommit(nucular.FontHeight(style.Font), w, vw.lc)
+		showCommit(nucular.FontHeight(style.Font), w, vw.lc, vw.viewInTabButton)
 		w.Label(" ", "LC")
 	}
 
 	showDiff(w, vw.diff, &vw.width)
 }
 
-func showCommit(lnh int, w *nucular.Window, lc LanedCommit) {
+func showCommit(lnh int, w *nucular.Window, lc LanedCommit, viewInTabButton bool) {
 	style := w.Master().Style()
-	zeroWidth := nucular.FontWidth(style.Font, "0")
-	w.Row(20).StaticScaled(zeroWidth*48+style.Text.Padding.X*2, int(80*style.Scaling))
+	commitWidth := nucular.FontWidth(style.Font, "0")*48+style.Text.Padding.X*2
+	btnWidth := int(80*style.Scaling)
+	if viewInTabButton {
+		w.Row(20).StaticScaled(commitWidth, btnWidth, btnWidth)
+	} else {
+		w.Row(20).StaticScaled(commitWidth, btnWidth)
+	}
 	w.Label(fmt.Sprintf("commit %s\n", lc.Id), "LC")
 	if w.ButtonText("Copy") {
 		clipboard.Set(lc.Id)
+	}
+	if viewInTabButton {
+		if w.ButtonText("View") {
+			viewAction(&lw, lc)
+		}
 	}
 	for i := range lc.Parent {
 		w.Label(fmt.Sprintf("parent %s\n", lc.Parent[i]), "LC")
