@@ -1215,10 +1215,9 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 		}
 	}
 
-	if lw.Headisref {
+	if lw.Headisref && len(lc.Refs) > 0 {
 		if w.MenuItem(label.TA("Merge", "LC")) {
-			//TODO: show this commit as the default merge destination
-			newMergePopup(cm.mainw, lw.allrefs)
+			newMergePopup(cm.mainw, lc.Refs)
 		}
 	}
 
