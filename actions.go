@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -46,14 +45,6 @@ func pushAction(lw *LogWindow, force bool, repository string) {
 				lw.mu.Unlock()
 			}
 		}()
-	}
-}
-
-func rebaseAction(lw *LogWindow, commitIdOrRef string) {
-	if os.Getenv("EDITOR") != "" {
-		execBackground(false, lw, "git", "rebase", "-i", commitIdOrRef)
-	} else {
-		execBackground(false, lw, "git", "rebase", commitIdOrRef)
 	}
 }
 

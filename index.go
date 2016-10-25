@@ -43,6 +43,10 @@ func (idxmw *IndexManagerWindow) Title() string {
 	return "Commit"
 }
 
+func (idxmw *IndexManagerWindow) Protected() bool {
+	return true
+}
+
 func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 	idxmw.mu.Lock()
 	defer idxmw.mu.Unlock()

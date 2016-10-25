@@ -10,8 +10,8 @@ import (
 )
 
 type ViewWindow struct {
-	repodir string
-	lc      LanedCommit
+	repodir         string
+	lc              LanedCommit
 	viewInTabButton bool
 
 	isdiff               bool
@@ -90,6 +90,10 @@ func (vw *ViewWindow) Title() string {
 	return vw.lc.NiceWithAbbrev()
 }
 
+func (vw *ViewWindow) Protected() bool {
+	return false
+}
+
 func (vw *ViewWindow) Update(w *nucular.Window) {
 	w.Row(0).Dynamic(1)
 	if sw := w.GroupBegin("view-"+vw.lc.Id, 0); sw != nil {
@@ -116,8 +120,8 @@ func (vw *ViewWindow) updateView(w *nucular.Window) {
 
 func showCommit(lnh int, w *nucular.Window, lc LanedCommit, viewInTabButton bool) {
 	style := w.Master().Style()
-	commitWidth := nucular.FontWidth(style.Font, "0")*48+style.Text.Padding.X*2
-	btnWidth := int(80*style.Scaling)
+	commitWidth := nucular.FontWidth(style.Font, "0")*48 + style.Text.Padding.X*2
+	btnWidth := int(80 * style.Scaling)
 	if viewInTabButton {
 		w.Row(20).StaticScaled(commitWidth, btnWidth, btnWidth)
 	} else {

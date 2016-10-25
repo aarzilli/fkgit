@@ -241,6 +241,14 @@ func (pw *GithubPullWindow) Update(w *nucular.Window) {
 	pw.gs.update(false, w)
 }
 
+func (pw *GithubPullWindow) Protected() bool {
+	return false
+}
+
 func (iw *GithubIssuesWindow) Update(w *nucular.Window) {
 	iw.gs.update(true, w)
+}
+
+func (pw *GithubIssuesWindow) Protected() bool {
+	return false
 }

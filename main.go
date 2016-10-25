@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -304,11 +305,11 @@ const (
 type Tab interface {
 	Title() string
 	Update(w *nucular.Window)
+	Protected() bool
 }
 
 var tabs []Tab
 var currentTab int
-var fixedTabsLimit int
 
 func openTab(tab Tab) {
 	tabs = append(tabs, tab)
@@ -316,6 +317,9 @@ func openTab(tab Tab) {
 }
 
 func closeTab(tab Tab) {
+	if tab.Protected() {
+		return
+	}
 	for i := range tabs {
 		if tab == tabs[i] {
 			if currentTab == i && currentTab > 0 {
@@ -344,9 +348,7 @@ func guiUpdate(w *nucular.Window) {
 			saveConfiguration()
 
 		case (e.Modifiers == 0) && ((e.Code == key.CodeEscape) || (e.Code == key.CodeQ)):
-			if currentTab > fixedTabsLimit {
-				closeTab(tabs[currentTab])
-			}
+			closeTab(tabs[currentTab])
 
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeR):
 			switch currentTab {
@@ -395,9 +397,7 @@ func guiUpdate(w *nucular.Window) {
 		selected := i == currentTab
 		bounds := w.WidgetBounds()
 		if w.Input().Mouse.Clicked(mouse.ButtonMiddle, bounds) {
-			if i > fixedTabsLimit {
-				closetab = i
-			}
+			closetab = i
 		}
 		w.SelectableLabel(tabs[i].Title(), "LC", &selected)
 		if selected {
@@ -422,10 +422,16 @@ func fixStyle(style *nstyle.Style) {
 }
 
 func main() {
+	rand.Seed(time.Now().Unix())
 	repodir := findRepository()
 	if repodir == "" {
 		fmt.Fprintf(os.Stderr, "could not find repository\n")
 		os.Exit(1)
+		return
+	}
+
+	if len(os.Args) >= 2 && os.Getenv("FKGIT_SEQUENCE_EDITOR_SOCKET") != "" {
+		editmodeMain()
 		return
 	}
 
@@ -461,8 +467,6 @@ func main() {
 	idxmw.reload()
 
 	openTab(&idxmw)
-
-	fixedTabsLimit = 1
 
 	initGithubIntegration(wnd, repodir)
 

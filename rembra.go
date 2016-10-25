@@ -38,6 +38,10 @@ func (rt *remotesTab) Title() string {
 	return "Remotes"
 }
 
+func (rt *remotesTab) Protected() bool {
+	return false
+}
+
 func (rt *remotesTab) Update(w *nucular.Window) {
 	w.Row(25).Static(90, 0)
 	w.Label("Filter:", "LC")
@@ -140,6 +144,10 @@ func (rt *refsTab) loadRefs() {
 
 func (rt *refsTab) Title() string {
 	return "Refs"
+}
+
+func (rt *refsTab) Protected() bool {
+	return false
 }
 
 func (rt *refsTab) Update(w *nucular.Window) {

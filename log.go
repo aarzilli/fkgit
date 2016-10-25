@@ -1262,6 +1262,10 @@ func (lw *LogWindow) Title() string {
 	return "Graph"
 }
 
+func (lw *LogWindow) Protected() bool {
+	return true
+}
+
 func (lw *LogWindow) Update(w *nucular.Window) {
 	area := w.Row(0).SpaceBegin(0)
 	b0, b1 := lw.split.Horizontal(w, area)
