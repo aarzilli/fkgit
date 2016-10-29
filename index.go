@@ -79,11 +79,18 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 
 			selected := idxmw.selected == i
 			sw.SelectableLabel(idxmw.status.Lines[i].Path, "LC", &selected)
-
-			if idxmw.status.Lines[i].Index == "?" && idxmw.status.Lines[i].WorkDir == "?" {
-				if w := sw.ContextualOpen(0, image.Point{200, 500}, sw.LastWidgetBounds, nil); w != nil {
-					w.Row(20).Dynamic(1)
-					selected = true
+			if w := sw.ContextualOpen(0, image.Point{200, 500}, sw.LastWidgetBounds, nil); w != nil {
+				w.Row(20).Dynamic(1)
+				selected = true
+				if os.Getenv("EDITOR") != "" {
+					if w.MenuItem(label.TA("Edit", "LC")) {
+						cmd := exec.Command(os.Getenv("EDITOR"), idxmw.status.Lines[i].Path)
+						cmd.Dir = idxmw.repodir
+						cmd.Start()
+						go cmd.Wait()
+					}
+				}
+				if idxmw.status.Lines[i].Index == "?" && idxmw.status.Lines[i].WorkDir == "?" {
 					if w.MenuItem(label.TA("Ignore", "LC")) {
 						idxmw.ignoreIndex(i)
 					}
