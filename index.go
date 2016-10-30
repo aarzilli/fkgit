@@ -37,6 +37,11 @@ type IndexManagerWindow struct {
 
 	amend bool
 	ed    nucular.TextEditor
+
+	// when rebasedit is set the commit editor will show that file
+	rebasedit  string
+	rebasechan chan struct{}
+	rebaseTab  Tab
 }
 
 func (idxmw *IndexManagerWindow) Title() string {
@@ -130,7 +135,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 		}
 		if idxmw.amend != oldamend {
 			if !idxmw.amend {
-				idxmw.ed.Buffer = []rune{}
+				idxmw.ed.Buffer = idxmw.ed.Buffer[:0]
 				idxmw.ed.Cursor = 0
 			}
 			idxmw.loadCommitMsg()
@@ -148,32 +153,42 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 		}
 		sw.Spacing(1)
 		if sw.ButtonText("Commit") {
-			var cmd *exec.Cmd
-			if idxmw.amend {
-				cmd = exec.Command("git", "commit", "--amend", "-F", "-")
+			if idxmw.rebasedit != "" {
+				close(idxmw.rebasechan)
+				idxmw.rebasechan = nil
+				idxmw.rebasedit = ""
+				if i := tabIndex(idxmw.rebaseTab); i >= 0 {
+					currentTab = i
+				}
 			} else {
-				cmd = exec.Command("git", "commit", "-F", "-")
+				var cmd *exec.Cmd
+				if idxmw.amend {
+					cmd = exec.Command("git", "commit", "--amend", "-F", "-")
+				} else {
+					cmd = exec.Command("git", "commit", "-F", "-")
+				}
+				cmd.Dir = idxmw.repodir
+				gitin, err := cmd.StdinPipe()
+				must(err)
+				go func() {
+					io.WriteString(gitin, string(idxmw.ed.Buffer))
+					gitin.Close()
+				}()
+				bs, err := cmd.CombinedOutput()
+				if err != nil {
+					newMessagePopup(w.Master(), "Error", fmt.Sprintf("error: %v\n%s\n", err, bs))
+				} else {
+					idxmw.amend = false
+					idxmw.ed.Buffer = []rune{}
+					idxmw.ed.Cursor = 0
+				}
+				idxmw.updating = true
 			}
-			cmd.Dir = idxmw.repodir
-			gitin, err := cmd.StdinPipe()
-			must(err)
-			go func() {
-				io.WriteString(gitin, string(idxmw.ed.Buffer))
-				gitin.Close()
-			}()
-			bs, err := cmd.CombinedOutput()
-			if err != nil {
-				newMessagePopup(w.Master(), "Error", fmt.Sprintf("error: %v\n%s\n", err, bs))
-			} else {
-				idxmw.amend = false
-				idxmw.ed.Buffer = []rune{}
-				idxmw.ed.Cursor = 0
-			}
-			idxmw.updating = true
 			lw.mu.Lock()
 			go lw.reload()
 			lw.mu.Unlock()
 			go idxmw.reload()
+
 		}
 		sw.GroupEnd()
 	}
@@ -288,25 +303,35 @@ func (idxmw *IndexManagerWindow) loadDiff() {
 }
 
 func (idxmw *IndexManagerWindow) loadCommitMsg() {
-	if idxmw.amend {
+	loadfile := func(filename string) error {
+		bs, err := ioutil.ReadFile(filename)
+		if err == nil {
+			idxmw.ed.Cursor = 0
+			idxmw.ed.Buffer = []rune(string(bs))
+		}
+		return err
+	}
+
+	switch {
+	case idxmw.rebasedit != "":
+		loadfile(idxmw.rebasedit)
+	case idxmw.amend:
 		out, err := execCommand(idxmw.repodir, "git", "cat-file", "commit", "HEAD")
 		must(err)
 		msgv := strings.Split(out, "\n")
 		for i := range msgv {
 			if msgv[i] == "" {
 				idxmw.ed.Cursor = 0
-				idxmw.ed.Buffer = []rune(strings.Join(msgv[i+1:], "\n"))
+				idxmw.ed.Buffer = append(idxmw.ed.Buffer[:0], []rune(strings.Join(msgv[i+1:], "\n"))...)
 				return
 			}
 		}
-	} else {
+	default:
 		for _, name := range []string{"MERGE_MSG", "SQUASH_MSG"} {
-			bs, err := ioutil.ReadFile(filepath.Join(filepath.Join(idxmw.repodir, ".git"), name))
-			if err == nil {
-				idxmw.ed.Cursor = 0
-				idxmw.ed.Buffer = []rune(string(bs))
+			if err := loadfile(filepath.Join(filepath.Join(idxmw.repodir, ".git"), name)); err == nil {
 				return
 			}
+
 		}
 	}
 }

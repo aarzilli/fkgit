@@ -333,6 +333,15 @@ func closeTab(tab Tab) {
 	}
 }
 
+func tabIndex(tab Tab) int {
+	for i := range tabs {
+		if tab == tabs[i] {
+			return i
+		}
+	}
+	return -1
+}
+
 func guiUpdate(w *nucular.Window) {
 	mw := w.Master()
 	for _, e := range w.Input().Keyboard.Keys {

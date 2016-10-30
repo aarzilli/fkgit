@@ -43,7 +43,6 @@ func rebaseAction(lw *LogWindow, commitIdOrRef string) {
 	}
 
 	os.Setenv("FKGIT_SEQUENCE_EDITOR_SOCKET", socname)
-	os.Setenv("GIT_SEQUENCE_EDITOR", "fkgit")
 
 	tab := &rebaseTab{soc: soc, mw: lw.mw, repodir: lw.repodir}
 	tab.newcommand("git", "rebase", "-i", commitIdOrRef)
@@ -88,12 +87,24 @@ func rebaseServer(soc net.Listener, socname string, tab *rebaseTab) {
 			fmt.Fprintf(os.Stderr, "Error reading rebase socket message: %v\n", err)
 			continue
 		}
-		tab.mu.Lock()
-		tab.editfile = string(bs[:len(bs)-1])
-		tab.editing = make(chan struct{})
-		tab.editload = true
-		tab.mu.Unlock()
-		<-tab.editing
+		typ := bs[0]
+		switch typ {
+		case 's':
+			tab.mu.Lock()
+			tab.editfile = string(bs[1 : len(bs)-1])
+			tab.editing = make(chan struct{})
+			tab.editload = true
+			tab.mu.Unlock()
+			<-tab.editing
+		case 'c':
+			idxmw.rebasedit = string(bs[1 : len(bs)-1])
+			idxmw.rebasechan = make(chan struct{})
+			idxmw.rebaseTab = tab
+			if i := tabIndex(&idxmw); i >= 0 {
+				currentTab = i
+			}
+			<-idxmw.rebasechan
+		}
 
 		conn.Write([]byte{'\x00'})
 		conn.Close()
@@ -190,7 +201,6 @@ func (rt *rebaseTab) Update(w *nucular.Window) {
 		w.Row(25).Static(0, 100)
 		w.Spacing(1)
 		if w.ButtonText("Done") {
-			rt.soc.Close()
 			closeTab(rt)
 		}
 	}
@@ -238,17 +248,26 @@ func (rt *rebaseTab) runcommand() {
 	f1, _ := os.Stat(filepath.Join(rt.repodir, ".git", "rebase-merge"))
 	f2, _ := os.Stat(filepath.Join(rt.repodir, ".git", "rebase-apply"))
 	rt.done = f1 == nil && f2 == nil
+	if rt.done {
+		rt.soc.Close()
+	}
 }
 
 func (rt *rebaseTab) newcommand(cmd string, args ...string) {
 	rt.cmd = exec.Command(cmd, args...)
+	rt.cmd.Env = []string{"GIT_SEQUENCE_EDITOR=fkgit seqed", "GIT_EDITOR=fkgit comed"}
 	rt.cmd.Dir = lw.repodir
 }
 
 func editmodeMain() {
 	soc, err := net.Dial("unixpacket", os.Getenv("FKGIT_SEQUENCE_EDITOR_SOCKET"))
 	must(err)
-	soc.Write([]byte(os.Args[1] + "\x00"))
+	switch os.Args[1] {
+	case "seqed":
+		soc.Write([]byte("s" + os.Args[2] + "\x00"))
+	case "comed":
+		soc.Write([]byte("c" + os.Args[2] + "\x00"))
+	}
 	bs := []byte{0}
 	soc.Read(bs)
 	soc.Close()
