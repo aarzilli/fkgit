@@ -7,6 +7,8 @@ import (
 
 	"github.com/aarzilli/nucular"
 	"github.com/aarzilli/nucular/clipboard"
+
+	"golang.org/x/mobile/event/key"
 )
 
 type ViewWindow struct {
@@ -21,6 +23,11 @@ type ViewWindow struct {
 	tooLong bool
 	diff    Diff
 	width   int
+
+	searching    bool
+	searched     nucular.TextEditor
+	searchNeedle string
+	searchSel    DiffSel
 }
 
 func NewViewWindow(repodir string, lc LanedCommit, opentab bool) *ViewWindow {
@@ -105,17 +112,64 @@ func (vw *ViewWindow) Update(w *nucular.Window) {
 func (vw *ViewWindow) updateView(w *nucular.Window) {
 	style := w.Master().Style()
 
+	scrollToSearch := false
+
 	if vw.isdiff {
 		w.Row(20).Dynamic(1)
 		w.Label("Diff", "LC")
 		w.Label("    "+vw.niceNameA, "LC")
 		w.Label("    "+vw.niceNameB, "LC")
 	} else {
+		if !vw.viewInTabButton {
+			for _, e := range w.Input().Keyboard.Keys {
+				switch {
+				case (e.Modifiers == key.ModControl) && (e.Code == key.CodeF):
+					vw.searching = true
+					vw.searched.Buffer = vw.searched.Buffer[:0]
+					vw.searchNeedle = "-DIFFERENT-"
+					vw.searched.Flags = nucular.EditSelectable | nucular.EditClipboard | nucular.EditSigEnter
+					vw.searchSel.Pos = vw.diff.BeforeFirst()
+					vw.searchSel.Start, vw.searchSel.End = 0, 0
+					w.Master().ActivateEditor(&vw.searched)
+					scrollToSearch = true
+				case (e.Modifiers == key.ModControl) && (e.Code == key.CodeG):
+					if !vw.searching {
+						w.Master().ActivateEditor(&vw.searched)
+					}
+					vw.searching = true
+					vw.searchSel = vw.diff.Lookfwd(vw.searchSel, string(vw.searched.Buffer), true)
+					scrollToSearch = true
+				case (e.Modifiers == 0) && (e.Code == key.CodeEscape):
+					vw.searching = false
+				}
+			}
+
+			if vw.searching {
+				w.MenubarBegin()
+				w.Row(20).Static(100, 0)
+				w.Label("Search", "LC")
+				active := vw.searched.Edit(w)
+				if active&nucular.EditCommitted != 0 {
+					vw.searching = false
+					w.Master().Changed()
+				}
+				if needle := string(vw.searched.Buffer); needle != vw.searchNeedle {
+					vw.searchSel = vw.diff.Lookfwd(vw.searchSel, needle, false)
+					vw.searchNeedle = needle
+					scrollToSearch = true
+				}
+				w.MenubarEnd()
+			}
+		}
 		showCommit(nucular.FontHeight(style.Font), w, vw.lc, vw.viewInTabButton)
 		w.Label(" ", "LC")
 	}
 
-	showDiff(w, vw.diff, &vw.width)
+	sel := &vw.searchSel
+	if !vw.searching {
+		sel = nil
+	}
+	showDiff(w, vw.diff, &vw.width, sel, scrollToSearch)
 }
 
 func showCommit(lnh int, w *nucular.Window, lc LanedCommit, viewInTabButton bool) {

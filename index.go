@@ -113,7 +113,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 			diffgroup.Scrollbar.Y = 0
 		}
 		if idxmw.selected >= 0 {
-			showDiff(diffgroup, idxmw.diff, &idxmw.diffwidth)
+			showDiff(diffgroup, idxmw.diff, &idxmw.diffwidth, nil, false)
 		}
 		diffgroup.GroupEnd()
 	}

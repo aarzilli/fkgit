@@ -347,9 +347,6 @@ func guiUpdate(w *nucular.Window) {
 			mw.Style().Scale(conf.Scaling)
 			saveConfiguration()
 
-		case (e.Modifiers == 0) && ((e.Code == key.CodeEscape) || (e.Code == key.CodeQ)):
-			closeTab(tabs[currentTab])
-
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeR):
 			switch currentTab {
 			case graphTabIndex:
@@ -362,7 +359,11 @@ func guiUpdate(w *nucular.Window) {
 			}
 
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeW):
-			go mw.Close()
+			if tabs[currentTab].Protected() {
+				go mw.Close()
+			} else {
+				closeTab(tabs[currentTab])
+			}
 
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeTab):
 			currentTab = (currentTab + 1) % len(tabs)

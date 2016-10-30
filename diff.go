@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"image"
+	"math"
 	"strings"
 	"unicode"
 
@@ -51,6 +53,17 @@ const (
 type Chunk struct {
 	Opts ChunkOpts
 	Text string
+}
+
+type DiffPos struct {
+	diff        Diff
+	curFileDiff int
+	curLineDiff int
+}
+
+type DiffSel struct {
+	Pos        DiffPos
+	Start, End int
 }
 
 func (ld *LineDiff) IsHunkHeader() bool {
@@ -507,36 +520,6 @@ const (
 	symbWsk  = wordSplitKind(iota)
 )
 
-/*split symbols on their own
-func wordSplit(in string) []string {
-	r := []string{}
-	start := 0
-	kind := spaceWsk
-	for i, ch := range in {
-		var curkind wordSplitKind
-		switch {
-		case unicode.IsSpace(ch):
-			curkind = spaceWsk
-		case unicode.IsLetter(ch) || unicode.IsNumber(ch):
-			curkind = textWsk
-		default:
-			curkind = symbWsk
-		}
-
-		if curkind != kind || kind == symbWsk {
-			if start != i {
-				r = append(r, in[start:i])
-				start = i
-			}
-			kind = curkind
-		}
-	}
-
-	r = append(r, in[start:len(in)])
-	return r
-}
-*/
-
 func wordSplit(in string) []string {
 	r := []string{}
 	start := 0
@@ -563,15 +546,21 @@ func wordSplit(in string) []string {
 	return r
 }
 
-func showDiff(w *nucular.Window, diff Diff, width *int) {
+func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSearch bool) {
 	style := w.Master().Style()
 
 	rounding := uint16(4 * style.Scaling)
 
 	lnh := nucular.FontHeight(style.Font)
 	d := font.Drawer{Face: style.Font}
+	if sel == nil {
+		sel = &DiffSel{diff.BeforeFirst(), 0, 0}
+	}
 
-	for _, filediff := range diff {
+	for fileidx, filediff := range diff {
+		if sel.Pos.InFile(fileidx) {
+			w.TreeOpen(filediff.Filename)
+		}
 		if w.TreePush(nucular.TreeTab, filediff.Filename, len(diff) == 1) {
 			originalSpacing := style.NormalWindow.Spacing.Y
 			style.NormalWindow.Spacing.Y = 0
@@ -588,8 +577,16 @@ func showDiff(w *nucular.Window, diff Diff, width *int) {
 
 			w.Spacing(1)
 
-			for _, linediff := range filediff.Lines {
+			for lineidx, linediff := range filediff.Lines {
 				bounds, out := w.Custom(nstyle.WidgetStateInactive)
+				if scrollToSearch && sel.Pos.InLine(fileidx, lineidx) {
+					above, below := w.Invisible()
+					if above || below {
+						w.Scrollbar.Y = w.At().Y
+					}
+					w.Master().Changed()
+					scrollToSearch = false
+				}
 				if out == nil {
 					continue
 				}
@@ -600,6 +597,9 @@ func showDiff(w *nucular.Window, diff Diff, width *int) {
 				case Delline:
 					out.FillRect(bounds, 0, dellineBg)
 				}
+
+				outchars := 0
+				selStartX, selEndX := 0, 0
 
 				dot := bounds
 				for _, chunk := range linediff.Chunks {
@@ -617,7 +617,22 @@ func showDiff(w *nucular.Window, diff Diff, width *int) {
 					}
 
 					out.DrawText(dot, chunk.Text, style.Font, style.Text.Color)
+
+					if sel.Pos.InLine(fileidx, lineidx) {
+						if sel.Start >= outchars && outchars+len(chunk.Text) > sel.Start {
+							selStartX = dot.X + d.MeasureString(chunk.Text[:sel.Start-outchars]).Ceil()
+						}
+						if sel.End >= outchars && outchars+len(chunk.Text) > sel.End {
+							selEndX = dot.X + d.MeasureString(chunk.Text[:sel.End-outchars]).Ceil()
+						}
+					}
+					outchars += len(chunk.Text)
 					dot.X += dot.W
+				}
+
+				if sel.Pos.InLine(fileidx, lineidx) {
+					maxy := bounds.Max().Y
+					out.StrokeLine(image.Pt(selStartX, maxy), image.Pt(selEndX, maxy), int(math.Ceil(style.Scaling)), style.Text.Color)
 				}
 			}
 
@@ -654,6 +669,95 @@ func showDiff(w *nucular.Window, diff Diff, width *int) {
 		}
 		if w.Scrollbar.X < 0 {
 			w.Scrollbar.X = 0
+		}
+	}
+}
+
+func (diff Diff) BeforeFirst() DiffPos {
+	return DiffPos{diff, 0, -1}
+}
+
+func (pos *DiffPos) Next() (DiffPos, bool) {
+	it := *pos
+	for it.curFileDiff < len(it.diff) {
+		it.curLineDiff++
+
+		if it.curLineDiff < len(it.diff[it.curFileDiff].Lines) {
+			return it, true
+		}
+
+		it.curLineDiff = -1
+		it.curFileDiff++
+	}
+	return DiffPos{pos.diff, 0, -1}, false
+}
+
+func (it *DiffPos) Text() string {
+	if it.curFileDiff >= len(it.diff) || it.curLineDiff >= len(it.diff[it.curFileDiff].Lines) || it.curFileDiff < 0 || it.curLineDiff < 0 {
+		return ""
+	}
+	lineDiff := &it.diff[it.curFileDiff].Lines[it.curLineDiff]
+	switch len(lineDiff.Chunks) {
+	case 0:
+		return ""
+	case 1:
+		return lineDiff.Chunks[0].Text
+	default:
+		var l int
+		for i := range lineDiff.Chunks {
+			l += len(lineDiff.Chunks[i].Text)
+		}
+		b := make([]byte, 0, l)
+		for i := range lineDiff.Chunks {
+			b = append(b, []byte(lineDiff.Chunks[i].Text)...)
+		}
+		return string(b)
+	}
+}
+
+func (it *DiffPos) InFile(fileidx int) bool {
+	return it.curFileDiff == fileidx && it.curLineDiff >= 0
+}
+
+func (it *DiffPos) InLine(fileidx int, lineidx int) bool {
+	return it.curFileDiff == fileidx && it.curLineDiff == lineidx
+}
+
+func (diff *Diff) Lookfwd(sel DiffSel, needle string, advance bool) DiffSel {
+	first := true
+	idx := sel.Start
+	if advance {
+		idx = sel.End
+	}
+	insensitive := true
+	for _, ch := range needle {
+		if unicode.IsUpper(ch) {
+			insensitive = false
+			break
+		}
+	}
+	for {
+		if !first {
+			var ok bool
+			sel.Pos, ok = sel.Pos.Next()
+			if !ok {
+				return DiffSel{diff.BeforeFirst(), 0, 0}
+			}
+			idx = 0
+		}
+		first = false
+		txt := sel.Pos.Text()
+		if insensitive {
+			//XXX this is wrong for languages where changing case changes the number of runes
+			txt = strings.ToLower(txt)
+		}
+		if len(txt) < 0 || idx >= len(txt) {
+			continue
+		}
+		if i := strings.Index(txt[idx:], needle); i >= 0 {
+			sel.Start = i + idx
+			sel.End = sel.Start + len(needle)
+			return sel
 		}
 	}
 }
