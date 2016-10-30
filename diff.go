@@ -21,10 +21,11 @@ const wordDiffDebug = false
 type Diff []FileDiff
 
 type FileDiff struct {
-	Num      int
-	Filename string
-	Headers  []Chunk
-	Lines    []LineDiff
+	Num       int
+	Filename  string
+	Filedescr string
+	Headers   []Chunk
+	Lines     []LineDiff
 }
 
 type LineDiffOpts int
@@ -91,6 +92,25 @@ func parseDiff(bs []byte) Diff {
 	const addprefix = "+++ "
 	const addprefixExtra = "b/"
 
+	flushFilediff := func() {
+		if len(lines) > 0 {
+			filediff.Lines = append(filediff.Lines, diffLines(lines, merge)...)
+		}
+		dellines, addlines := 0, 0
+		for i := range filediff.Lines {
+			switch filediff.Lines[i].Opts {
+			case Addline:
+				addlines++
+			case Delline:
+				dellines++
+			}
+		}
+		filediff.Filedescr = fmt.Sprintf("%s +%d-%d", filediff.Filename, addlines, dellines)
+		diff = append(diff, *filediff)
+		filediffBody = false
+		filediff = &FileDiff{}
+	}
+
 	for rdr.Scan() {
 		text := rdr.Text()
 
@@ -132,12 +152,7 @@ func parseDiff(bs []byte) Diff {
 			}
 		} else if filediff != nil && filediffBody {
 			if strings.HasPrefix(text, "diff ") {
-				if len(lines) > 0 {
-					filediff.Lines = append(filediff.Lines, diffLines(lines, merge)...)
-				}
-				diff = append(diff, *filediff)
-				filediffBody = false
-				filediff = &FileDiff{}
+				flushFilediff()
 				lines = []string{}
 				filediff.Headers = append(filediff.Headers, Chunk{Opts: Filehdr, Text: text})
 			} else if text[0] == '@' {
@@ -153,10 +168,7 @@ func parseDiff(bs []byte) Diff {
 	}
 
 	if filediff != nil {
-		if len(lines) > 0 {
-			filediff.Lines = append(filediff.Lines, diffLines(lines, merge)...)
-		}
-		diff = append(diff, *filediff)
+		flushFilediff()
 	}
 
 	for i := range diff {
@@ -561,7 +573,7 @@ func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSe
 		if sel.Pos.InFile(fileidx) {
 			w.TreeOpen(filediff.Filename)
 		}
-		if w.TreePush(nucular.TreeTab, filediff.Filename, len(diff) == 1) {
+		if w.TreePushNamed(nucular.TreeTab, filediff.Filename, filediff.Filedescr, len(diff) == 1) {
 			originalSpacing := style.NormalWindow.Spacing.Y
 			style.NormalWindow.Spacing.Y = 0
 
