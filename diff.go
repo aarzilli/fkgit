@@ -580,7 +580,7 @@ func showDiff(w *nucular.Window, diff Diff, width *int, sel *SearchSel, scrollTo
 				w.Row(20).Static(0, 90)
 				w.LabelColored(filediff.Headers[1].Text, "LC", hunkhdrColor)
 				if w.ButtonText("Blame") {
-					NewBlameWindow(w.Master(), filediff.Filename)
+					NewBlameWindow(w.Master(), "", filediff.Filename)
 				}
 			}
 

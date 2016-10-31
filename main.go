@@ -456,7 +456,7 @@ func fixStyle(style *nstyle.Style) {
 func main() {
 	rand.Seed(time.Now().Unix())
 
-	blamefile := ""
+	blamefile, blamerev := "", ""
 
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
@@ -468,12 +468,23 @@ func main() {
 			editmodeMain()
 			return
 		case "blame":
+			switch len(os.Args) {
+			case 3:
+				blamefile = os.Args[2]
+				Repodir = findRepository(nil)
+			case 4:
+				blamerev = os.Args[2]
+				blamefile = os.Args[3]
+				Repodir = findRepository(nil)
+			case 5:
+				blamerev = os.Args[2]
+				blamefile = os.Args[3]
+				Repodir = findRepository(os.Args[4:])
+			}
 			if len(os.Args) < 3 {
 				fmt.Fprintf(os.Stderr, "blame needs an argument\n")
 				os.Exit(1)
 			}
-			blamefile = os.Args[2]
-			Repodir = findRepository(os.Args[3:])
 		default:
 			Repodir = findRepository(os.Args[1:])
 		}
@@ -520,7 +531,12 @@ func main() {
 
 	blameTabIndex := -1
 	if blamefile != "" {
-		NewBlameWindow(wnd, blamefile)
+		wd, _ := os.Getwd()
+		if len(blamefile) <= 0 || blamefile[0] != '/' {
+			blamefile, _ = filepath.Abs(filepath.Join(wd, blamefile))
+		}
+		blamefile, _ = filepath.Rel(Repodir, blamefile)
+		NewBlameWindow(wnd, blamerev, blamefile)
 		blameTabIndex = len(tabs) - 1
 	}
 

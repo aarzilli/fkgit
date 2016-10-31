@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -23,6 +24,7 @@ import (
 
 type BlameTab struct {
 	filename string
+	revision string
 
 	mu sync.Mutex
 	mw *nucular.MasterWindow
@@ -59,8 +61,8 @@ type BlameLine struct {
 	Text   string
 }
 
-func NewBlameWindow(mw *nucular.MasterWindow, filename string) {
-	tab := &BlameTab{filename: filename, mw: mw, Commits: map[string]*Commit{}, CommitColor: map[string]color.RGBA{}}
+func NewBlameWindow(mw *nucular.MasterWindow, revision, filename string) {
+	tab := &BlameTab{filename: filename, revision: revision, mw: mw, Commits: map[string]*Commit{}, CommitColor: map[string]color.RGBA{}}
 
 	tab.loadFile()
 
@@ -71,14 +73,30 @@ func NewBlameWindow(mw *nucular.MasterWindow, filename string) {
 }
 
 func (tab *BlameTab) loadFile() {
-	fh, err := os.Open(filepath.Join(Repodir, tab.filename))
-	if err != nil {
+	if tab.revision == "" {
+		fh, err := os.Open(filepath.Join(Repodir, tab.filename))
+		if err != nil {
+			tab.err = err
+			return
+		}
+		defer fh.Close()
+		tab.loadReader(fh)
+		return
+	}
+	cmd := exec.Command("git", "show", tab.revision+":"+tab.filename)
+	cmd.Dir = Repodir
+	stdout, _ := cmd.StdoutPipe()
+	defer stdout.Close()
+	if err := cmd.Start(); err != nil {
 		tab.err = err
 		return
 	}
-	defer fh.Close()
+	tab.loadReader(stdout)
+	cmd.Wait()
+}
 
-	s := bufio.NewScanner(fh)
+func (tab *BlameTab) loadReader(in io.Reader) {
+	s := bufio.NewScanner(in)
 	for s.Scan() {
 		tab.Lines = append(tab.Lines, BlameLine{Text: expandtabs(s.Text())})
 	}
@@ -87,6 +105,9 @@ func (tab *BlameTab) loadFile() {
 func (tab *BlameTab) parseBlameOut() {
 	defer func() { tab.loadDone = true }()
 	args := []string{"blame", "--incremental", "-w"}
+	if tab.revision != "" {
+		args = append(args, tab.revision)
+	}
 	args = append(args, "--", tab.filename)
 	cmd := exec.Command("git", args...)
 
@@ -166,7 +187,15 @@ func (tab *BlameTab) Protected() bool {
 
 func (tab *BlameTab) Title() string {
 	if tab.title == "" {
-		tab.title = fmt.Sprintf("Blame %s", tab.filename)
+		if tab.revision != "" {
+			if len(tab.revision) >= 40 {
+				tab.title = fmt.Sprintf("Blame %s %s", abbrev(tab.revision), tab.filename)
+			} else {
+				tab.title = fmt.Sprintf("Blame %s %s", tab.revision, tab.filename)
+			}
+		} else {
+			tab.title = fmt.Sprintf("Blame %s", tab.filename)
+		}
 	}
 	return tab.title
 }
@@ -332,6 +361,9 @@ func (tab *BlameTab) blameCommitMenu(w *nucular.Window, commit *Commit) {
 		// commit must be reloaded because it only contains the summary in Message
 		fullCommit, _ := LoadCommit(commit.Id)
 		NewViewWindow(fullCommit, true)
+	}
+	if w.MenuItem(label.TA(fmt.Sprintf("Blame at %s", a), "LC")) {
+		NewBlameWindow(w.Master(), commit.Id, tab.filename)
 	}
 }
 

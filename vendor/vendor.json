@@ -61,10 +61,10 @@
 			"revisionTime": "2016-10-31T10:17:33Z"
 		},
 		{
-			"checksumSHA1": "jzjOd5evtllVZ9crXY+EMeHtI2U=",
+			"checksumSHA1": "IzqeBw7Wmt9Z1RrLKGmkWG16ahk=",
 			"path": "github.com/aarzilli/nucular/style",
-			"revision": "80bd82f23ecc9f014840e7360a3709e7c37cae23",
-			"revisionTime": "2016-10-31T10:17:33Z"
+			"revision": "1bd38db9a74942d8b705ee8799293b2520b47ea1",
+			"revisionTime": "2016-10-31T14:44:32Z"
 		},
 		{
 			"path": "github.com/golang/freetype",
