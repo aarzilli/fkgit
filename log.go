@@ -1281,6 +1281,9 @@ func (lw *LogWindow) Update(w *nucular.Window) {
 }
 
 func (lw *LogWindow) reload() {
+	if lw.started && !lw.done {
+		return
+	}
 	lw.commits = lw.commits[:0]
 	lw.maxOccupied = 0
 
