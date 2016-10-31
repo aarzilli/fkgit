@@ -460,6 +460,14 @@ func main() {
 
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
+		case "help":
+			fmt.Printf("Usage:\n")
+			fmt.Printf("\tfkgit\n")
+			fmt.Printf("\tfkgit blame [revision] file\n")
+			fmt.Printf("\tfkgit help\n")
+			fmt.Printf("\n")
+			fmt.Printf("Call without arguments to open log/commit window\n")
+			os.Exit(0)
 		case "seqed", "comed":
 			if os.Getenv("FKGIT_SEQUENCE_EDITOR_SOCKET") == "" {
 				fmt.Fprintf(os.Stderr, "no sequence editor socket\n")
