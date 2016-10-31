@@ -22,7 +22,6 @@ import (
 )
 
 type BlameTab struct {
-	repodir  string
 	filename string
 
 	mu sync.Mutex
@@ -60,8 +59,8 @@ type BlameLine struct {
 	Text   string
 }
 
-func NewBlameWindow(mw *nucular.MasterWindow, repodir, filename string) {
-	tab := &BlameTab{repodir: repodir, filename: filename, mw: mw, Commits: map[string]*Commit{}, CommitColor: map[string]color.RGBA{}}
+func NewBlameWindow(mw *nucular.MasterWindow, filename string) {
+	tab := &BlameTab{filename: filename, mw: mw, Commits: map[string]*Commit{}, CommitColor: map[string]color.RGBA{}}
 
 	tab.loadFile()
 
@@ -72,7 +71,7 @@ func NewBlameWindow(mw *nucular.MasterWindow, repodir, filename string) {
 }
 
 func (tab *BlameTab) loadFile() {
-	fh, err := os.Open(filepath.Join(tab.repodir, tab.filename))
+	fh, err := os.Open(filepath.Join(Repodir, tab.filename))
 	if err != nil {
 		tab.err = err
 		return
@@ -95,7 +94,7 @@ func (tab *BlameTab) parseBlameOut() {
 	defer stdout.Close()
 	s := bufio.NewScanner(stdout)
 
-	cmd.Dir = tab.repodir
+	cmd.Dir = Repodir
 	if err := cmd.Start(); err != nil {
 		tab.mu.Lock()
 		tab.err = err
@@ -331,8 +330,8 @@ func (tab *BlameTab) blameCommitMenu(w *nucular.Window, commit *Commit) {
 	a := abbrev(commit.Id)
 	if w.MenuItem(label.TA(fmt.Sprintf("View %s", a), "LC")) {
 		// commit must be reloaded because it only contains the summary in Message
-		fullCommit, _ := LoadCommit(tab.repodir, commit.Id)
-		NewViewWindow(tab.repodir, fullCommit, true)
+		fullCommit, _ := LoadCommit(commit.Id)
+		NewViewWindow(fullCommit, true)
 	}
 }
 

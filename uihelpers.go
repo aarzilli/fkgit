@@ -347,7 +347,7 @@ func (dp *diffPopup) Update(w *nucular.Window) {
 		niceNameA, commitOrRefA := dp.idxToCommitOrRef(dp.Idx1)
 		niceNameB, commitOrRefB := dp.idxToCommitOrRef(dp.Idx2)
 
-		diffAction(&lw, niceNameA, commitOrRefA, niceNameB, commitOrRefB)
+		diffAction(niceNameA, commitOrRefA, niceNameB, commitOrRefB)
 	}
 }
 

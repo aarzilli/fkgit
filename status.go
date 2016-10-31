@@ -18,12 +18,12 @@ type GitStatus struct {
 	Lines  []StatusLine
 }
 
-func gitStatus(repodir string) *GitStatus {
+func gitStatus() *GitStatus {
 	r := GitStatus{}
 
 	const arrow = " -> "
 
-	bs, err := execCommand(repodir, "git", "status", "--porcelain", "-b")
+	bs, err := execCommand("git", "status", "--porcelain", "-b")
 	must(err)
 	rdr := bufio.NewScanner(bytes.NewReader([]byte(bs)))
 	for rdr.Scan() {

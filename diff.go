@@ -556,7 +556,7 @@ func wordSplit(in string) []string {
 	return r
 }
 
-func showDiff(w *nucular.Window, diff Diff, repodir string, width *int, sel *SearchSel, scrollToSearch bool) {
+func showDiff(w *nucular.Window, diff Diff, width *int, sel *SearchSel, scrollToSearch bool) {
 	style := w.Master().Style()
 
 	rounding := uint16(4 * style.Scaling)
@@ -580,7 +580,7 @@ func showDiff(w *nucular.Window, diff Diff, repodir string, width *int, sel *Sea
 				w.Row(20).Static(0, 90)
 				w.LabelColored(filediff.Headers[1].Text, "LC", hunkhdrColor)
 				if w.ButtonText("Blame") {
-					NewBlameWindow(w.Master(), repodir, filediff.Filename)
+					NewBlameWindow(w.Master(), filediff.Filename)
 				}
 			}
 

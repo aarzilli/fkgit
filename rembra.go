@@ -10,15 +10,13 @@ import (
 )
 
 type remotesTab struct {
-	repodir     string
 	ed          nucular.TextEditor
 	remotes     map[string]string
 	remoteNames []string
 }
 
-func newRemotesTab(repodir string) {
+func newRemotesTab() {
 	rt := &remotesTab{}
-	rt.repodir = repodir
 	rt.ed.Flags = nucular.EditSelectable | nucular.EditClipboard
 	rt.loadRemotes()
 	sort.Strings(rt.remoteNames)
@@ -26,7 +24,7 @@ func newRemotesTab(repodir string) {
 }
 
 func (rt *remotesTab) loadRemotes() {
-	rt.remotes = allRemotes(rt.repodir)
+	rt.remotes = allRemotes()
 	rt.remoteNames = make([]string, 0, len(rt.remotes))
 	for k := range rt.remotes {
 		rt.remoteNames = append(rt.remoteNames, k)
@@ -71,16 +69,14 @@ func (rt *remotesTab) Update(w *nucular.Window) {
 }
 
 type refsTab struct {
-	repodir     string
 	ed          nucular.TextEditor
 	refs        []Ref
 	commits     map[string]Commit
 	selectedRef Ref
 }
 
-func newRefsTab(repodir string) {
+func newRefsTab() {
 	rt := &refsTab{}
-	rt.repodir = repodir
 	rt.ed.Flags = nucular.EditSelectable | nucular.EditClipboard
 	rt.loadRefs()
 	openTab(rt)
@@ -108,7 +104,7 @@ func (v refsByCommitDate) Less(i, j int) bool {
 }
 
 func (rt *refsTab) loadRefs() {
-	rt.refs, _ = allRefs(rt.repodir)
+	rt.refs, _ = allRefs()
 	if rt.commits == nil {
 		rt.commits = map[string]Commit{}
 	}
@@ -125,7 +121,7 @@ func (rt *refsTab) loadRefs() {
 		if rt.commits[commitId].Id != "" {
 			continue
 		}
-		rt.commits[commitId], _ = LoadCommit(rt.repodir, commitId)
+		rt.commits[commitId], _ = LoadCommit(commitId)
 	}
 	sort.Sort(refsByCommitDate{rt.refs, rt.commits})
 }

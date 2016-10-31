@@ -190,12 +190,12 @@ headerLoop:
 	return
 }
 
-func allCommits(repodir string) *CommitFetcher {
+func allCommits() *CommitFetcher {
 	fetcher := &CommitFetcher{}
 	outchan := make(chan Commit)
 	fetcher.Out = outchan
 	fetcher.cmd = exec.Command("git", "log", "--pretty=raw", "-z", "--all", "--no-color", "--date-order")
-	fetcher.cmd.Dir = repodir
+	fetcher.cmd.Dir = Repodir
 	stdout, err := fetcher.cmd.StdoutPipe()
 	if err != nil {
 		fetcher.Err = err
@@ -466,7 +466,6 @@ type LogWindow struct {
 	selectedId   string
 	selectedView *ViewWindow
 
-	repodir string
 	allrefs []Ref
 	mw      *nucular.MasterWindow
 
@@ -500,16 +499,16 @@ func (lw *LogWindow) commitproc() {
 	}()
 
 	var err error
-	lw.allrefs, err = allRefs(lw.repodir)
+	lw.allrefs, err = allRefs()
 	if err != nil {
 		newMessagePopup(lw.mw, "Error", fmt.Sprintf("Error fetching references: %v\n", err))
 		return
 	}
 
-	fetcher := allCommits(lw.repodir)
+	fetcher := allCommits()
 	commitchan := make(chan LanedCommit)
 	var headcommit string
-	lw.Headisref, headcommit, _ = getHead(lw.repodir)
+	lw.Headisref, headcommit, _ = getHead()
 	if lw.Headisref {
 		lw.Head = &Ref{}
 		lw.Head.Init(headcommit, "")
@@ -593,7 +592,7 @@ func (lw *LogWindow) selectCommit(lc *LanedCommit) {
 	}
 	lw.selectedId = lc.Id
 	lw.showOutput = false
-	lw.selectedView = NewViewWindow(lw.repodir, lc.Commit, false)
+	lw.selectedView = NewViewWindow(lc.Commit, false)
 }
 
 var graphColor = color.RGBA{213, 204, 255, 0xff}
@@ -622,7 +621,7 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 		}
 	}
 	if lw.status == nil {
-		lw.status = gitStatus(lw.repodir)
+		lw.status = gitStatus()
 	}
 	w.Label(lw.status.Summary(), "LC")
 
@@ -1111,7 +1110,7 @@ func NewCommitMenu(lw *LogWindow, lc LanedCommit, mainw *nucular.Window) *commit
 					continue
 				}
 
-				base, err := execCommand(lw.repodir, "git", "merge-base", headref.nice, ref.Nice())
+				base, err := execCommand("git", "merge-base", headref.nice, ref.Nice())
 				if err != nil {
 					continue
 				}
@@ -1302,13 +1301,13 @@ func (lw *LogWindow) pathSearch(path string) {
 	lw.searchDone = false
 	lw.searchResults = lw.searchResults[:0]
 	lw.searchCmd = exec.Command("git", "log", "--format=%H", "--color=never", "--", path)
-	lw.searchCmd.Dir = lw.repodir
+	lw.searchCmd.Dir = Repodir
 	lw.anySearch()
 }
 
 func (lw *LogWindow) grepSearch(pattern string) {
 	lw.searchCmd = exec.Command("git", "log", "--format=%H", "--color=never", "--grep="+pattern)
-	lw.searchCmd.Dir = lw.repodir
+	lw.searchCmd.Dir = Repodir
 	lw.anySearch()
 }
 

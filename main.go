@@ -20,15 +20,17 @@ import (
 	"golang.org/x/mobile/event/mouse"
 )
 
+var Repodir string
+
 func must(err error) {
 	if err != nil {
 		panic(err)
 	}
 }
 
-func execCommand(repodir, cmdname string, args ...string) (string, error) {
+func execCommand(cmdname string, args ...string) (string, error) {
 	cmd := exec.Command(cmdname, args...)
-	cmd.Dir = repodir
+	cmd.Dir = Repodir
 	bs, err := cmd.CombinedOutput()
 	return string(bs), err
 }
@@ -94,9 +96,9 @@ func (ref *Ref) RemoteName() string {
 	return ref.nice[len(ref.remote)+1:]
 }
 
-func getHead(repodir string) (isref bool, reforid string, err error) {
+func getHead() (isref bool, reforid string, err error) {
 	const refPrefix = "ref: "
-	bs, err := ioutil.ReadFile(filepath.Join(filepath.Join(repodir, ".git"), "HEAD"))
+	bs, err := ioutil.ReadFile(filepath.Join(filepath.Join(Repodir, ".git"), "HEAD"))
 	if err != nil {
 		return false, "", err
 	}
@@ -109,8 +111,8 @@ func getHead(repodir string) (isref bool, reforid string, err error) {
 	return false, s, nil
 }
 
-func allRefs(repodir string) ([]Ref, error) {
-	headisref, headref, err := getHead(repodir)
+func allRefs() ([]Ref, error) {
+	headisref, headref, err := getHead()
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +120,7 @@ func allRefs(repodir string) ([]Ref, error) {
 		headref = ""
 	}
 
-	s, err := execCommand(repodir, "git", "show-ref", "-d")
+	s, err := execCommand("git", "show-ref", "-d")
 	if err != nil {
 		return nil, err
 	}
@@ -152,9 +154,9 @@ func allRefs(repodir string) ([]Ref, error) {
 	return r, nil
 }
 
-func allRemotes(repodir string) map[string]string {
+func allRemotes() map[string]string {
 	r := map[string]string{}
-	s, err := execCommand(repodir, "git", "remote", "-v")
+	s, err := execCommand("git", "remote", "-v")
 	must(err)
 	rlines := strings.Split(s, "\n")
 	for _, line := range rlines {
@@ -205,9 +207,9 @@ type Commit struct {
 	Message       string
 }
 
-func LoadCommit(repodir, commitId string) (Commit, bool) {
+func LoadCommit(commitId string) (Commit, bool) {
 	cmd := exec.Command("git", "show", "--pretty=raw", "--no-color", "--no-patch", commitId)
-	cmd.Dir = repodir
+	cmd.Dir = Repodir
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return Commit{}, false
@@ -409,10 +411,10 @@ func guiUpdate(w *nucular.Window) {
 	if w := w.Menu(label.TA("More...", "CC"), 200, nil); w != nil {
 		w.Row(20).Dynamic(1)
 		if w.MenuItem(label.TA("Remotes", "LC")) {
-			newRemotesTab(lw.repodir)
+			newRemotesTab()
 		}
 		if w.MenuItem(label.TA("Refs", "LC")) {
-			newRefsTab(lw.repodir)
+			newRefsTab()
 		}
 		if githubStuff != nil {
 			if w.MenuItem(label.TA("Github Issues", "LC")) {
@@ -454,7 +456,6 @@ func fixStyle(style *nstyle.Style) {
 func main() {
 	rand.Seed(time.Now().Unix())
 
-	repodir := ""
 	blamefile := ""
 
 	if len(os.Args) >= 2 {
@@ -472,15 +473,15 @@ func main() {
 				os.Exit(1)
 			}
 			blamefile = os.Args[2]
-			repodir = findRepository(os.Args[3:])
+			Repodir = findRepository(os.Args[3:])
 		default:
-			repodir = findRepository(os.Args[1:])
+			Repodir = findRepository(os.Args[1:])
 		}
 	} else {
-		repodir = findRepository(nil)
+		Repodir = findRepository(nil)
 	}
 
-	if repodir == "" {
+	if Repodir == "" {
 		fmt.Fprintf(os.Stderr, "could not find repository\n")
 		os.Exit(1)
 		return
@@ -492,7 +493,6 @@ func main() {
 	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme, conf.Scaling))
 	fixStyle(wnd.Style())
 
-	lw.repodir = repodir
 	lw.edOutput.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditReadOnly | nucular.EditClipboard
 	lw.searchEd.Flags = nucular.EditSelectable | nucular.EditFocusFollowsMouse | nucular.EditSigEnter | nucular.EditClipboard
 	lw.searchMode = noSearch
@@ -504,7 +504,6 @@ func main() {
 
 	openTab(&lw)
 
-	idxmw.repodir = repodir
 	idxmw.selected = -1
 	idxmw.splitv.MinSize = 80
 	idxmw.splitv.Size = 120
@@ -521,13 +520,13 @@ func main() {
 
 	blameTabIndex := -1
 	if blamefile != "" {
-		NewBlameWindow(wnd, repodir, blamefile)
+		NewBlameWindow(wnd, blamefile)
 		blameTabIndex = len(tabs) - 1
 	}
 
-	initGithubIntegration(wnd, repodir)
+	initGithubIntegration(wnd)
 
-	status := gitStatus(repodir)
+	status := gitStatus()
 	switch {
 	case blameTabIndex >= 0:
 		currentTab = blameTabIndex

@@ -10,7 +10,6 @@ import (
 )
 
 type ViewWindow struct {
-	repodir         string
 	commit          Commit
 	viewInTabButton bool
 
@@ -25,10 +24,9 @@ type ViewWindow struct {
 	searcher Searcher
 }
 
-func NewViewWindow(repodir string, commit Commit, opentab bool) *ViewWindow {
+func NewViewWindow(commit Commit, opentab bool) *ViewWindow {
 	vw := &ViewWindow{}
 
-	vw.repodir = repodir
 	vw.commit = commit
 
 	vw.parseDiff()
@@ -44,11 +42,10 @@ func NewViewWindow(repodir string, commit Commit, opentab bool) *ViewWindow {
 	return vw
 }
 
-func NewDiffWindow(repodir string, niceNameA, commitA, niceNameB, commitB string) {
+func NewDiffWindow(niceNameA, commitA, niceNameB, commitB string) {
 	vw := &ViewWindow{}
 
 	vw.isdiff = true
-	vw.repodir = repodir
 	vw.niceNameA = niceNameA
 	vw.niceNameB = niceNameB
 	vw.commitA = commitA
@@ -66,7 +63,7 @@ func (vw *ViewWindow) parseDiff() {
 	} else {
 		cmd = exec.Command("git", "show", vw.commit.Id, "--decorate=full", "--no-abbrev", "--color=never")
 	}
-	cmd.Dir = vw.repodir
+	cmd.Dir = Repodir
 
 	bs, err := cmd.CombinedOutput()
 	if err != nil {
@@ -130,7 +127,7 @@ func (vw *ViewWindow) updateView(w *nucular.Window) {
 		w.Label(" ", "LC")
 	}
 
-	showDiff(w, vw.diff, vw.repodir, &vw.width, vw.searcher.Sel(), scrollToSearch)
+	showDiff(w, vw.diff, &vw.width, vw.searcher.Sel(), scrollToSearch)
 }
 
 func showCommit(lnh int, w *nucular.Window, lc Commit, viewInTabButton bool) {

@@ -19,7 +19,6 @@ import (
 )
 
 type IndexManagerWindow struct {
-	repodir             string
 	selected            int
 	status              *GitStatus
 	diff                Diff
@@ -90,7 +89,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 				if os.Getenv("EDITOR") != "" {
 					if w.MenuItem(label.TA("Edit", "LC")) {
 						cmd := exec.Command(os.Getenv("EDITOR"), idxmw.status.Lines[i].Path)
-						cmd.Dir = idxmw.repodir
+						cmd.Dir = Repodir
 						cmd.Start()
 						go cmd.Wait()
 					}
@@ -118,7 +117,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 			diffgroup.Scrollbar.Y = 0
 		}
 		if idxmw.selected >= 0 {
-			showDiff(diffgroup, idxmw.diff, idxmw.repodir, &idxmw.diffwidth, nil, false)
+			showDiff(diffgroup, idxmw.diff, &idxmw.diffwidth, nil, false)
 		}
 		diffgroup.GroupEnd()
 	}
@@ -167,7 +166,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 				} else {
 					cmd = exec.Command("git", "commit", "-F", "-")
 				}
-				cmd.Dir = idxmw.repodir
+				cmd.Dir = Repodir
 				gitin, err := cmd.StdinPipe()
 				must(err)
 				go func() {
@@ -230,16 +229,16 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 
 func (idxmw *IndexManagerWindow) addRemoveIndex(add bool, i int) {
 	if add {
-		execCommand(idxmw.repodir, "git", "add", idxmw.status.Lines[i].Path)
+		execCommand("git", "add", idxmw.status.Lines[i].Path)
 	} else {
-		execCommand(idxmw.repodir, "git", "reset", "-q", "--", idxmw.status.Lines[i].Path)
+		execCommand("git", "reset", "-q", "--", idxmw.status.Lines[i].Path)
 	}
 	idxmw.updating = true
 	go idxmw.reload()
 }
 
 func (idxmw *IndexManagerWindow) ignoreIndex(i int) {
-	fh, err := os.OpenFile(filepath.Join(idxmw.repodir, ".git/info/exclude"), os.O_APPEND|os.O_WRONLY, 0)
+	fh, err := os.OpenFile(filepath.Join(Repodir, ".git/info/exclude"), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		return
 	}
@@ -269,7 +268,7 @@ func (idxmw *IndexManagerWindow) reload() {
 
 	idxmw.loadCommitMsg()
 
-	idxmw.status = gitStatus(idxmw.repodir)
+	idxmw.status = gitStatus()
 
 	for i, line := range idxmw.status.Lines {
 		if line.Path == oldselected {
@@ -293,9 +292,9 @@ func (idxmw *IndexManagerWindow) loadDiff() {
 	var err error
 
 	if line.Index != " " && line.WorkDir == " " {
-		bs, err = execCommand(idxmw.repodir, "git", "diff", "--color=never", "--cached", "--", line.Path)
+		bs, err = execCommand("git", "diff", "--color=never", "--cached", "--", line.Path)
 	} else {
-		bs, err = execCommand(idxmw.repodir, "git", "diff", "--color=never", "--", line.Path)
+		bs, err = execCommand("git", "diff", "--color=never", "--", line.Path)
 	}
 	must(err)
 	idxmw.resetDiffViewScroll = true
@@ -316,7 +315,7 @@ func (idxmw *IndexManagerWindow) loadCommitMsg() {
 	case idxmw.rebasedit != "":
 		loadfile(idxmw.rebasedit)
 	case idxmw.amend:
-		out, err := execCommand(idxmw.repodir, "git", "cat-file", "commit", "HEAD")
+		out, err := execCommand("git", "cat-file", "commit", "HEAD")
 		must(err)
 		msgv := strings.Split(out, "\n")
 		for i := range msgv {
@@ -328,7 +327,7 @@ func (idxmw *IndexManagerWindow) loadCommitMsg() {
 		}
 	default:
 		for _, name := range []string{"MERGE_MSG", "SQUASH_MSG"} {
-			if err := loadfile(filepath.Join(filepath.Join(idxmw.repodir, ".git"), name)); err == nil {
+			if err := loadfile(filepath.Join(filepath.Join(Repodir, ".git"), name)); err == nil {
 				return
 			}
 

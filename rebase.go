@@ -44,7 +44,7 @@ func rebaseAction(lw *LogWindow, commitIdOrRef string) {
 
 	os.Setenv("FKGIT_SEQUENCE_EDITOR_SOCKET", socname)
 
-	tab := &rebaseTab{soc: soc, mw: lw.mw, repodir: lw.repodir}
+	tab := &rebaseTab{soc: soc, mw: lw.mw}
 	tab.newcommand("git", "rebase", "-i", commitIdOrRef)
 	openTab(tab)
 
@@ -53,10 +53,9 @@ func rebaseAction(lw *LogWindow, commitIdOrRef string) {
 }
 
 type rebaseTab struct {
-	soc     net.Listener
-	mu      sync.Mutex
-	mw      *nucular.MasterWindow
-	repodir string
+	soc net.Listener
+	mu  sync.Mutex
+	mw  *nucular.MasterWindow
 
 	ed nucular.TextEditor
 
@@ -245,8 +244,8 @@ func (rt *rebaseTab) runcommand() {
 	}
 	rt.cmd = nil
 
-	f1, _ := os.Stat(filepath.Join(rt.repodir, ".git", "rebase-merge"))
-	f2, _ := os.Stat(filepath.Join(rt.repodir, ".git", "rebase-apply"))
+	f1, _ := os.Stat(filepath.Join(Repodir, ".git", "rebase-merge"))
+	f2, _ := os.Stat(filepath.Join(Repodir, ".git", "rebase-apply"))
 	rt.done = f1 == nil && f2 == nil
 	if rt.done {
 		rt.soc.Close()
@@ -256,7 +255,7 @@ func (rt *rebaseTab) runcommand() {
 func (rt *rebaseTab) newcommand(cmd string, args ...string) {
 	rt.cmd = exec.Command(cmd, args...)
 	rt.cmd.Env = []string{"GIT_SEQUENCE_EDITOR=fkgit seqed", "GIT_EDITOR=fkgit comed"}
-	rt.cmd.Dir = lw.repodir
+	rt.cmd.Dir = Repodir
 }
 
 func editmodeMain() {

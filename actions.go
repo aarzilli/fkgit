@@ -10,7 +10,7 @@ import (
 )
 
 func viewAction(lw *LogWindow, commit Commit) {
-	NewViewWindow(lw.repodir, commit, true)
+	NewViewWindow(commit, true)
 }
 
 func newbranchAction(lw *LogWindow, branchname, commitId string) {
@@ -73,8 +73,8 @@ func mergeAction(lw *LogWindow, ref *Ref) {
 	execBackground(false, lw, "git", "merge", ref.Nice())
 }
 
-func diffAction(lw *LogWindow, niceNameA, commitOrRefA, niceNameB, commitOrRefB string) {
-	NewDiffWindow(lw.repodir, niceNameA, commitOrRefA, niceNameB, commitOrRefB)
+func diffAction(niceNameA, commitOrRefA, niceNameB, commitOrRefB string) {
+	NewDiffWindow(niceNameA, commitOrRefA, niceNameB, commitOrRefB)
 }
 
 func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) error {
@@ -94,7 +94,7 @@ func execBackground(wait bool, lw *LogWindow, cmdname string, args ...string) er
 		}
 
 		cmd := exec.Command(cmdname, args...)
-		cmd.Dir = lw.repodir
+		cmd.Dir = Repodir
 
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()

@@ -13,10 +13,10 @@ import (
 
 var githubStuff *GithubStuff
 
-func initGithubIntegration(mw *nucular.MasterWindow, repodir string) {
+func initGithubIntegration(mw *nucular.MasterWindow) {
 	const prefix = "git@github.com:"
 	const suffix = ".git"
-	remotes := allRemotes(repodir)
+	remotes := allRemotes()
 	origin := remotes["origin"]
 
 	if !strings.HasPrefix(origin, prefix) || !strings.HasSuffix(origin, suffix) {
@@ -31,7 +31,7 @@ func initGithubIntegration(mw *nucular.MasterWindow, repodir string) {
 	owner := v[0]
 	repo := v[1]
 
-	githubStuff = NewGithubStuff(mw, repodir, owner, repo)
+	githubStuff = NewGithubStuff(mw, owner, repo)
 }
 
 type issue struct {
@@ -49,10 +49,9 @@ type pull struct {
 }
 
 type GithubStuff struct {
-	repodir string
-	owner   string
-	repo    string
-	mw      *nucular.MasterWindow
+	owner string
+	repo  string
+	mw    *nucular.MasterWindow
 
 	selectedIssue int
 	iss           []issue
@@ -72,9 +71,8 @@ type GithubPullWindow struct {
 	gs *GithubStuff
 }
 
-func NewGithubStuff(mw *nucular.MasterWindow, repodir, owner, repo string) *GithubStuff {
+func NewGithubStuff(mw *nucular.MasterWindow, owner, repo string) *GithubStuff {
 	var gs GithubStuff
-	gs.repodir = repodir
 	gs.owner = owner
 	gs.repo = repo
 	gs.mw = mw
