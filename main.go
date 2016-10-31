@@ -170,10 +170,10 @@ func allRemotes(repodir string) map[string]string {
 	return r
 }
 
-func findRepository() string {
+func findRepository(arg []string) string {
 	var path string
-	if len(os.Args) > 1 {
-		path = os.Args[1]
+	if len(arg) > 0 {
+		path = arg[0]
 	} else {
 		var err error
 		path, err = os.Getwd()
@@ -203,6 +203,26 @@ type Commit struct {
 	Committer     string
 	CommitterDate time.Time
 	Message       string
+}
+
+func LoadCommit(repodir, commitId string) (Commit, bool) {
+	cmd := exec.Command("git", "show", "--pretty=raw", "--no-color", "--no-patch", commitId)
+	cmd.Dir = repodir
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return Commit{}, false
+	}
+	defer stdout.Close()
+	err = cmd.Start()
+	if err != nil {
+		return Commit{}, false
+	}
+	go cmd.Wait()
+	commit, ok, err := readCommit(stdout)
+	if !ok || err != nil {
+		return Commit{}, false
+	}
+	return commit, true
 }
 
 func (commit *Commit) LongPrint() {
@@ -433,15 +453,36 @@ func fixStyle(style *nstyle.Style) {
 
 func main() {
 	rand.Seed(time.Now().Unix())
-	repodir := findRepository()
+
+	repodir := ""
+	blamefile := ""
+
+	if len(os.Args) >= 2 {
+		switch os.Args[1] {
+		case "seqed", "comed":
+			if os.Getenv("FKGIT_SEQUENCE_EDITOR_SOCKET") == "" {
+				fmt.Fprintf(os.Stderr, "no sequence editor socket\n")
+				os.Exit(1)
+			}
+			editmodeMain()
+			return
+		case "blame":
+			if len(os.Args) < 3 {
+				fmt.Fprintf(os.Stderr, "blame needs an argument\n")
+				os.Exit(1)
+			}
+			blamefile = os.Args[2]
+			repodir = findRepository(os.Args[3:])
+		default:
+			repodir = findRepository(os.Args[1:])
+		}
+	} else {
+		repodir = findRepository(nil)
+	}
+
 	if repodir == "" {
 		fmt.Fprintf(os.Stderr, "could not find repository\n")
 		os.Exit(1)
-		return
-	}
-
-	if len(os.Args) >= 2 && os.Getenv("FKGIT_SEQUENCE_EDITOR_SOCKET") != "" {
-		editmodeMain()
 		return
 	}
 
@@ -478,13 +519,22 @@ func main() {
 
 	openTab(&idxmw)
 
+	blameTabIndex := -1
+	if blamefile != "" {
+		NewBlameWindow(wnd, repodir, blamefile)
+		blameTabIndex = len(tabs) - 1
+	}
+
 	initGithubIntegration(wnd, repodir)
 
 	status := gitStatus(repodir)
-	if len(status.Lines) == 0 {
-		currentTab = graphTabIndex
-	} else {
+	switch {
+	case blameTabIndex >= 0:
+		currentTab = blameTabIndex
+	case len(status.Lines) != 0:
 		currentTab = indexTabIndex
+	default:
+		currentTab = graphTabIndex
 	}
 
 	wnd.Main()

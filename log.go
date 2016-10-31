@@ -593,7 +593,7 @@ func (lw *LogWindow) selectCommit(lc *LanedCommit) {
 	}
 	lw.selectedId = lc.Id
 	lw.showOutput = false
-	lw.selectedView = NewViewWindow(lw.repodir, *lc, false)
+	lw.selectedView = NewViewWindow(lw.repodir, lc.Commit, false)
 }
 
 var graphColor = color.RGBA{213, 204, 255, 0xff}

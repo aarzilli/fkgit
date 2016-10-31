@@ -7,13 +7,11 @@ import (
 
 	"github.com/aarzilli/nucular"
 	"github.com/aarzilli/nucular/clipboard"
-
-	"golang.org/x/mobile/event/key"
 )
 
 type ViewWindow struct {
 	repodir         string
-	lc              LanedCommit
+	commit          Commit
 	viewInTabButton bool
 
 	isdiff               bool
@@ -24,19 +22,18 @@ type ViewWindow struct {
 	diff    Diff
 	width   int
 
-	searching    bool
-	searched     nucular.TextEditor
-	searchNeedle string
-	searchSel    DiffSel
+	searcher Searcher
 }
 
-func NewViewWindow(repodir string, lc LanedCommit, opentab bool) *ViewWindow {
+func NewViewWindow(repodir string, commit Commit, opentab bool) *ViewWindow {
 	vw := &ViewWindow{}
 
 	vw.repodir = repodir
-	vw.lc = lc
+	vw.commit = commit
 
 	vw.parseDiff()
+
+	vw.searcher.searchSel = SearchSel{vw.diff.BeforeFirst(), 0, 0}
 
 	if opentab {
 		openTab(vw)
@@ -67,7 +64,7 @@ func (vw *ViewWindow) parseDiff() {
 	if vw.isdiff {
 		cmd = exec.Command("git", "diff", "--color=never", vw.commitA, vw.commitB)
 	} else {
-		cmd = exec.Command("git", "show", vw.lc.Id, "--decorate=full", "--no-abbrev", "--color=never")
+		cmd = exec.Command("git", "show", vw.commit.Id, "--decorate=full", "--no-abbrev", "--color=never")
 	}
 	cmd.Dir = vw.repodir
 
@@ -94,7 +91,7 @@ var (
 )
 
 func (vw *ViewWindow) Title() string {
-	return vw.lc.NiceWithAbbrev()
+	return vw.commit.NiceWithAbbrev()
 }
 
 func (vw *ViewWindow) Protected() bool {
@@ -103,7 +100,7 @@ func (vw *ViewWindow) Protected() bool {
 
 func (vw *ViewWindow) Update(w *nucular.Window) {
 	w.Row(0).Dynamic(1)
-	if sw := w.GroupBegin("view-"+vw.lc.Id, 0); sw != nil {
+	if sw := w.GroupBegin("view-"+vw.commit.Id, 0); sw != nil {
 		vw.updateView(sw)
 		sw.GroupEnd()
 	}
@@ -121,58 +118,22 @@ func (vw *ViewWindow) updateView(w *nucular.Window) {
 		w.Label("    "+vw.niceNameB, "LC")
 	} else {
 		if !vw.viewInTabButton {
-			for _, e := range w.Input().Keyboard.Keys {
-				switch {
-				case (e.Modifiers == key.ModControl) && (e.Code == key.CodeF):
-					vw.searching = true
-					vw.searched.Buffer = vw.searched.Buffer[:0]
-					vw.searchNeedle = "-DIFFERENT-"
-					vw.searched.Flags = nucular.EditSelectable | nucular.EditClipboard | nucular.EditSigEnter
-					vw.searchSel.Pos = vw.diff.BeforeFirst()
-					vw.searchSel.Start, vw.searchSel.End = 0, 0
-					w.Master().ActivateEditor(&vw.searched)
-					scrollToSearch = true
-				case (e.Modifiers == key.ModControl) && (e.Code == key.CodeG):
-					if !vw.searching {
-						w.Master().ActivateEditor(&vw.searched)
-					}
-					vw.searching = true
-					vw.searchSel = vw.diff.Lookfwd(vw.searchSel, string(vw.searched.Buffer), true)
-					scrollToSearch = true
-				case (e.Modifiers == 0) && (e.Code == key.CodeEscape):
-					vw.searching = false
-				}
-			}
+			vw.searcher.Events(w, &scrollToSearch)
 
-			if vw.searching {
+			if vw.searcher.searching {
 				w.MenubarBegin()
-				w.Row(20).Static(100, 0)
-				w.Label("Search", "LC")
-				active := vw.searched.Edit(w)
-				if active&nucular.EditCommitted != 0 {
-					vw.searching = false
-					w.Master().Changed()
-				}
-				if needle := string(vw.searched.Buffer); needle != vw.searchNeedle {
-					vw.searchSel = vw.diff.Lookfwd(vw.searchSel, needle, false)
-					vw.searchNeedle = needle
-					scrollToSearch = true
-				}
+				vw.searcher.Update(w, &scrollToSearch)
 				w.MenubarEnd()
 			}
 		}
-		showCommit(nucular.FontHeight(style.Font), w, vw.lc, vw.viewInTabButton)
+		showCommit(nucular.FontHeight(style.Font), w, vw.commit, vw.viewInTabButton)
 		w.Label(" ", "LC")
 	}
 
-	sel := &vw.searchSel
-	if !vw.searching {
-		sel = nil
-	}
-	showDiff(w, vw.diff, &vw.width, sel, scrollToSearch)
+	showDiff(w, vw.diff, vw.repodir, &vw.width, vw.searcher.Sel(), scrollToSearch)
 }
 
-func showCommit(lnh int, w *nucular.Window, lc LanedCommit, viewInTabButton bool) {
+func showCommit(lnh int, w *nucular.Window, lc Commit, viewInTabButton bool) {
 	style := w.Master().Style()
 	commitWidth := nucular.FontWidth(style.Font, "0")*48 + style.Text.Padding.X*2
 	btnWidth := int(80 * style.Scaling)

@@ -13,7 +13,6 @@ import (
 	nstyle "github.com/aarzilli/nucular/style"
 
 	"golang.org/x/image/font"
-	"golang.org/x/mobile/event/key"
 )
 
 const wordDiffDebug = false
@@ -60,11 +59,6 @@ type DiffPos struct {
 	diff        Diff
 	curFileDiff int
 	curLineDiff int
-}
-
-type DiffSel struct {
-	Pos        DiffPos
-	Start, End int
 }
 
 func (ld *LineDiff) IsHunkHeader() bool {
@@ -179,23 +173,27 @@ func parseDiff(bs []byte) Diff {
 	for _, filediff := range diff {
 		for _, linediff := range filediff.Lines {
 			for i := range linediff.Chunks {
-				text := linediff.Chunks[i].Text
-				if strings.Index(text, "\t") >= 0 {
-					out := make([]byte, 0, len(text))
-					for j := range text {
-						if text[j] != '\t' {
-							out = append(out, text[j])
-						} else {
-							out = append(out, []byte("        ")...)
-						}
-					}
-					linediff.Chunks[i].Text = string(out)
-				}
+				linediff.Chunks[i].Text = expandtabs(linediff.Chunks[i].Text)
 			}
 		}
 	}
 
 	return diff
+}
+
+func expandtabs(text string) string {
+	if strings.Index(text, "\t") < 0 {
+		return text
+	}
+	out := make([]byte, 0, len(text)+7)
+	for j := range text {
+		if text[j] != '\t' {
+			out = append(out, text[j])
+		} else {
+			out = append(out, []byte("        ")...)
+		}
+	}
+	return string(out)
 }
 
 func parseHunkHeader(text string) LineDiff {
@@ -558,7 +556,7 @@ func wordSplit(in string) []string {
 	return r
 }
 
-func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSearch bool) {
+func showDiff(w *nucular.Window, diff Diff, repodir string, width *int, sel *SearchSel, scrollToSearch bool) {
 	style := w.Master().Style()
 
 	rounding := uint16(4 * style.Scaling)
@@ -566,16 +564,25 @@ func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSe
 	lnh := nucular.FontHeight(style.Font)
 	d := font.Drawer{Face: style.Font}
 	if sel == nil {
-		sel = &DiffSel{diff.BeforeFirst(), 0, 0}
+		sel = &SearchSel{diff.BeforeFirst(), 0, 0}
 	}
+	selpos := sel.Pos.(DiffPos)
 
 	for fileidx, filediff := range diff {
-		if sel.Pos.InFile(fileidx) {
+		if selpos.InFile(fileidx) {
 			w.TreeOpen(filediff.Filename)
 		}
 		if w.TreePushNamed(nucular.TreeTab, filediff.Filename, filediff.Filedescr, len(diff) == 1) {
 			originalSpacing := style.NormalWindow.Spacing.Y
 			style.NormalWindow.Spacing.Y = 0
+
+			if len(filediff.Headers) >= 2 {
+				w.Row(20).Static(0, 90)
+				w.LabelColored(filediff.Headers[1].Text, "LC", hunkhdrColor)
+				if w.ButtonText("Blame") {
+					NewBlameWindow(w.Master(), repodir, filediff.Filename)
+				}
+			}
 
 			if *width > 0 {
 				w.RowScaled(lnh).StaticScaled(*width)
@@ -583,7 +590,7 @@ func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSe
 				w.RowScaled(lnh).Dynamic(1)
 			}
 
-			for _, hdr := range filediff.Headers[1:] {
+			for _, hdr := range filediff.Headers[2:] {
 				w.LabelColored(hdr.Text, "LC", hunkhdrColor)
 			}
 
@@ -591,13 +598,12 @@ func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSe
 
 			for lineidx, linediff := range filediff.Lines {
 				bounds, out := w.Custom(nstyle.WidgetStateInactive)
-				if scrollToSearch && sel.Pos.InLine(fileidx, lineidx) {
-					above, below := w.Invisible()
-					if above || below {
+				if scrollToSearch && selpos.InLine(fileidx, lineidx) {
+					if above, below := w.Invisible(); above || below {
 						w.Scrollbar.Y = w.At().Y
+						w.Master().Changed()
+						scrollToSearch = false
 					}
-					w.Master().Changed()
-					scrollToSearch = false
 				}
 				if out == nil {
 					continue
@@ -630,7 +636,7 @@ func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSe
 
 					out.DrawText(dot, chunk.Text, style.Font, style.Text.Color)
 
-					if sel.Pos.InLine(fileidx, lineidx) {
+					if selpos.InLine(fileidx, lineidx) {
 						if sel.Start >= outchars && outchars+len(chunk.Text) > sel.Start {
 							selStartX = dot.X + d.MeasureString(chunk.Text[:sel.Start-outchars]).Ceil()
 						}
@@ -642,7 +648,7 @@ func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSe
 					dot.X += dot.W
 				}
 
-				if sel.Pos.InLine(fileidx, lineidx) {
+				if selpos.InLine(fileidx, lineidx) {
 					maxy := bounds.Max().Y
 					out.StrokeLine(image.Pt(selStartX, maxy), image.Pt(selEndX, maxy), int(math.Ceil(style.Scaling)), style.Text.Color)
 				}
@@ -654,43 +660,19 @@ func showDiff(w *nucular.Window, diff Diff, width *int, sel *DiffSel, scrollToSe
 		}
 	}
 
-	for _, e := range w.KeyboardOnHover(w.Bounds).Keys {
-		switch {
-		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
-			w.Scrollbar.X = 0
-			w.Scrollbar.Y = 0
-		case (e.Modifiers == 0) && (e.Code == key.CodeEnd):
-			w.Scrollbar.X = 0
-			w.Scrollbar.Y = w.At().Y
-		case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
-			w.Scrollbar.Y -= lnh
-		case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
-			w.Scrollbar.Y += lnh
-		case (e.Modifiers == 0) && (e.Code == key.CodeLeftArrow):
-			w.Scrollbar.X -= w.Bounds.W / 10
-		case (e.Modifiers == 0) && (e.Code == key.CodeRightArrow):
-			w.Scrollbar.X += w.Bounds.W / 10
-		case (e.Modifiers == 0) && (e.Code == key.CodePageUp):
-			w.Scrollbar.Y -= w.Bounds.H / 2
-		case (e.Modifiers == 0) && (e.Code == key.CodePageDown):
-			w.Scrollbar.Y += w.Bounds.H / 2
-		}
-
-		if w.Scrollbar.Y < 0 {
-			w.Scrollbar.Y = 0
-		}
-		if w.Scrollbar.X < 0 {
-			w.Scrollbar.X = 0
-		}
-	}
+	scrollingKeys(w, lnh)
 }
 
 func (diff Diff) BeforeFirst() DiffPos {
 	return DiffPos{diff, 0, -1}
 }
 
-func (pos *DiffPos) Next() (DiffPos, bool) {
-	it := *pos
+func (pos DiffPos) BeforeFirst() SearchPos {
+	return pos.diff.BeforeFirst()
+}
+
+func (pos DiffPos) Next() (SearchPos, bool) {
+	it := pos
 	for it.curFileDiff < len(it.diff) {
 		it.curLineDiff++
 
@@ -704,7 +686,7 @@ func (pos *DiffPos) Next() (DiffPos, bool) {
 	return DiffPos{pos.diff, 0, -1}, false
 }
 
-func (it *DiffPos) Text() string {
+func (it DiffPos) Text() string {
 	if it.curFileDiff >= len(it.diff) || it.curLineDiff >= len(it.diff[it.curFileDiff].Lines) || it.curFileDiff < 0 || it.curLineDiff < 0 {
 		return ""
 	}
@@ -733,43 +715,4 @@ func (it *DiffPos) InFile(fileidx int) bool {
 
 func (it *DiffPos) InLine(fileidx int, lineidx int) bool {
 	return it.curFileDiff == fileidx && it.curLineDiff == lineidx
-}
-
-func (diff *Diff) Lookfwd(sel DiffSel, needle string, advance bool) DiffSel {
-	first := true
-	idx := sel.Start
-	if advance {
-		idx = sel.End
-	}
-	insensitive := true
-	for _, ch := range needle {
-		if unicode.IsUpper(ch) {
-			insensitive = false
-			break
-		}
-	}
-	for {
-		if !first {
-			var ok bool
-			sel.Pos, ok = sel.Pos.Next()
-			if !ok {
-				return DiffSel{diff.BeforeFirst(), 0, 0}
-			}
-			idx = 0
-		}
-		first = false
-		txt := sel.Pos.Text()
-		if insensitive {
-			//XXX this is wrong for languages where changing case changes the number of runes
-			txt = strings.ToLower(txt)
-		}
-		if len(txt) < 0 || idx >= len(txt) {
-			continue
-		}
-		if i := strings.Index(txt[idx:], needle); i >= 0 {
-			sel.Start = i + idx
-			sel.End = sel.Start + len(needle)
-			return sel
-		}
-	}
 }

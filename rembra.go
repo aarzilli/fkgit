@@ -2,7 +2,6 @@ package main
 
 import (
 	"image"
-	"os/exec"
 	"sort"
 	"strings"
 
@@ -126,18 +125,7 @@ func (rt *refsTab) loadRefs() {
 		if rt.commits[commitId].Id != "" {
 			continue
 		}
-		cmd := exec.Command("git", "show", "--pretty=raw", "--no-color", commitId)
-		cmd.Dir = rt.repodir
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			continue
-		}
-		err = cmd.Start()
-		if err != nil {
-			continue
-		}
-		rt.commits[commitId], _, _ = readCommit(stdout)
-		stdout.Close()
+		rt.commits[commitId], _ = LoadCommit(rt.repodir, commitId)
 	}
 	sort.Sort(refsByCommitDate{rt.refs, rt.commits})
 }

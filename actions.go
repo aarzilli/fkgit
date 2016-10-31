@@ -9,8 +9,8 @@ import (
 	"sync"
 )
 
-func viewAction(lw *LogWindow, lc LanedCommit) {
-	NewViewWindow(lw.repodir, lc, true)
+func viewAction(lw *LogWindow, commit Commit) {
+	NewViewWindow(lw.repodir, commit, true)
 }
 
 func newbranchAction(lw *LogWindow, branchname, commitId string) {
