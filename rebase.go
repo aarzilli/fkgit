@@ -254,7 +254,7 @@ func (rt *rebaseTab) runcommand() {
 
 func (rt *rebaseTab) newcommand(cmd string, args ...string) {
 	rt.cmd = exec.Command(cmd, args...)
-	rt.cmd.Env = []string{"GIT_SEQUENCE_EDITOR=fkgit seqed", "GIT_EDITOR=fkgit comed"}
+	rt.cmd.Env = append(os.Environ(), "GIT_SEQUENCE_EDITOR=fkgit seqed", "GIT_EDITOR=fkgit comed")
 	rt.cmd.Dir = Repodir
 }
 
