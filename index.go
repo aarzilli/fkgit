@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aarzilli/nucular"
 	"github.com/aarzilli/nucular/label"
@@ -186,7 +187,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 			lw.mu.Lock()
 			go lw.reload()
 			lw.mu.Unlock()
-			go idxmw.reload()
+			idxmw.reload()
 
 		}
 		sw.GroupEnd()
@@ -233,8 +234,7 @@ func (idxmw *IndexManagerWindow) addRemoveIndex(add bool, i int) {
 	} else {
 		execCommand("git", "reset", "-q", "--", idxmw.status.Lines[i].Path)
 	}
-	idxmw.updating = true
-	go idxmw.reload()
+	idxmw.reload()
 }
 
 func (idxmw *IndexManagerWindow) ignoreIndex(i int) {
@@ -244,16 +244,24 @@ func (idxmw *IndexManagerWindow) ignoreIndex(i int) {
 	}
 	defer fh.Close()
 	fmt.Fprintf(fh, "\n%s\n", idxmw.status.Lines[i].Path)
-	idxmw.updating = true
-	go idxmw.reload()
+	idxmw.reload()
 }
 
 func (idxmw *IndexManagerWindow) reload() {
-	idxmw.mu.Lock()
-	idxmw.updating = true
-	idxmw.mu.Unlock()
+	done := make(chan struct{})
+	go idxmw.reloadGoroutine(done)
 
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		idxmw.updating = true
+		break
+	}
+}
+
+func (idxmw *IndexManagerWindow) reloadGoroutine(done chan struct{}) {
 	defer func() {
+		close(done)
 		idxmw.mu.Lock()
 		idxmw.updating = false
 		idxmw.mu.Unlock()

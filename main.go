@@ -357,7 +357,7 @@ func closeTab(tab Tab) {
 	}
 	if found >= 0 && currentTab > found {
 		currentTab--
-	} 
+	}
 }
 
 func tabIndex(tab Tab) int {
@@ -391,7 +391,7 @@ func guiUpdate(w *nucular.Window) {
 				lw.mu.Unlock()
 
 			case indexTabIndex:
-				go idxmw.reload()
+				idxmw.reload()
 			}
 
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeW):
