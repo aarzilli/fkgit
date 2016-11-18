@@ -342,6 +342,7 @@ func closeTab(tab Tab) {
 	if tab.Protected() {
 		return
 	}
+	found := -1
 	for i := range tabs {
 		if tab == tabs[i] {
 			if currentTab == i && currentTab > 0 {
@@ -350,9 +351,13 @@ func closeTab(tab Tab) {
 
 			copy(tabs[i:], tabs[i+1:])
 			tabs = tabs[:len(tabs)-1]
+			found = i
 			break
 		}
 	}
+	if found >= 0 && currentTab > found {
+		currentTab--
+	} 
 }
 
 func tabIndex(tab Tab) int {
