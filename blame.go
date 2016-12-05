@@ -341,8 +341,8 @@ func colorTest(w *nucular.Window) {
 
 func BlameCommitFn(commit *Commit) func(*nucular.Window) {
 	commitline := fmt.Sprintf("commit %s", commit.Id)
-	authorline := fmt.Sprintf("author %s %s", commit.Author, commit.AuthorDate.Local().Format("2016-01-02 15:04"))
-	committerline := fmt.Sprintf("committer %s %s", commit.Committer, commit.CommitterDate.Local().Format("2016-01-02 15:04"))
+	authorline := fmt.Sprintf("author %s %s", commit.Author, commit.AuthorDate.Local().Format("2006-01-02 15:04"))
+	committerline := fmt.Sprintf("committer %s %s", commit.Committer, commit.CommitterDate.Local().Format("2006-01-02 15:04"))
 	return func(w *nucular.Window) {
 		style := w.Master().Style()
 		lnh := nucular.FontHeight(style.Font)
