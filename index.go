@@ -102,7 +102,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 				}
 			}
 
-			if selected && idxmw.selected != i {
+			if selected && idxmw.selected != i && i < len(idxmw.status.Lines) && !idxmw.updating {
 				idxmw.selected = i
 				idxmw.loadDiff()
 			}
