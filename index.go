@@ -29,7 +29,7 @@ type IndexManagerWindow struct {
 	splith nucular.ScalableSplit
 
 	mu       sync.Mutex
-	mw       *nucular.MasterWindow
+	mw       nucular.MasterWindow
 	updating bool
 
 	diffwidth int

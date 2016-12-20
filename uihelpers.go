@@ -20,7 +20,7 @@ type messagePopup struct {
 	ed    nucular.TextEditor
 }
 
-func newMessagePopup(mw *nucular.MasterWindow, title, message string) {
+func newMessagePopup(mw nucular.MasterWindow, title, message string) {
 	var mp messagePopup
 	mp.Title = title
 	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse
@@ -194,7 +194,7 @@ type newBranchPopup struct {
 	ed       nucular.TextEditor
 }
 
-func newNewBranchPopup(mw *nucular.MasterWindow, id string) {
+func newNewBranchPopup(mw nucular.MasterWindow, id string) {
 	np := newBranchPopup{CommitId: id}
 	np.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
 	np.ed.Active = true
@@ -305,7 +305,7 @@ type diffPopup struct {
 	names     []string
 }
 
-func newDiffPopup(mw *nucular.MasterWindow, refs []Ref, bookmarks []LanedCommit, lc LanedCommit) {
+func newDiffPopup(mw nucular.MasterWindow, refs []Ref, bookmarks []LanedCommit, lc LanedCommit) {
 	dp := diffPopup{refs, bookmarks, lc, -1, -1, nil}
 	dp.names = make([]string, 0, len(dp.Refs)+len(dp.Bookmarks)+1)
 	dp.names = append(dp.names, dp.Lc.NiceWithAbbrev())
@@ -368,7 +368,7 @@ type ForcePushPopup struct {
 	ed         nucular.TextEditor
 }
 
-func newForcePushPopup(mw *nucular.MasterWindow, repository string, buffer []rune) {
+func newForcePushPopup(mw nucular.MasterWindow, repository string, buffer []rune) {
 	var fp ForcePushPopup
 	fp.Repository = repository
 	fp.ed.Buffer = buffer

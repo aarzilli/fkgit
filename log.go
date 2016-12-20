@@ -467,7 +467,7 @@ type LogWindow struct {
 	selectedView *ViewWindow
 
 	allrefs []Ref
-	mw      *nucular.MasterWindow
+	mw      nucular.MasterWindow
 
 	searchCmd     *exec.Cmd
 	searchMode    searchMode

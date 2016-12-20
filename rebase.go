@@ -55,7 +55,7 @@ func rebaseAction(lw *LogWindow, commitIdOrRef string) {
 type rebaseTab struct {
 	soc net.Listener
 	mu  sync.Mutex
-	mw  *nucular.MasterWindow
+	mw  nucular.MasterWindow
 
 	ed nucular.TextEditor
 

@@ -13,7 +13,7 @@ import (
 
 var githubStuff *GithubStuff
 
-func initGithubIntegration(mw *nucular.MasterWindow) {
+func initGithubIntegration(mw nucular.MasterWindow) {
 	const prefix = "git@github.com:"
 	const suffix = ".git"
 	remotes := allRemotes()
@@ -51,7 +51,7 @@ type pull struct {
 type GithubStuff struct {
 	owner string
 	repo  string
-	mw    *nucular.MasterWindow
+	mw    nucular.MasterWindow
 
 	selectedIssue int
 	iss           []issue
@@ -71,7 +71,7 @@ type GithubPullWindow struct {
 	gs *GithubStuff
 }
 
-func NewGithubStuff(mw *nucular.MasterWindow, owner, repo string) *GithubStuff {
+func NewGithubStuff(mw nucular.MasterWindow, owner, repo string) *GithubStuff {
 	var gs GithubStuff
 	gs.owner = owner
 	gs.repo = repo

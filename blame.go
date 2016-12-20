@@ -27,7 +27,7 @@ type BlameTab struct {
 	revision string
 
 	mu sync.Mutex
-	mw *nucular.MasterWindow
+	mw nucular.MasterWindow
 
 	CommitColor  map[string]color.RGBA
 	Commits      map[string]*Commit
@@ -61,7 +61,7 @@ type BlameLine struct {
 	Text   string
 }
 
-func NewBlameWindow(mw *nucular.MasterWindow, revision, filename string) {
+func NewBlameWindow(mw nucular.MasterWindow, revision, filename string) {
 	tab := &BlameTab{filename: filename, revision: revision, mw: mw, Commits: map[string]*Commit{}, CommitColor: map[string]color.RGBA{}}
 
 	tab.loadFile()
