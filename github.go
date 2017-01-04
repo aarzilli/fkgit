@@ -3,34 +3,42 @@ package main
 import (
 	"fmt"
 	"image"
+	"os"
 	"strings"
 	"sync"
 
 	"github.com/aarzilli/nucular"
 	"github.com/aarzilli/nucular/label"
 	"github.com/google/go-github/github"
+	"golang.org/x/oauth2"
 )
 
 var githubStuff *GithubStuff
 
-func initGithubIntegration(mw nucular.MasterWindow) {
+func parseGithubRemote(remote string) (owner, repo string) {
 	const prefix = "git@github.com:"
 	const suffix = ".git"
-	remotes := allRemotes()
-	origin := remotes["origin"]
 
-	if !strings.HasPrefix(origin, prefix) || !strings.HasSuffix(origin, suffix) {
+	if !strings.HasPrefix(remote, prefix) || !strings.HasSuffix(remote, suffix) {
 		return
 	}
 
-	v := strings.Split(origin[len(prefix):len(origin)-len(suffix)], "/")
+	v := strings.Split(remote[len(prefix):len(remote)-len(suffix)], "/")
 	if len(v) != 2 {
 		return
 	}
 
-	owner := v[0]
-	repo := v[1]
+	owner = v[0]
+	repo = v[1]
+	return
+}
 
+func initGithubIntegration(mw nucular.MasterWindow) {
+	remotes := allRemotes()
+	owner, repo := parseGithubRemote(remotes["origin"])
+	if repo == "" {
+		return
+	}
 	githubStuff = NewGithubStuff(mw, owner, repo)
 }
 
@@ -141,6 +149,99 @@ func (gs *GithubStuff) reload() {
 	gs.loaded = true
 	gs.loaderr = false
 	gs.mw.Changed()
+}
+
+func githubRemoteRef(refs []Ref, allRemotes map[string]string) *Ref {
+	for i := range refs {
+		ref := &refs[i]
+		_, repo := parseGithubRemote(allRemotes[ref.Remote()])
+		if repo != "" {
+			return ref
+		}
+	}
+	return nil
+}
+
+func (gs *GithubStuff) pullRequest(lw *LogWindow, title string, ref *Ref, lc LanedCommit) {
+	lw.showOutput = true
+	lw.edOutput.Buffer = lw.edOutput.Buffer[:0]
+
+	remotes := allRemotes()
+
+	owner, repo := parseGithubRemote(remotes[ref.Remote()])
+
+	commits, err := allCommits("origin^1..HEAD").ReadAll()
+	if err != nil {
+		lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(fmt.Sprintf("Can not create Pull Request: %v\n", err))...)
+		return
+	}
+	originCommit := commits[len(commits)-1]
+	commits = commits[:len(commits)-1]
+
+	var originRef *Ref
+	var originOwner, originRepo string
+	for i := range lw.allrefs {
+		ref := &lw.allrefs[i]
+		if ref.CommitId == originCommit.Id {
+			originOwner, originRepo = parseGithubRemote(remotes[ref.Remote()])
+			if originRepo != "" && originOwner == gs.owner && originRepo == gs.repo && ref.Nice() != "origin/HEAD" {
+				originRef = ref
+				break
+			}
+		}
+	}
+	if originRef == nil {
+		lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(fmt.Sprintf("Can not create Pull Request: could not find origin ref\n"))...)
+		return
+	}
+
+	if originRepo != repo {
+		lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(fmt.Sprintf("repo mismatch %s %s\n", originRepo, repo))...)
+		return
+	}
+
+	if len(commits) > 10 {
+		lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(fmt.Sprintf("Too many commits %d\n", len(commits)))...)
+		return
+	}
+
+	base := originRef.Nice()
+	if i := strings.Index(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	head := ref.Nice()
+	if i := strings.Index(head, "/"); i >= 0 {
+		head = owner + ":" + head[i+1:]
+	}
+
+	lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(fmt.Sprintf("Generating Pull Request for %s (repository: %s/%s) with %d commits from %s\n", base, originOwner, repo, len(commits), head))...)
+
+	if title == "" {
+		title = commits[0].ShortMessage()
+	}
+
+	body := []byte("```\n")
+
+	for _, commit := range commits {
+		body = append(body, []byte(commit.Message)...)
+		body = append(body, '\n')
+	}
+
+	body = append(body, []byte("```\n")...)
+
+	bodystr := string(body)
+
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: os.Getenv("GITHUB")},
+	)
+	tc := oauth2.NewClient(oauth2.NoContext, ts)
+	client := github.NewClient(tc)
+	pr, _, err := client.PullRequests.Create(originOwner, repo, &github.NewPullRequest{Title: &title, Head: &head, Base: &base, Body: &bodystr})
+	if err != nil {
+		lw.edOutput.Buffer = append(lw.edOutput.Buffer, []rune(fmt.Sprintf("Error creating pull request: %v\n", err))...)
+		return
+	}
+	openUrl(*pr.HTMLURL)
 }
 
 func (iw *GithubIssuesWindow) Title() string {

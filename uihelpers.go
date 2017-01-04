@@ -384,3 +384,26 @@ func (fp *ForcePushPopup) Update(w *nucular.Window) {
 		pushAction(&lw, true, fp.Repository)
 	}
 }
+
+type pullRequestPopup struct {
+	lc        LanedCommit
+	githubRef *Ref
+	ed        nucular.TextEditor
+}
+
+func newPullRequestPopup(mw nucular.MasterWindow, lc LanedCommit, githubRef *Ref) {
+	prp := &pullRequestPopup{lc: lc, githubRef: githubRef}
+	prp.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
+	prp.ed.Active = true
+	prp.ed.Maxlen = 70
+	mw.PopupOpen("New Pull Request...", popupFlags, rect.Rect{20, 100, 480, 400}, true, prp.Update)
+}
+
+func (prp *pullRequestPopup) Update(w *nucular.Window) {
+	w.Row(25).Dynamic(1)
+	prp.ed.Edit(w)
+	ok, _ := okCancelButtons(w, !prp.ed.Active, "OK", true)
+	if ok {
+		githubStuff.pullRequest(&lw, string(prp.ed.Buffer), prp.githubRef, prp.lc)
+	}
+}

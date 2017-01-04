@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -190,11 +191,12 @@ headerLoop:
 	return
 }
 
-func allCommits() *CommitFetcher {
+func allCommits(commitRange string) *CommitFetcher {
 	fetcher := &CommitFetcher{}
 	outchan := make(chan Commit)
 	fetcher.Out = outchan
-	fetcher.cmd = exec.Command("git", "log", "--pretty=raw", "-z", "--all", "--no-color", "--date-order")
+	args := []string{"log", "--pretty=raw", "-z", "--no-color", "--date-order", commitRange}
+	fetcher.cmd = exec.Command("git", args...)
 	fetcher.cmd.Dir = Repodir
 	stdout, err := fetcher.cmd.StdoutPipe()
 	if err != nil {
@@ -250,6 +252,14 @@ func allCommits() *CommitFetcher {
 	}()
 
 	return fetcher
+}
+
+func (fetcher *CommitFetcher) ReadAll() ([]Commit, error) {
+	r := []Commit{}
+	for commit := range fetcher.Out {
+		r = append(r, commit)
+	}
+	return r, fetcher.Err
 }
 
 type commitLookaheadBuffer struct {
@@ -505,7 +515,7 @@ func (lw *LogWindow) commitproc() {
 		return
 	}
 
-	fetcher := allCommits()
+	fetcher := allCommits("--all")
 	commitchan := make(chan LanedCommit)
 	var headcommit string
 	lw.Headisref, headcommit, _ = getHead()
@@ -1059,6 +1069,7 @@ type commitMenu struct {
 	localRefs, remoteRefs []Ref
 	remotes               []string
 	requiresForcePush     []bool
+	githubRemoteRef       *Ref
 }
 
 func NewCommitMenu(lw *LogWindow, lc LanedCommit, mainw *nucular.Window) *commitMenu {
@@ -1130,7 +1141,9 @@ func NewCommitMenu(lw *LogWindow, lc LanedCommit, mainw *nucular.Window) *commit
 		}
 	}
 
-	return &commitMenu{lw: lw, lc: lc, mainw: mainw, localRefs: localRefs, remoteRefs: remoteRefs, remotes: remotes, requiresForcePush: requiresForcePush}
+	githubRemoteRef := githubRemoteRef(lc.Refs, allRemotes())
+
+	return &commitMenu{lw: lw, lc: lc, mainw: mainw, localRefs: localRefs, remoteRefs: remoteRefs, remotes: remotes, requiresForcePush: requiresForcePush, githubRemoteRef: githubRemoteRef}
 }
 
 func (cm *commitMenu) Update(w *nucular.Window) {
@@ -1193,6 +1206,12 @@ func (cm *commitMenu) Update(w *nucular.Window) {
 			} else {
 				newRemotesPopup(cm.mainw, "pull", cm.remotes)
 			}
+		}
+	}
+
+	if lc.IsHEAD && cm.githubRemoteRef != nil && os.Getenv("GITHUB") != "" {
+		if w.MenuItem(label.TA("Pull Request", "LC")) {
+			newPullRequestPopup(lw.mw, lc, cm.githubRemoteRef)
 		}
 	}
 
