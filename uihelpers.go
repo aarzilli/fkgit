@@ -163,7 +163,7 @@ func selectFromListWindow(w *nucular.Window, title, text string, list []string, 
 		W = 400
 	)
 	if len(list) < 10 {
-		w.ContextualOpen(nucular.WindowContextualReplace, image.Point{H, W}, rect.Rect{0, 0, 0, 0}, func(w *nucular.Window) {
+		w.ContextualOpen(0, image.Point{H, W}, rect.Rect{0, 0, 0, 0}, func(w *nucular.Window) {
 			w.Row(25).Dynamic(1)
 			for i := range list {
 				if w.MenuItem(label.TA(list[i], "LC")) {
@@ -226,7 +226,7 @@ type resetPopup struct {
 
 func newResetPopup(w *nucular.Window, id string, mode resetMode) {
 	rp := resetPopup{CommitId: id}
-	w.ContextualOpen(nucular.WindowContextualReplace, image.Point{480, 400}, rect.Rect{0, 0, 0, 0}, rp.Update)
+	w.ContextualOpen(0, image.Point{480, 400}, rect.Rect{0, 0, 0, 0}, rp.Update)
 }
 
 func (rp *resetPopup) Update(w *nucular.Window) {
