@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/aarzilli/nucular"
 	"github.com/aarzilli/nucular/label"
@@ -28,9 +27,8 @@ type IndexManagerWindow struct {
 	splitv nucular.ScalableSplit
 	splith nucular.ScalableSplit
 
-	mu       sync.Mutex
-	mw       nucular.MasterWindow
-	updating bool
+	mu sync.Mutex
+	mw nucular.MasterWindow
 
 	diffwidth int
 	fmtwidth  int
@@ -57,12 +55,6 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 	defer idxmw.mu.Unlock()
 
 	var diffbounds rect.Rect
-
-	if idxmw.updating {
-		w.Row(25).Dynamic(1)
-		w.Label("Updating...", "LC")
-		return
-	}
 
 	style := w.Master().Style()
 
@@ -102,7 +94,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 				}
 			}
 
-			if selected && idxmw.selected != i && i < len(idxmw.status.Lines) && !idxmw.updating {
+			if selected && idxmw.selected != i && i < len(idxmw.status.Lines) {
 				idxmw.selected = i
 				idxmw.loadDiff()
 			}
@@ -154,6 +146,9 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 		sw.Spacing(1)
 		if sw.ButtonText("Commit") {
 			if idxmw.rebasedit != "" {
+				fh, _ := os.Create(idxmw.rebasedit)
+				io.WriteString(fh, string(idxmw.ed.Buffer))
+				fh.Close()
 				close(idxmw.rebasechan)
 				idxmw.rebasechan = nil
 				idxmw.rebasedit = ""
@@ -182,11 +177,8 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 					idxmw.ed.Buffer = []rune{}
 					idxmw.ed.Cursor = 0
 				}
-				idxmw.updating = true
 			}
-			lw.mu.Lock()
 			go lw.reload()
-			lw.mu.Unlock()
 			idxmw.reload()
 
 		}
@@ -248,45 +240,30 @@ func (idxmw *IndexManagerWindow) ignoreIndex(i int) {
 }
 
 func (idxmw *IndexManagerWindow) reload() {
-	done := make(chan struct{})
-	go idxmw.reloadGoroutine(done)
-
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		idxmw.updating = true
-		break
-	}
-}
-
-func (idxmw *IndexManagerWindow) reloadGoroutine(done chan struct{}) {
-	defer func() {
-		close(done)
+	go func() {
 		idxmw.mu.Lock()
-		idxmw.updating = false
-		idxmw.mu.Unlock()
-		idxmw.mw.Changed()
-	}()
+		defer idxmw.mu.Unlock()
 
-	oldselected := ""
-	if idxmw.status != nil && idxmw.selected >= 0 {
-		oldselected = idxmw.status.Lines[idxmw.selected].Path
-	}
-	idxmw.selected = -1
-
-	idxmw.loadCommitMsg()
-
-	idxmw.status = gitStatus()
-
-	for i, line := range idxmw.status.Lines {
-		if line.Path == oldselected {
-			idxmw.selected = i
-			break
-
+		oldselected := ""
+		if idxmw.status != nil && idxmw.selected >= 0 {
+			oldselected = idxmw.status.Lines[idxmw.selected].Path
 		}
-	}
+		idxmw.selected = -1
 
-	idxmw.loadDiff()
+		idxmw.loadCommitMsg()
+
+		idxmw.status = gitStatus()
+
+		for i, line := range idxmw.status.Lines {
+			if line.Path == oldselected {
+				idxmw.selected = i
+				break
+
+			}
+		}
+
+		idxmw.loadDiff()
+	}()
 }
 
 func (idxmw *IndexManagerWindow) loadDiff() {
