@@ -513,7 +513,7 @@ func main() {
 
 	loadConfiguration()
 
-	wnd := nucular.NewMasterWindow(guiUpdate, nucular.WindowNoScrollbar)
+	wnd := nucular.NewMasterWindow(nucular.WindowNoScrollbar, "Fkgit", guiUpdate)
 	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme, conf.Scaling))
 	fixStyle(wnd.Style())
 
