@@ -137,6 +137,11 @@ func (mw *masterWindow) main(s screen.Screen) {
 func (w *masterWindow) handleEventLocked(ei interface{}) bool {
 	switch e := ei.(type) {
 	case paint.Event:
+		// On darwin we must respond to a paint.Event by reuploading the buffer or
+		// the appplication will freeze.
+		// On windows when the window goes off screen part of the window contents
+		// will be discarded and must be redrawn.
+		w.prevCmds = w.prevCmds[:0]
 		w.updateLocked()
 
 	case lifecycle.Event:
