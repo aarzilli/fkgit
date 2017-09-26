@@ -117,7 +117,7 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 
 	w.LayoutSpacePushScaled(commitbounds)
 	if sw := w.GroupBegin("index-right-column", nucular.WindowNoScrollbar|nucular.WindowBorder); sw != nil {
-		sw.Row(25).Static(100, 100)
+		sw.Row(25).Static(100, 100, 100, 50, 0, 100)
 		oldamend := idxmw.amend
 		if sw.OptionText("New commit", idxmw.amend == false) {
 			idxmw.amend = false
@@ -133,12 +133,6 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 			idxmw.loadCommitMsg()
 		}
 
-		sw.LayoutReserveRow(25, 1)
-
-		sw.Row(0).Dynamic(1)
-		idxmw.ed.Edit(sw)
-
-		sw.Row(25).Static(100, 50, 0, 100)
 		sw.PropertyInt("fmt:", 10, &idxmw.fmtwidth, 150, 1, 1)
 		if sw.ButtonText("fmt") {
 			idxmw.formatmsg()
@@ -182,6 +176,9 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 			idxmw.reload()
 
 		}
+
+		sw.Row(0).Dynamic(1)
+		idxmw.ed.Edit(sw)
 		sw.GroupEnd()
 	}
 

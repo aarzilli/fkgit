@@ -53,6 +53,10 @@ type MasterWindow interface {
 	SetPerf(bool)
 
 	PopupOpen(title string, flags WindowFlags, rect rect.Rect, scale bool, updateFn UpdateFn)
+	PopupOpenPersistent(title string, flags WindowFlags, rect rect.Rect, scale bool, updateFn UpdateFn, saveFn SaveFn)
+
+	Save() ([]byte, error)
+	Restore([]byte, RestoreFn)
 }
 
 type masterWindow struct {
@@ -61,6 +65,8 @@ type masterWindow struct {
 	wnd    screen.Window
 	wndb   screen.Buffer
 	bounds image.Rectangle
+
+	initialSize image.Point
 
 	// show performance counters
 	Perf bool
@@ -77,13 +83,19 @@ type masterWindow struct {
 	focusedOnce bool
 }
 
-// Creates new master window
 func NewMasterWindow(flags WindowFlags, title string, updatefn UpdateFn) MasterWindow {
+	return NewMasterWindowSize(flags, title, image.Point{640, 480}, updatefn)
+}
+
+// Creates new master window
+func NewMasterWindowSize(flags WindowFlags, title string, sz image.Point, updatefn UpdateFn) MasterWindow {
 	ctx := &context{}
 	ctx.Input.Mouse.valid = true
+	ctx.DockedWindows.Split.MinSize = 40
 	wnd := &masterWindow{ctx: ctx}
 	wnd.layout.Flags = flags
 	wnd.Title = title
+	wnd.initialSize = sz
 
 	clipboardMu.Lock()
 	if !clipboardStarted {
@@ -112,7 +124,7 @@ func (mw *masterWindow) context() *context {
 func (mw *masterWindow) main(s screen.Screen) {
 	var err error
 	mw.screen = s
-	width, height := int(640*mw.ctx.Style.Scaling), int(480*mw.ctx.Style.Scaling)
+	width, height := mw.ctx.scale(mw.initialSize.X), mw.ctx.scale(mw.initialSize.Y)
 	mw.wnd, err = s.NewWindow(&screen.NewWindowOptions{width, height, mw.Title})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "could not create window: %v", err)
@@ -396,6 +408,7 @@ func (w *masterWindow) draw() int {
 	wimg := w.wndb.RGBA()
 
 	contextAllCommands(w.ctx)
+	w.ctx.Reset()
 
 	if !w.drawChanged(w.ctx.cmds) {
 		return 0

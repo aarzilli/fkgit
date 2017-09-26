@@ -14,7 +14,7 @@ import (
 
 func drawSymbol(out *command.Buffer, type_ label.SymbolType, content rect.Rect, background color.RGBA, foreground color.RGBA, border_width int, font font.Face) {
 	triangleSymbol := func(heading Heading) {
-		points := triangleFromDirection(content, 0, 0, heading)
+		points := triangleFromDirection(content, border_width, border_width, heading)
 		out.FillTriangle(points[0], points[1], points[2], foreground)
 	}
 	switch type_ {
@@ -74,7 +74,6 @@ type drawableWindowHeader struct {
 	Hovered bool
 	Title   string
 
-	Minimized     bool
 	Dynamic       bool
 	HeaderActive  bool
 	Bounds        rect.Rect
@@ -86,10 +85,7 @@ type drawableWindowHeader struct {
 
 func (dwh *drawableWindowHeader) Draw(z *nstyle.Style, out *command.Buffer) {
 	style := dwh.Style
-	if dwh.Minimized {
-		/* draw window background if minimized */
-		out.FillRect(rect.Rect{dwh.Bounds.X, dwh.Bounds.Y, dwh.Bounds.W, dwh.RowHeight}, 0, style.Background)
-	} else if !dwh.Dynamic {
+	if !dwh.Dynamic {
 		/* draw fixed window body */
 		body := dwh.Bounds
 		if dwh.HeaderActive {
@@ -331,7 +327,7 @@ func drawSymbolButton(win *Window, bounds rect.Rect, content rect.Rect, state ns
 	} else {
 		sym = style.TextNormal
 	}
-	drawSymbol(out, symbol, content, bg, sym, 1, font)
+	drawSymbol(out, symbol, content, bg, sym, style.SymbolBorderWidth, font)
 	return
 }
 
