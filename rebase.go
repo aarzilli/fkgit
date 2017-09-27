@@ -156,6 +156,9 @@ func (rt *rebaseTab) Update(w *nucular.Window) {
 			rt.editing = nil
 		}
 		if w.ButtonText("Cancel") {
+			if rt.cmd != nil {
+				rt.cmd.Process.Kill()
+			}
 			close(rt.editing)
 			rt.editing = nil
 		}
