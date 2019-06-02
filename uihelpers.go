@@ -23,7 +23,7 @@ type messagePopup struct {
 func newMessagePopup(mw nucular.MasterWindow, title, message string) {
 	var mp messagePopup
 	mp.Title = title
-	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse
+	mp.ed.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditFocusFollowsMouse | nucular.EditClipboard
 	mp.ed.Buffer = []rune(message)
 	mw.PopupOpen(mp.Title, popupFlags, rect.Rect{20, 100, 480, 500}, true, mp.Update)
 }
@@ -196,7 +196,7 @@ type newBranchPopup struct {
 
 func newNewBranchPopup(mw nucular.MasterWindow, id string) {
 	np := newBranchPopup{CommitId: id}
-	np.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
+	np.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable | nucular.EditClipboard
 	np.ed.Active = true
 	np.ed.Maxlen = 128
 	mw.PopupOpen("New branch...", popupFlags, rect.Rect{20, 100, 480, 400}, true, np.Update)
@@ -372,7 +372,7 @@ func newForcePushPopup(mw nucular.MasterWindow, repository string, buffer []rune
 	var fp ForcePushPopup
 	fp.Repository = repository
 	fp.ed.Buffer = buffer
-	fp.ed.Flags = nucular.EditMultiline | nucular.EditReadOnly
+	fp.ed.Flags = nucular.EditMultiline | nucular.EditReadOnly | nucular.EditClipboard
 	mw.PopupOpen("Push error", popupFlags, rect.Rect{20, 100, 480, 500}, true, fp.Update)
 }
 
@@ -393,7 +393,7 @@ type pullRequestPopup struct {
 
 func newPullRequestPopup(mw nucular.MasterWindow, lc LanedCommit, githubRef *Ref) {
 	prp := &pullRequestPopup{lc: lc, githubRef: githubRef}
-	prp.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable
+	prp.ed.Flags = nucular.EditSigEnter | nucular.EditSelectable | nucular.EditClipboard
 	prp.ed.Active = true
 	prp.ed.Maxlen = 70
 	mw.PopupOpen("New Pull Request...", popupFlags, rect.Rect{20, 100, 480, 400}, true, prp.Update)

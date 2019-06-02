@@ -20,6 +20,17 @@ import (
 var rebaseServerMutex sync.Mutex
 
 func rebaseAction(lw *LogWindow, commitIdOrRef string) {
+	/*if os.Getenv("EDITOR") == "E" {
+		cmd := exec.Command("git", "rebase", "-i", commitIdOrRef)
+		cmd.Dir = Repodir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		cmd.Start()
+		go cmd.Wait()
+		return
+	}*/
+
 	var socname string
 	var soc net.Listener
 	errcount := 0

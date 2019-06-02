@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"image"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -513,7 +514,7 @@ func main() {
 
 	loadConfiguration()
 
-	wnd := nucular.NewMasterWindow(nucular.WindowNoScrollbar, "Fkgit", guiUpdate)
+	wnd := nucular.NewMasterWindowSize(nucular.WindowNoScrollbar, "Fkgit", image.Point{1024, 768}, guiUpdate)
 	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme, conf.Scaling))
 	fixStyle(wnd.Style())
 
@@ -521,7 +522,7 @@ func main() {
 	lw.searchEd.Flags = nucular.EditSelectable | nucular.EditFocusFollowsMouse | nucular.EditSigEnter | nucular.EditClipboard
 	lw.searchMode = noSearch
 	lw.needsMore = -1
-	lw.split.Size = 250
+	lw.split.Size = 400
 	lw.split.MinSize = 20
 	lw.split.Spacing = 5
 	lw.mw = wnd
@@ -530,10 +531,10 @@ func main() {
 
 	idxmw.selected = -1
 	idxmw.splitv.MinSize = 80
-	idxmw.splitv.Size = 120
+	idxmw.splitv.Size = 200
 	idxmw.splitv.Spacing = 5
 	idxmw.splith.MinSize = 100
-	idxmw.splith.Size = 300
+	idxmw.splith.Size = 480
 	idxmw.splith.Spacing = 5
 	idxmw.mw = wnd
 	idxmw.fmtwidth = 70
