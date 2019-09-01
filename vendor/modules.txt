@@ -1,0 +1,72 @@
+# github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
+github.com/BurntSushi/xgb
+github.com/BurntSushi/xgb/render
+github.com/BurntSushi/xgb/shm
+github.com/BurntSushi/xgb/xproto
+# github.com/aarzilli/nucular v0.0.0-20190830160826-65c2df339915
+github.com/aarzilli/nucular
+github.com/aarzilli/nucular/clipboard
+github.com/aarzilli/nucular/command
+github.com/aarzilli/nucular/internal/assets
+github.com/aarzilli/nucular/label
+github.com/aarzilli/nucular/rect
+github.com/aarzilli/nucular/style
+# github.com/golang/freetype v0.0.0-20161208064710-d9be45aaf745
+github.com/golang/freetype
+github.com/golang/freetype/raster
+github.com/golang/freetype/truetype
+# github.com/golang/protobuf v0.0.0-20161117033126-8ee79997227b
+github.com/golang/protobuf/proto
+# github.com/google/go-github v2.0.1-0.20160802180827-56add9d4071b+incompatible
+github.com/google/go-github/github
+# github.com/google/go-querystring v0.0.0-20160401233042-9235644dd9e5
+github.com/google/go-querystring/query
+# github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
+github.com/hashicorp/golang-lru
+github.com/hashicorp/golang-lru/simplelru
+# golang.org/x/exp v0.0.0-20190510132918-efd6b22b2522
+golang.org/x/exp/shiny/driver
+golang.org/x/exp/shiny/driver/gldriver
+golang.org/x/exp/shiny/driver/internal/drawer
+golang.org/x/exp/shiny/driver/internal/errscreen
+golang.org/x/exp/shiny/driver/internal/event
+golang.org/x/exp/shiny/driver/internal/lifecycler
+golang.org/x/exp/shiny/driver/internal/swizzle
+golang.org/x/exp/shiny/driver/internal/win32
+golang.org/x/exp/shiny/driver/internal/x11key
+golang.org/x/exp/shiny/driver/windriver
+golang.org/x/exp/shiny/driver/x11driver
+golang.org/x/exp/shiny/screen
+# golang.org/x/image v0.0.0-20190227222117-0694c2d4d067
+golang.org/x/image/font
+golang.org/x/image/math/f64
+golang.org/x/image/math/fixed
+# golang.org/x/mobile v0.0.0-20190318164015-6bd122906c08
+golang.org/x/mobile/app
+golang.org/x/mobile/app/internal/callfn
+golang.org/x/mobile/event/key
+golang.org/x/mobile/event/lifecycle
+golang.org/x/mobile/event/mouse
+golang.org/x/mobile/event/paint
+golang.org/x/mobile/event/size
+golang.org/x/mobile/event/touch
+golang.org/x/mobile/exp/f32
+golang.org/x/mobile/exp/gl/glutil
+golang.org/x/mobile/geom
+golang.org/x/mobile/gl
+golang.org/x/mobile/internal/mobileinit
+# golang.org/x/net v0.0.0-20190311183353-d8887717615a
+golang.org/x/net/context
+# golang.org/x/oauth2 v0.0.0-20161219192954-314dd2c0bf3e
+golang.org/x/oauth2
+golang.org/x/oauth2/internal
+# golang.org/x/sys v0.0.0-20190312061237-fead79001313
+golang.org/x/sys/windows
+# google.golang.org/appengine v1.0.1-0.20161217034650-08a149cfaee0
+google.golang.org/appengine/internal
+google.golang.org/appengine/internal/base
+google.golang.org/appengine/internal/datastore
+google.golang.org/appengine/internal/log
+google.golang.org/appengine/internal/remote_api
+google.golang.org/appengine/internal/urlfetch
+google.golang.org/appengine/urlfetch

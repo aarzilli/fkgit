@@ -52,6 +52,12 @@ func (w *TestWindow) Changed() {
 func (w *TestWindow) Main() {
 }
 
+func (w *TestWindow) Lock() {
+}
+
+func (w *TestWindow) Unlock() {
+}
+
 func (w *TestWindow) SetStyle(style *nstyle.Style) {
 	w.ctx.Style = *style
 	w.ctx.Style.Defaults()
@@ -79,11 +85,7 @@ func (w *TestWindow) SetPerf(p bool) {
 }
 
 func (w *TestWindow) PopupOpen(title string, flags WindowFlags, rect rect.Rect, scale bool, updateFn UpdateFn) {
-	w.ctx.popupOpen(title, flags, rect, scale, updateFn, nil)
-}
-
-func (w *TestWindow) PopupOpenPersistent(title string, flags WindowFlags, rect rect.Rect, scale bool, updateFn UpdateFn, saveFn SaveFn) {
-	w.ctx.popupOpen(title, flags, rect, scale, updateFn, saveFn)
+	w.ctx.popupOpen(title, flags, rect, scale, updateFn)
 }
 
 // Click simulates a click at point p.
@@ -113,6 +115,18 @@ func (w *TestWindow) Click(button mouse.Button, p image.Point) {
 	w.Update()
 }
 
+func (w *TestWindow) Walk(fn WindowWalkFn) {
+	w.ctx.Walk(fn)
+}
+
+func (w *TestWindow) Input() *Input {
+	return &w.ctx.Input
+}
+
+func (w *TestWindow) ResetWindows() *DockSplit {
+	return w.ctx.ResetWindows()
+}
+
 // Type simulates typing.
 // The update function will be run as many times as needed, the window will
 // be drawn every time.
@@ -126,16 +140,4 @@ func (w *TestWindow) TypeKey(e key.Event) {
 	w.ctx.processKeyEvent(e, &b)
 	w.ctx.Input.Keyboard.Text = w.ctx.Input.Keyboard.Text + b.String()
 	w.Update()
-}
-
-func (w *TestWindow) Save() ([]byte, error) {
-	return nil, nil
-}
-
-func (w *TestWindow) Restore([]byte, RestoreFn) {
-	return
-}
-
-func (w *TestWindow) ListWindowsData() []interface{} {
-	return w.ctx.ListWindowsData()
 }

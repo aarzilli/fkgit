@@ -37,18 +37,6 @@ func max(a, b int) int {
 	return b
 }
 
-func assert(cond bool) {
-	if !cond {
-		panic("assert!")
-	}
-}
-
-func assert2(cond bool, reason string) {
-	if !cond {
-		panic(reason)
-	}
-}
-
 func triangleFromDirection(r rect.Rect, pad_x, pad_y int, direction Heading) (result [3]image.Point) {
 	var w_half int
 	var h_half int
@@ -165,9 +153,18 @@ func FontHeight(f font.Face) int {
 }
 
 var fontWidthCache *lru.Cache
+var fontWidthCacheSize int
 
 func init() {
+	fontWidthCacheSize = 256
 	fontWidthCache, _ = lru.New(256)
+}
+
+func ChangeFontWidthCache(size int) {
+	if size > fontWidthCacheSize {
+		fontWidthCacheSize = size
+		fontWidthCache, _ = lru.New(fontWidthCacheSize)
+	}
 }
 
 type fontWidthCacheKey struct {

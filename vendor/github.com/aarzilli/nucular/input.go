@@ -43,6 +43,13 @@ func (win *Window) Input() *Input {
 	return &win.ctx.Input
 }
 
+func (win *Window) scrollwheelInput() *Input {
+	if win.ctx.scrollwheelFocus == win.idx {
+		return &win.ctx.Input
+	}
+	return &Input{}
+}
+
 func (win *Window) KeyboardOnHover(bounds rect.Rect) KeyboardInput {
 	if !win.toplevel() || !win.ctx.Input.Mouse.HoveringRect(bounds) {
 		return KeyboardInput{}
@@ -116,13 +123,8 @@ func (win *Window) toplevel() bool {
 	if win.moving {
 		return false
 	}
-	if (win.flags&windowDocked != 0) && (win.idx == win.ctx.dockedWindowFocus) {
+	if win.ctx.dockedWindowFocus != 0 && win.idx == win.ctx.dockedWindowFocus {
 		return true
 	}
-	for i := len(win.ctx.Windows) - 1; i >= 0; i-- {
-		if win.ctx.Windows[i].flags&windowTooltip == 0 {
-			return win.idx == i
-		}
-	}
-	return false
+	return win.idx == win.ctx.floatWindowFocus
 }

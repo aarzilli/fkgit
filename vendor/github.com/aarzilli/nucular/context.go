@@ -1,10 +1,13 @@
 package nucular
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
+	"io"
 	"math"
 	"time"
 
@@ -16,8 +19,14 @@ import (
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
+	"golang.org/x/mobile/event/key"
 	"golang.org/x/mobile/event/mouse"
 )
+
+const perfUpdate = false
+const dumpFrame = false
+
+var UnknownCommandErr = errors.New("unknown command")
 
 type context struct {
 	mw             MasterWindow
@@ -31,8 +40,14 @@ type context struct {
 	trashFrame     bool
 	autopos        image.Point
 
+	finalCmds command.Buffer
+
 	dockedWindowFocus int
+	floatWindowFocus  int
+	scrollwheelFocus  int
 	dockedCnt         int
+
+	cmdstim []time.Duration // contains timing for all commands
 }
 
 func contextAllCommands(ctx *context) {
@@ -46,6 +61,7 @@ func contextAllCommands(ctx *context) {
 			})
 		}
 	}
+	ctx.cmds = append(ctx.cmds, ctx.finalCmds.Commands...)
 	return
 }
 
@@ -54,7 +70,6 @@ func (ctx *context) setupMasterWindow(layout *panel, updatefn UpdateFn) {
 	ctx.Windows[0].idx = 0
 	ctx.Windows[0].layout = layout
 	ctx.Windows[0].flags = layout.Flags | WindowNonmodal
-	ctx.Windows[0].cmds.UseClipping = true
 	ctx.Windows[0].updateFn = updatefn
 }
 
@@ -65,6 +80,7 @@ func (ctx *context) Update() {
 			ctx.Windows[i].began = false
 		}
 		ctx.Restack()
+		ctx.FindFocus()
 		for i := 0; i < len(ctx.Windows); i++ { // this must not use range or tooltips won't work
 			ctx.updateWindow(ctx.Windows[i])
 			if i == 0 {
@@ -103,6 +119,46 @@ func (ctx *context) updateWindow(win *Window) {
 	}
 }
 
+func (ctx *context) processKeyEvent(e key.Event, textbuffer *bytes.Buffer) {
+	if e.Direction == key.DirRelease {
+		return
+	}
+
+	evinNotext := func() {
+		for _, k := range ctx.Input.Keyboard.Keys {
+			if k.Code == e.Code {
+				k.Modifiers |= e.Modifiers
+				return
+			}
+		}
+		ctx.Input.Keyboard.Keys = append(ctx.Input.Keyboard.Keys, e)
+	}
+	evinText := func() {
+		if e.Modifiers == 0 || e.Modifiers == key.ModShift {
+			io.WriteString(textbuffer, string(e.Rune))
+		}
+
+		evinNotext()
+	}
+
+	switch {
+	case e.Code == key.CodeUnknown:
+		if e.Rune > 0 {
+			evinText()
+		}
+	case (e.Code >= key.CodeA && e.Code <= key.Code0) || e.Code == key.CodeSpacebar || e.Code == key.CodeHyphenMinus || e.Code == key.CodeEqualSign || e.Code == key.CodeLeftSquareBracket || e.Code == key.CodeRightSquareBracket || e.Code == key.CodeBackslash || e.Code == key.CodeSemicolon || e.Code == key.CodeApostrophe || e.Code == key.CodeGraveAccent || e.Code == key.CodeComma || e.Code == key.CodeFullStop || e.Code == key.CodeSlash || (e.Code >= key.CodeKeypadSlash && e.Code <= key.CodeKeypadPlusSign) || (e.Code >= key.CodeKeypad1 && e.Code <= key.CodeKeypadEqualSign):
+		evinText()
+	case e.Code == key.CodeTab:
+		e.Rune = '\t'
+		evinText()
+	case e.Code == key.CodeReturnEnter || e.Code == key.CodeKeypadEnter:
+		e.Rune = '\n'
+		evinText()
+	default:
+		evinNotext()
+	}
+}
+
 func contextBegin(ctx *context, layout *panel) {
 	for _, w := range ctx.Windows {
 		w.usingSub = false
@@ -111,6 +167,7 @@ func contextBegin(ctx *context, layout *panel) {
 		w.widgets.reset()
 		w.cmds.Reset()
 	}
+	ctx.finalCmds.Reset()
 	ctx.DockedWindows.Walk(func(w *Window) *Window {
 		w.usingSub = false
 		w.curNode = w.rootNode
@@ -131,6 +188,7 @@ func contextEnd(ctx *context) {
 }
 
 func (ctx *context) Reset() {
+	prevNumWindows := len(ctx.Windows)
 	for i := 0; i < len(ctx.Windows); i++ {
 		if ctx.Windows[i].close {
 			if i != len(ctx.Windows)-1 {
@@ -142,6 +200,21 @@ func (ctx *context) Reset() {
 	}
 	for i := range ctx.Windows {
 		ctx.Windows[i].idx = i
+	}
+	if prevNumWindows == 2 && len(ctx.Windows) == 1 && ctx.Input.Mouse.valid {
+		ctx.DockedWindows.Walk(func(w *Window) *Window {
+			if w.flags&windowDocked == 0 {
+				return w
+			}
+			for _, b := range []mouse.Button{mouse.ButtonLeft, mouse.ButtonRight, mouse.ButtonMiddle} {
+				btn := ctx.Input.Mouse.Buttons[b]
+				if btn.Clicked && w.Bounds.Contains(btn.ClickedPos) {
+					ctx.dockedWindowFocus = w.idx
+					return w
+				}
+			}
+			return w
+		})
 	}
 	ctx.activateEditor = nil
 	in := &ctx.Input
@@ -207,11 +280,59 @@ func (ctx *context) Restack() {
 		return
 	}
 	ctx.DockedWindows.Walk(func(w *Window) *Window {
-		if ctx.restackClick(w) {
+		if ctx.restackClick(w) && (w.flags&windowDocked != 0) {
 			ctx.dockedWindowFocus = w.idx
 		}
 		return w
 	})
+}
+
+func (ctx *context) FindFocus() {
+	ctx.floatWindowFocus = 0
+	for i := len(ctx.Windows) - 1; i >= 0; i-- {
+		if ctx.Windows[i].flags&windowTooltip == 0 {
+			ctx.floatWindowFocus = i
+			break
+		}
+	}
+	ctx.scrollwheelFocus = 0
+	for i := len(ctx.Windows) - 1; i > 0; i-- {
+		if ctx.Windows[i].Bounds.Contains(ctx.Input.Mouse.Pos) {
+			ctx.scrollwheelFocus = i
+			break
+		}
+	}
+	if ctx.scrollwheelFocus == 0 {
+		ctx.DockedWindows.Walk(func(w *Window) *Window {
+			if w.Bounds.Contains(ctx.Input.Mouse.Pos) {
+				ctx.scrollwheelFocus = w.idx
+			}
+			return w
+		})
+	}
+}
+
+func (ctx *context) Walk(fn WindowWalkFn) {
+	fn(ctx.Windows[0].title, ctx.Windows[0].Data, false, 0, ctx.Windows[0].Bounds)
+	ctx.DockedWindows.walkExt(func(t *dockedTree) {
+		switch t.Type {
+		case dockedNodeHoriz:
+			fn("", nil, true, t.Split.Size, rect.Rect{})
+		case dockedNodeVert:
+			fn("", nil, true, -t.Split.Size, rect.Rect{})
+		case dockedNodeLeaf:
+			if t.W == nil {
+				fn("", nil, true, 0, rect.Rect{})
+			} else {
+				fn(t.W.title, t.W.Data, true, 0, t.W.Bounds)
+			}
+		}
+	})
+	for _, win := range ctx.Windows[1:] {
+		if win.flags&WindowNonmodal != 0 {
+			fn(win.title, win.Data, false, 0, win.Bounds)
+		}
+	}
 }
 
 func (ctx *context) restackClick(w *Window) bool {
@@ -227,31 +348,11 @@ func (ctx *context) restackClick(w *Window) bool {
 	return false
 }
 
-func (w *masterWindow) ListWindowsData() []interface{} {
-	return w.ctx.ListWindowsData()
-}
-
-func (ctx *context) ListWindowsData() []interface{} {
-	r := []interface{}{}
-	ctx.DockedWindows.Walk(func(w *Window) *Window {
-		if w.Data != nil {
-			r = append(r, w.Data)
-		}
-		return w
-	})
-	for _, w := range ctx.Windows {
-		if w.Data != nil {
-			r = append(r, w.Data)
-		}
-	}
-	return r
-}
-
 var cnt = 0
-var ln, frect, brrect, frrect, ftri, circ, fcirc, txt int
+var ln, frect, frectover, brrect, frrect, ftri, circ, fcirc, txt int
 
 func (ctx *context) Draw(wimg *image.RGBA) int {
-	var txttim, tritim, brecttim, frecttim, frrecttim time.Duration
+	var txttim, tritim, brecttim, frecttim, frectovertim, frrecttim time.Duration
 	var t0 time.Time
 
 	img := wimg
@@ -274,7 +375,16 @@ func (ctx *context) Draw(wimg *image.RGBA) int {
 		painter = &myRGBAPainter{Image: img}
 	}
 
+	if ctx.cmdstim != nil {
+		ctx.cmdstim = ctx.cmdstim[:0]
+	}
+
+	transparentBorderOptimization := false
+
 	for i := range ctx.cmds {
+		if perfUpdate {
+			t0 = time.Now()
+		}
 		icmd := &ctx.cmds[i]
 		switch icmd.Kind {
 		case command.ScissorCmd:
@@ -296,11 +406,11 @@ func (ctx *context) Draw(wimg *image.RGBA) int {
 			if cmd.Begin.X == cmd.End.X {
 				// draw vertical line
 				r := image.Rect(cmd.Begin.X-h1, cmd.Begin.Y, cmd.Begin.X+h2, cmd.End.Y)
-				draw.Draw(img, r, colimg, r.Min, op)
+				drawFill(img, r, colimg, r.Min, op)
 			} else if cmd.Begin.Y == cmd.End.Y {
 				// draw horizontal line
 				r := image.Rect(cmd.Begin.X, cmd.Begin.Y-h1, cmd.End.X, cmd.Begin.Y+h2)
-				draw.Draw(img, r, colimg, r.Min, op)
+				drawFill(img, r, colimg, r.Min, op)
 			} else {
 				if rasterizer == nil {
 					setupRasterizer()
@@ -328,8 +438,16 @@ func (ctx *context) Draw(wimg *image.RGBA) int {
 				// first command draws the background, insure that it's always fully opaque
 				cmd.Color.A = 0xff
 			}
-			if perfUpdate {
-				t0 = time.Now()
+			if transparentBorderOptimization {
+				transparentBorderOptimization = false
+				prevcmd := ctx.cmds[i-1].RectFilled
+				const m = 1<<16 - 1
+				sr, sg, sb, sa := cmd.Color.RGBA()
+				a := (m - sa) * 0x101
+				cmd.Color.R = uint8((uint32(prevcmd.Color.R)*a/m + sr) >> 8)
+				cmd.Color.G = uint8((uint32(prevcmd.Color.G)*a/m + sg) >> 8)
+				cmd.Color.B = uint8((uint32(prevcmd.Color.B)*a/m + sb) >> 8)
+				cmd.Color.A = uint8((uint32(prevcmd.Color.A)*a/m + sa) >> 8)
 			}
 			colimg := image.NewUniform(cmd.Color)
 			op := draw.Over
@@ -358,14 +476,18 @@ func (ctx *context) Draw(wimg *image.RGBA) int {
 				// only draw parts of body if this command can be optimized to a border with the next command
 
 				bordopt = true
-				cmd2 := ctx.cmds[i+1]
-				border += int(cmd2.RectFilled.Rounding)
+
+				if ctx.cmds[i+1].RectFilled.Color.A != 0xff {
+					transparentBorderOptimization = true
+				}
+
+				border += int(ctx.cmds[i+1].RectFilled.Rounding)
 
 				top := image.Rect(body.Min.X, body.Min.Y, body.Max.X, body.Min.Y+border)
 				bot := image.Rect(body.Min.X, body.Max.Y-border, body.Max.X, body.Max.Y)
 
-				draw.Draw(img, top, colimg, top.Min, op)
-				draw.Draw(img, bot, colimg, bot.Min, op)
+				drawFill(img, top, colimg, top.Min, op)
+				drawFill(img, bot, colimg, bot.Min, op)
 
 				if border < int(cmd.Rounding) {
 					// wings need shrinking
@@ -379,23 +501,27 @@ func (ctx *context) Draw(wimg *image.RGBA) int {
 					xlwing := image.Rect(top.Min.X, top.Max.Y, top.Min.X+d, bot.Min.Y)
 					xrwing := image.Rect(top.Max.X-d, top.Max.Y, top.Max.X, bot.Min.Y)
 
-					draw.Draw(img, xlwing, colimg, xlwing.Min, op)
-					draw.Draw(img, xrwing, colimg, xrwing.Min, op)
+					drawFill(img, xlwing, colimg, xlwing.Min, op)
+					drawFill(img, xrwing, colimg, xrwing.Min, op)
 				}
 
 				brrect++
 			} else {
-				draw.Draw(img, body, colimg, body.Min, op)
+				drawFill(img, body, colimg, body.Min, op)
 				if cmd.Rounding == 0 {
-					frect++
+					if op == draw.Src {
+						frect++
+					} else {
+						frectover++
+					}
 				} else {
 					frrect++
 				}
 			}
 
 			if rounding {
-				draw.Draw(img, lwing, colimg, lwing.Min, op)
-				draw.Draw(img, rwing, colimg, rwing.Min, op)
+				drawFill(img, lwing, colimg, lwing.Min, op)
+				drawFill(img, rwing, colimg, rwing.Min, op)
 
 				rangle := math.Pi / 2
 
@@ -419,16 +545,21 @@ func (ctx *context) Draw(wimg *image.RGBA) int {
 					if cmd.Rounding > 0 {
 						frrecttim += time.Now().Sub(t0)
 					} else {
-						frecttim += time.Now().Sub(t0)
+						d := time.Now().Sub(t0)
+						if op == draw.Src {
+							frecttim += d
+						} else {
+							if d > 8*time.Millisecond {
+								fmt.Printf("outstanding rect")
+							}
+							frectovertim += d
+						}
 					}
 				}
 			}
 
 		case command.TriangleFilledCmd:
 			cmd := icmd.TriangleFilled
-			if perfUpdate {
-				t0 = time.Now()
-			}
 			if rasterizer == nil {
 				setupRasterizer()
 			}
@@ -462,9 +593,6 @@ func (ctx *context) Draw(wimg *image.RGBA) int {
 			draw.Draw(img, icmd.Rectangle(), icmd.Image.Img, image.Point{}, draw.Src)
 
 		case command.TextCmd:
-			if perfUpdate {
-				t0 = time.Now()
-			}
 			dstimg := wimg.SubImage(img.Bounds().Intersect(icmd.Rectangle())).(*image.RGBA)
 			d := font.Drawer{
 				Dst:  dstimg,
@@ -491,16 +619,20 @@ func (ctx *context) Draw(wimg *image.RGBA) int {
 		default:
 			panic(UnknownCommandErr)
 		}
+
+		if dumpFrame {
+			ctx.cmdstim = append(ctx.cmdstim, time.Since(t0))
+		}
 	}
 
 	if perfUpdate {
-		fmt.Printf("triangle: %0.4fms text: %0.4fms brect: %0.4fms frect: %0.4fms frrect %0.4f\n", tritim.Seconds()*1000, txttim.Seconds()*1000, brecttim.Seconds()*1000, frecttim.Seconds()*1000, frrecttim.Seconds()*1000)
+		fmt.Printf("triangle: %0.4fms text: %0.4fms brect: %0.4fms frect: %0.4fms frectover: %0.4fms frrect %0.4f\n", tritim.Seconds()*1000, txttim.Seconds()*1000, brecttim.Seconds()*1000, frecttim.Seconds()*1000, frectovertim.Seconds()*1000, frrecttim.Seconds()*1000)
 	}
 
 	cnt++
-	if perfUpdate && (cnt%100) == 0 {
-		fmt.Printf("ln %d, frect %d, frrect %d, brrect %d, ftri %d, circ %d, fcirc %d, txt %d\n", ln, frect, frrect, brrect, ftri, circ, fcirc, txt)
-		ln, frect, frrect, brrect, ftri, circ, fcirc, txt = 0, 0, 0, 0, 0, 0, 0, 0
+	if perfUpdate /*&& (cnt%100) == 0*/ {
+		fmt.Printf("ln %d, frect %d, frectover %d, frrect %d, brrect %d, ftri %d, circ %d, fcirc %d, txt %d\n", ln, frect, frectover, frrect, brrect, ftri, circ, fcirc, txt)
+		ln, frect, frectover, frrect, brrect, ftri, circ, fcirc, txt = 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
 
 	return len(ctx.cmds)
@@ -513,13 +645,13 @@ func borderOptimize(cmd *command.Command, cmds []command.Command, idx int) (ok b
 		return false, 0
 	}
 
-	if cmds[idx].Kind != command.RectFilledCmd {
+	if cmd.Kind != command.RectFilledCmd || cmds[idx].Kind != command.RectFilledCmd {
 		return false, 0
 	}
 
 	cmd2 := cmds[idx]
 
-	if cmd2.RectFilled.Color.A != 0xff {
+	if cmd.RectFilled.Color.A != 0xff && cmd2.RectFilled.Color.A != 0xff {
 		return false, 0
 	}
 
@@ -697,19 +829,26 @@ func (t *dockedTree) Update(bounds rect.Rect, scaling float64) *dockedTree {
 	return t
 }
 
-func (t *dockedTree) Walk(fn func(win *Window) *Window) {
+func (t *dockedTree) walkExt(fn func(t *dockedTree)) {
 	if t == nil {
 		return
 	}
 	switch t.Type {
 	case dockedNodeVert, dockedNodeHoriz:
-		t.Child[0].Walk(fn)
-		t.Child[1].Walk(fn)
+		fn(t)
+		t.Child[0].walkExt(fn)
+		t.Child[1].walkExt(fn)
 	case dockedNodeLeaf:
-		if t.W != nil {
+		fn(t)
+	}
+}
+
+func (t *dockedTree) Walk(fn func(t *Window) *Window) {
+	t.walkExt(func(t *dockedTree) {
+		if t.Type == dockedNodeLeaf && t.W != nil {
 			t.W = fn(t.W)
 		}
-	}
+	})
 }
 
 func newDockedLeaf(win *Window) *dockedTree {
@@ -783,6 +922,7 @@ func (t *dockedTree) Dock(win *Window, pos image.Point, bounds rect.Rect, scalin
 func (ctx *context) dockWindow(win *Window) {
 	win.undockedSz = image.Point{win.Bounds.W, win.Bounds.H}
 	win.flags |= windowDocked
+	win.layout.Flags |= windowDocked
 	ctx.dockedCnt--
 	win.idx = ctx.dockedCnt
 	for i := range ctx.Windows {
@@ -804,6 +944,7 @@ func (t *dockedTree) Undock(win *Window) {
 		return w
 	})
 	win.flags &= ^windowDocked
+	win.layout.Flags &= ^windowDocked
 	win.Bounds.H = win.undockedSz.Y
 	win.Bounds.W = win.undockedSz.X
 	win.idx = len(win.ctx.Windows)
@@ -849,6 +990,37 @@ func (t *dockedTree) Scale(win *Window, delta image.Point, scaling float64) imag
 	return image.ZP
 }
 
+func (ctx *context) ResetWindows() *DockSplit {
+	ctx.DockedWindows = dockedTree{}
+	ctx.Windows = ctx.Windows[:1]
+	ctx.dockedCnt = 0
+	return &DockSplit{ctx, &ctx.DockedWindows}
+}
+
+type DockSplit struct {
+	ctx  *context
+	node *dockedTree
+}
+
+func (ds *DockSplit) Split(horiz bool, size int) (left, right *DockSplit) {
+	if horiz {
+		ds.node.Type = dockedNodeHoriz
+	} else {
+		ds.node.Type = dockedNodeVert
+	}
+	ds.node.Split.Size = size
+	ds.node.Child[0] = &dockedTree{Type: dockedNodeLeaf, Split: ScalableSplit{MinSize: 40}}
+	ds.node.Child[1] = &dockedTree{Type: dockedNodeLeaf, Split: ScalableSplit{MinSize: 40}}
+	return &DockSplit{ds.ctx, ds.node.Child[0]}, &DockSplit{ds.ctx, ds.node.Child[1]}
+}
+
+func (ds *DockSplit) Open(title string, flags WindowFlags, rect rect.Rect, scale bool, updateFn UpdateFn) {
+	ds.ctx.popupOpen(title, flags, rect, scale, updateFn)
+	ds.node.Type = dockedNodeLeaf
+	ds.node.W = ds.ctx.Windows[len(ds.ctx.Windows)-1]
+	ds.ctx.dockWindow(ds.node.W)
+}
+
 func percentages(bounds rect.Rect, f float64) (r [4]rect.Rect) {
 	pw := int(float64(bounds.W) * f)
 	ph := int(float64(bounds.H) * f)
@@ -866,4 +1038,57 @@ func percentages(bounds rect.Rect, f float64) (r [4]rect.Rect) {
 	r[3].X += r[3].W - pw
 	r[3].W = pw
 	return
+}
+
+func clip(dst *image.RGBA, r *image.Rectangle, src image.Image, sp *image.Point) {
+	orig := r.Min
+	*r = r.Intersect(dst.Bounds())
+	*r = r.Intersect(src.Bounds().Add(orig.Sub(*sp)))
+	dx := r.Min.X - orig.X
+	dy := r.Min.Y - orig.Y
+	if dx == 0 && dy == 0 {
+		return
+	}
+	sp.X += dx
+	sp.Y += dy
+}
+
+func drawFill(dst *image.RGBA, r image.Rectangle, src *image.Uniform, sp image.Point, op draw.Op) {
+	clip(dst, &r, src, &sp)
+	if r.Empty() {
+		return
+	}
+	sr, sg, sb, sa := src.RGBA()
+	switch op {
+	case draw.Over:
+		drawFillOver(dst, r, sr, sg, sb, sa)
+	case draw.Src:
+		drawFillSrc(dst, r, sr, sg, sb, sa)
+	default:
+		draw.Draw(dst, r, src, sp, op)
+	}
+}
+
+func drawFillSrc(dst *image.RGBA, r image.Rectangle, sr, sg, sb, sa uint32) {
+	sr8 := uint8(sr >> 8)
+	sg8 := uint8(sg >> 8)
+	sb8 := uint8(sb >> 8)
+	sa8 := uint8(sa >> 8)
+	// The built-in copy function is faster than a straightforward for loop to fill the destination with
+	// the color, but copy requires a slice source. We therefore use a for loop to fill the first row, and
+	// then use the first row as the slice source for the remaining rows.
+	i0 := dst.PixOffset(r.Min.X, r.Min.Y)
+	i1 := i0 + r.Dx()*4
+	for i := i0; i < i1; i += 4 {
+		dst.Pix[i+0] = sr8
+		dst.Pix[i+1] = sg8
+		dst.Pix[i+2] = sb8
+		dst.Pix[i+3] = sa8
+	}
+	firstRow := dst.Pix[i0:i1]
+	for y := r.Min.Y + 1; y < r.Max.Y; y++ {
+		i0 += dst.Stride
+		i1 += dst.Stride
+		copy(dst.Pix[i0:i1], firstRow)
+	}
 }

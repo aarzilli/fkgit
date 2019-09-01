@@ -150,6 +150,8 @@ type TextEditor struct {
 
 	Maxlen int
 
+	PasswordChar rune // if non-zero all characters are displayed like this character
+
 	Initialized            bool
 	Active                 bool
 	InsertMode             bool
@@ -168,6 +170,8 @@ type TextEditor struct {
 	trueSelectStart int
 
 	needle []rune
+
+	password []rune // support buffer for drawing PasswordChar!=0 fields
 }
 
 type drawchunk struct {
@@ -217,6 +221,7 @@ const (
 	EditNeverInsertMode
 	EditFocusFollowsMouse
 	EditNoContextMenu
+	EditIbeamCursor
 
 	EditSimple = EditAlwaysInsertMode
 	EditField  = EditSelectable | EditClipboard | EditSigEnter
@@ -663,6 +668,11 @@ func (edit *TextEditor) Text(text []rune) {
 			break
 		}
 
+		/* can't add tab in single-line mode */
+		if text[i] == '\t' && edit.SingleLine {
+			break
+		}
+
 		/* filter incoming text */
 		if edit.Filter != nil && !edit.Filter(text[i]) {
 			continue
@@ -1103,7 +1113,7 @@ func (state *TextEditor) clearState(type_ TextEditType) {
 
 func (edit *TextEditor) SelectAll() {
 	edit.SelectStart = 0
-	edit.SelectEnd = len(edit.Buffer) + 1
+	edit.SelectEnd = len(edit.Buffer)
 }
 
 func (edit *TextEditor) editDrawText(out *command.Buffer, style *nstyle.Edit, pos image.Point, x_margin int, text []rune, textOffset int, row_height int, f font.Face, background color.RGBA, foreground color.RGBA, is_selected bool) (posOut image.Point) {
@@ -1122,6 +1132,29 @@ func (edit *TextEditor) editDrawText(out *command.Buffer, style *nstyle.Edit, po
 	d := font.Drawer{Face: f}
 
 	tabsz := d.MeasureString(" ").Ceil() * tabSizeInSpaces
+	pwsz := d.MeasureString("*").Ceil()
+
+	measureText := func(start, end int) int {
+		if edit.PasswordChar != 0 {
+			return pwsz * (end - start)
+		}
+		// XXX calculating text width here is slow figure out why
+		return d.MeasureString(string(text[start:end])).Ceil()
+	}
+
+	getText := func(start, end int) string {
+		if edit.PasswordChar != 0 {
+			n := end - start
+			if n >= len(edit.password) {
+				edit.password = make([]rune, n)
+				for i := range edit.password {
+					edit.password[i] = edit.PasswordChar
+				}
+			}
+			return string(edit.password[:n])
+		}
+		return string(text[start:end])
+	}
 
 	flushLine := func(index int) rect.Rect {
 		// new line sepeator so draw previous line
@@ -1133,13 +1166,12 @@ func (edit *TextEditor) editDrawText(out *command.Buffer, style *nstyle.Edit, po
 
 		if is_selected { // selection needs to draw different background color
 			if index == len(text) || (index == start && start == 0) {
-				// XXX calculating text width here is slow figure out why
-				lblrect.W = d.MeasureString(string(text[start:index])).Ceil()
+				lblrect.W = measureText(start, index)
 			}
 			out.FillRect(lblrect, 0, background)
 		}
 		edit.drawchunks = append(edit.drawchunks, drawchunk{lblrect, start + textOffset, index + textOffset})
-		widgetText(out, lblrect, string(text[start:index]), &txt, "LC", f)
+		widgetText(out, lblrect, getText(start, index), &txt, "LC", f)
 
 		pos_x = x_margin
 
@@ -1150,7 +1182,7 @@ func (edit *TextEditor) editDrawText(out *command.Buffer, style *nstyle.Edit, po
 		var lblrect rect.Rect
 		lblrect.Y = pos_y + line_offset
 		lblrect.H = row_height
-		lblrect.W = d.MeasureString(string(text[start:index])).Ceil()
+		lblrect.W = measureText(start, index)
 		lblrect.X = pos_x
 
 		lblrect.W = int(math.Floor(float64(lblrect.X+lblrect.W-x_margin)/float64(tabsz))+1)*tabsz + x_margin - lblrect.X
@@ -1159,7 +1191,7 @@ func (edit *TextEditor) editDrawText(out *command.Buffer, style *nstyle.Edit, po
 			out.FillRect(lblrect, 0, background)
 		}
 		edit.drawchunks = append(edit.drawchunks, drawchunk{lblrect, start + textOffset, index + textOffset})
-		widgetText(out, lblrect, string(text[start:index]), &txt, "LC", f)
+		widgetText(out, lblrect, getText(start, index), &txt, "LC", f)
 
 		pos_x += lblrect.W
 
@@ -1171,7 +1203,6 @@ func (edit *TextEditor) editDrawText(out *command.Buffer, style *nstyle.Edit, po
 		case '\t':
 			flushTab(index)
 			start = index + 1
-
 		case '\n':
 			flushLine(index)
 			line_count++
@@ -1189,7 +1220,7 @@ func (edit *TextEditor) editDrawText(out *command.Buffer, style *nstyle.Edit, po
 
 	// draw last line
 	lblrect := flushLine(len(text))
-	lblrect.W = d.MeasureString(string(text[start:])).Ceil()
+	lblrect.W = measureText(start, len(text))
 
 	return image.Point{lblrect.X + lblrect.W, lblrect.Y}
 }
@@ -1220,8 +1251,14 @@ func (ed *TextEditor) doEdit(bounds rect.Rect, style *nstyle.Edit, inp *Input, c
 	prev_state := ed.Active
 
 	if ed.win.ctx.activateEditor != nil {
-		ed.Active = ed.win.ctx.activateEditor == ed
-
+		if ed.win.ctx.activateEditor == ed {
+			ed.Active = true
+			if ed.win.flags&windowDocked != 0 {
+				ed.win.ctx.dockedWindowFocus = ed.win.idx
+			}
+		} else {
+			ed.Active = false
+		}
 	}
 
 	is_hovered := inp.Mouse.HoveringRect(bounds)
@@ -1411,9 +1448,11 @@ func (ed *TextEditor) doEdit(bounds rect.Rect, style *nstyle.Edit, inp *Input, c
 	d.Edit = ed
 	d.State = state
 	d.Style = style
+	d.Scaling = ed.win.ctx.Style.Scaling
 	d.Bounds = bounds
 	d.Area = area
 	d.RowHeight = row_height
+	d.hasInput = inp.Mouse.valid
 	ed.win.widgets.Add(state, bounds)
 	d.Draw(&ed.win.ctx.Style, &ed.win.cmds)
 
@@ -1466,9 +1505,11 @@ type drawableTextEditor struct {
 	Edit      *TextEditor
 	State     nstyle.WidgetStates
 	Style     *nstyle.Edit
+	Scaling   float64
 	Bounds    rect.Rect
 	Area      rect.Rect
 	RowHeight int
+	hasInput  bool
 
 	SelectionBegin, SelectionEnd int
 
@@ -1561,25 +1602,31 @@ func (d *drawableTextEditor) Draw(z *nstyle.Style, out *command.Buffer) {
 			cursor_pos := d.CursorPos
 			/* draw cursor at end of line */
 			var cursor rect.Rect
-			cursor.W = FontWidth(font, "i")
+			if edit.Flags&EditIbeamCursor != 0 {
+				cursor.W = int(d.Scaling)
+				if cursor.W <= 0 {
+					cursor.W = 1
+				}
+			} else {
+				cursor.W = FontWidth(font, "i")
+			}
 			cursor.H = row_height
 			cursor.X = area.X + cursor_pos.X - edit.Scrollbar.X
 			cursor.Y = area.Y + cursor_pos.Y + row_height/2.0 - cursor.H/2.0
 			cursor.Y -= edit.Scrollbar.Y
 			out.FillRect(cursor, 0, cursor_color)
-
 		}
 
 		/* no selection so just draw the complete text */
 		pos = edit.editDrawText(out, style, pos, x_margin, edit.Buffer[:edit.Cursor], 0, row_height, font, background_color, text_color, false)
 		d.CursorPos = pos.Sub(startPos)
-		if edit.Active {
+		if edit.Active && d.hasInput {
 			if edit.Cursor < len(edit.Buffer) {
-				switch edit.Buffer[edit.Cursor] {
-				case '\n', '\t':
+				cursorChar := edit.Buffer[edit.Cursor]
+				if cursorChar == '\n' || cursorChar == '\t' || edit.Flags&EditIbeamCursor != 0 {
 					pos = edit.editDrawText(out, style, pos, x_margin, edit.Buffer[edit.Cursor:edit.Cursor+1], edit.Cursor, row_height, font, background_color, text_color, true)
 					drawEolCursor()
-				default:
+				} else {
 					pos = edit.editDrawText(out, style, pos, x_margin, edit.Buffer[edit.Cursor:edit.Cursor+1], edit.Cursor, row_height, font, cursor_color, cursor_text_color, true)
 				}
 				pos = edit.editDrawText(out, style, pos, x_margin, edit.Buffer[edit.Cursor+1:], edit.Cursor+1, row_height, font, background_color, text_color, false)
