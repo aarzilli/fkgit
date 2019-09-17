@@ -6,7 +6,6 @@ import (
 	"image"
 	"image/color"
 	"io"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,10 +15,10 @@ import (
 	"time"
 
 	"github.com/aarzilli/nucular"
+	"github.com/aarzilli/nucular/clipboard"
 	"github.com/aarzilli/nucular/label"
+	"github.com/aarzilli/nucular/richtext"
 	nstyle "github.com/aarzilli/nucular/style"
-
-	"golang.org/x/image/font"
 )
 
 type BlameTab struct {
@@ -39,6 +38,8 @@ type BlameTab struct {
 	maxwidth int
 
 	err error
+
+	rtxt *richtext.RichText
 
 	searcher Searcher
 }
@@ -63,10 +64,21 @@ type BlameLine struct {
 
 func NewBlameWindow(mw nucular.MasterWindow, revision, filename string) {
 	tab := &BlameTab{filename: filename, revision: revision, mw: mw, Commits: map[string]*Commit{}, CommitColor: map[string]color.RGBA{}}
+	tab.rtxt = richtext.New(richtext.Clipboard | richtext.Selectable)
+	tab.searcher.Reset = func() {
+		tab.rtxt.Sel.S = 0
+		tab.rtxt.Sel.E = 0
+		tab.rtxt.FollowCursor()
+	}
+	tab.searcher.Look = func(needle string, advance bool) {
+		if advance {
+			tab.rtxt.Sel.S = tab.rtxt.Sel.E
+		}
+		tab.rtxt.FollowCursor()
+		tab.rtxt.Look(needle, true)
+	}
 
 	tab.loadFile()
-
-	tab.searcher.searchSel = SearchSel{BlamePos{tab, -1}, 0, 0}
 
 	go tab.parseBlameOut()
 	openTab(tab)
@@ -206,9 +218,7 @@ func (tab *BlameTab) Update(w *nucular.Window) {
 	tab.mu.Lock()
 	defer tab.mu.Unlock()
 
-	scrollToSearch := false
-
-	tab.searcher.Events(w, &scrollToSearch)
+	tab.searcher.Events(w)
 
 	switch {
 	case !tab.loadDone:
@@ -216,15 +226,12 @@ func (tab *BlameTab) Update(w *nucular.Window) {
 		w.Label("Loading:", "LC")
 		w.Progress(&tab.CoveredLines, len(tab.Lines), false)
 	case tab.searcher.searching:
-		tab.searcher.Update(w, &scrollToSearch)
+		tab.searcher.Update(w)
 	}
 
 	style := w.Master().Style()
 
 	lnh := nucular.FontHeight(style.Font)
-	abbrevsz := nucular.FontWidth(style.Font, "0")*6 + style.Text.Padding.X*2
-	authorsz := nucular.FontWidth(style.Font, "MMMM") + style.Text.Padding.X*2
-	thick := int(style.Scaling)
 	tooltipsz := nucular.FontWidth(style.Font, "0")*80 + style.TooltipWindow.Padding.X*2
 
 	w.Row(0).Dynamic(1)
@@ -233,87 +240,32 @@ func (tab *BlameTab) Update(w *nucular.Window) {
 		return
 	}
 
-	// 	colorTest(w)
-	// 	_, _, _, _ = lnh, abbrevsz, authorsz, thick
-	//	return
-
-	var curCommit *Commit = nil
-
 	maxwidth := 0
 	if w := w.GroupBegin("blame", 0); w != nil {
-		originalSpacing := style.GroupWindow.Spacing.Y
-		style.GroupWindow.Spacing.Y = 0
-
-		for lineidx, line := range tab.Lines {
-			w.RowScaled(lnh).StaticScaled(abbrevsz, authorsz, thick, tab.maxwidth)
-
-			if line.Commit != curCommit {
-				if line.Commit != nil {
-					w.Label(abbrev(line.Commit.Id), "CC")
-					if w := w.ContextualOpen(0, blameCommitMenuSize, w.LastWidgetBounds, nil); w != nil {
-						tab.blameCommitMenu(w, line.Commit)
-					}
-					w.Label(nameInitials(line.Commit.Author), "CC")
+		if c := tab.rtxt.Rows(w, false); c != nil {
+			for _, line := range tab.Lines {
+				if clr, ok := tab.CommitColor[line.Commit.Id]; ok {
+					c.ParagraphStyle(richtext.AlignLeftDumb, clr)
 				} else {
-					w.Label("", "LC")
-					w.Label("", "LC")
+					c.ParagraphStyle(richtext.AlignLeftDumb, color.RGBA{})
 				}
-				curCommit = line.Commit
-			} else {
-				w.Label("", "LC")
-				w.Label("", "LC")
-			}
-
-			if bounds, out := w.Custom(nstyle.WidgetStateInactive); out != nil {
-				top := image.Pt(bounds.X+bounds.W/2, bounds.Y)
-				bot := image.Pt(bounds.X+bounds.W/2, bounds.Y+bounds.H)
-				out.StrokeLine(top, bot, thick, style.Text.Color)
-			}
-
-			issearchline := tab.searcher.searching && lineidx == tab.searcher.searchSel.Pos.(BlamePos).index
-
-			if bounds, out := w.Custom(nstyle.WidgetStateInactive); out != nil {
 				if line.Commit != nil {
-					if c, ok := tab.CommitColor[line.Commit.Id]; ok {
-						out.FillRect(bounds, 0, c)
-					}
+					c.SetStyle(richtext.TextStyle{
+						TooltipWidth: tooltipsz,
+						Tooltip:      BlameCommitFn(line.Commit),
+						ContextMenu: func(w *nucular.Window) {
+							tab.blameCommitMenu(w, line.Commit)
+						}})
+				} else {
+					c.SetStyle(richtext.TextStyle{})
 				}
-				out.DrawText(bounds, line.Text, style.Font, style.Text.Color)
-
-				if issearchline {
-					d := font.Drawer{Face: style.Font}
-					startX := bounds.X + d.MeasureString(line.Text[:tab.searcher.searchSel.Start]).Ceil()
-					endX := bounds.X + d.MeasureString(line.Text[:tab.searcher.searchSel.End]).Ceil()
-					maxy := bounds.Y + bounds.H
-					out.StrokeLine(image.Pt(startX, maxy), image.Pt(endX, maxy), int(math.Ceil(style.Scaling)), style.Text.Color)
-				}
-
-				if w.Input().Mouse.HoveringRect(bounds) && line.Commit != nil {
-					w.TooltipOpen(tooltipsz, false, BlameCommitFn(line.Commit))
-				}
+				c.Text(fmt.Sprintf("%s %3s \t", abbrev(line.Commit.Id), nameInitials(line.Commit.Author)))
+				c.Text(line.Text)
+				c.Text("\n")
 			}
-			if issearchline && scrollToSearch {
-				if above, below := w.Invisible(); above || below {
-					w.Scrollbar.Y = w.At().Y
-					w.Master().Changed()
-					scrollToSearch = false
-				}
-
-			}
-			if line.Commit != nil {
-				if w := w.ContextualOpen(0, blameCommitMenuSize, w.LastWidgetBounds, nil); w != nil {
-					tab.blameCommitMenu(w, line.Commit)
-				}
-			}
-
-			if tab.maxwidth == 0 {
-				if width := nucular.FontWidth(style.Font, line.Text); width > maxwidth {
-					maxwidth = width
-				}
-			}
+			c.End()
 		}
 
-		style.GroupWindow.Spacing.Y = originalSpacing
 		scrollingKeys(w, lnh)
 		w.GroupEnd()
 	}
@@ -357,6 +309,9 @@ func BlameCommitFn(commit *Commit) func(*nucular.Window) {
 func (tab *BlameTab) blameCommitMenu(w *nucular.Window, commit *Commit) {
 	w.Row(20).Dynamic(1)
 	a := abbrev(commit.Id)
+	if w.MenuItem(label.TA("Copy", "LC")) {
+		clipboard.Set(tab.rtxt.Get(tab.rtxt.Sel))
+	}
 	if w.MenuItem(label.TA(fmt.Sprintf("View %s", a), "LC")) {
 		// commit must be reloaded because it only contains the summary in Message
 		fullCommit, _ := LoadCommit(commit.Id)
@@ -365,28 +320,4 @@ func (tab *BlameTab) blameCommitMenu(w *nucular.Window, commit *Commit) {
 	if w.MenuItem(label.TA(fmt.Sprintf("Blame at %s", a), "LC")) {
 		NewBlameWindow(w.Master(), commit.Id, tab.filename)
 	}
-}
-
-type BlamePos struct {
-	tab   *BlameTab
-	index int
-}
-
-func (pos BlamePos) BeforeFirst() SearchPos {
-	return BlamePos{pos.tab, -1}
-}
-
-func (pos BlamePos) Next() (SearchPos, bool) {
-	pos.index++
-	if pos.index < 0 || pos.index >= len(pos.tab.Lines) {
-		return pos, false
-	}
-	return pos, true
-}
-
-func (pos BlamePos) Text() string {
-	if pos.index < 0 || pos.index >= len(pos.tab.Lines) {
-		return ""
-	}
-	return pos.tab.Lines[pos.index].Text
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/aarzilli/nucular"
 	"github.com/aarzilli/nucular/clipboard"
+	"github.com/aarzilli/nucular/richtext"
 )
 
 type ViewWindow struct {
@@ -19,9 +20,9 @@ type ViewWindow struct {
 
 	tooLong bool
 	diff    Diff
-	width   int
 
-	searcher Searcher
+	searcher  Searcher
+	searchIdx int
 }
 
 func NewViewWindow(commit Commit, opentab bool) *ViewWindow {
@@ -31,7 +32,8 @@ func NewViewWindow(commit Commit, opentab bool) *ViewWindow {
 
 	vw.parseDiff()
 
-	vw.searcher.searchSel = SearchSel{vw.diff.BeforeFirst(), 0, 0}
+	vw.searcher.Look = vw.Look
+	vw.searcher.Reset = vw.SearchReset
 
 	if opentab {
 		openTab(vw)
@@ -106,8 +108,6 @@ func (vw *ViewWindow) Update(w *nucular.Window) {
 func (vw *ViewWindow) updateView(w *nucular.Window) {
 	style := w.Master().Style()
 
-	scrollToSearch := false
-
 	if vw.isdiff {
 		w.Row(20).Dynamic(1)
 		w.Label("Diff", "LC")
@@ -115,11 +115,11 @@ func (vw *ViewWindow) updateView(w *nucular.Window) {
 		w.Label("    "+vw.niceNameB, "LC")
 	} else {
 		if !vw.viewInTabButton {
-			vw.searcher.Events(w, &scrollToSearch)
+			vw.searcher.Events(w)
 
 			if vw.searcher.searching {
 				w.MenubarBegin()
-				vw.searcher.Update(w, &scrollToSearch)
+				vw.searcher.Update(w)
 				w.MenubarEnd()
 			}
 		}
@@ -127,7 +127,7 @@ func (vw *ViewWindow) updateView(w *nucular.Window) {
 		w.Label(" ", "LC")
 	}
 
-	showDiff(w, vw.diff, &vw.width, vw.searcher.Sel(), scrollToSearch)
+	showDiff(w, vw.diff)
 }
 
 func showCommit(lnh int, w *nucular.Window, lc Commit, viewInTabButton bool) {
@@ -159,4 +159,28 @@ func showCommit(lnh int, w *nucular.Window, lc Commit, viewInTabButton bool) {
 	w.Label(fmt.Sprintf("committer %s on %s\n", lc.Committer, lc.CommitterDate.Local().Format("2006-01-02 15:04")), "LC")
 	w.Spacing(1)
 	showLines(w, lc.Message)
+}
+
+func (vw *ViewWindow) Look(needle string, advance bool) {
+	if advance {
+		vw.diff[vw.searchIdx].rtxt.Sel.S = vw.diff[vw.searchIdx].rtxt.Sel.E
+	}
+	for i := 0; i < 2; i++ { // wraparound loop
+		for vw.searchIdx < len(vw.diff) {
+			if vw.diff[vw.searchIdx].rtxt.Look(needle, false) {
+				vw.diff[vw.searchIdx].rtxt.FollowCursor()
+				return
+			}
+			vw.diff[vw.searchIdx].rtxt.Sel = richtext.Sel{0, 0}
+			vw.searchIdx++
+		}
+		vw.searchIdx = 0
+	}
+}
+
+func (vw *ViewWindow) SearchReset() {
+	vw.searchIdx = 0
+	for i := range vw.diff {
+		vw.diff[i].rtxt.Sel = richtext.Sel{0, 0}
+	}
 }

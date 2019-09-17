@@ -3,13 +3,14 @@ github.com/BurntSushi/xgb
 github.com/BurntSushi/xgb/render
 github.com/BurntSushi/xgb/shm
 github.com/BurntSushi/xgb/xproto
-# github.com/aarzilli/nucular v0.0.0-20190917083118-58c0dc32d894
+# github.com/aarzilli/nucular v0.0.0-20190918100723-3e3c504fb81c
 github.com/aarzilli/nucular
 github.com/aarzilli/nucular/clipboard
 github.com/aarzilli/nucular/command
 github.com/aarzilli/nucular/internal/assets
 github.com/aarzilli/nucular/label
 github.com/aarzilli/nucular/rect
+github.com/aarzilli/nucular/richtext
 github.com/aarzilli/nucular/style
 # github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 github.com/golang/freetype

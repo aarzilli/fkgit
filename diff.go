@@ -4,15 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"image"
-	"math"
+	"image/color"
 	"strings"
 	"unicode"
 
 	"github.com/aarzilli/nucular"
-	nstyle "github.com/aarzilli/nucular/style"
-
-	"golang.org/x/image/font"
+	"github.com/aarzilli/nucular/richtext"
 )
 
 const wordDiffDebug = false
@@ -25,6 +22,7 @@ type FileDiff struct {
 	Filedescr string
 	Headers   []Chunk
 	Lines     []LineDiff
+	rtxt      *richtext.RichText
 }
 
 type LineDiffOpts int
@@ -53,12 +51,6 @@ const (
 type Chunk struct {
 	Opts ChunkOpts
 	Text string
-}
-
-type DiffPos struct {
-	diff        Diff
-	curFileDiff int
-	curLineDiff int
 }
 
 func (ld *LineDiff) IsHunkHeader() bool {
@@ -167,15 +159,7 @@ func parseDiff(bs []byte) Diff {
 
 	for i := range diff {
 		diff[i].Num = i
-	}
-
-	// convert spaces to tabs
-	for _, filediff := range diff {
-		for _, linediff := range filediff.Lines {
-			for i := range linediff.Chunks {
-				linediff.Chunks[i].Text = expandtabs(linediff.Chunks[i].Text)
-			}
-		}
+		diff[i].rtxt = richtext.New(richtext.Selectable | richtext.Clipboard)
 	}
 
 	return diff
@@ -556,163 +540,72 @@ func wordSplit(in string) []string {
 	return r
 }
 
-func showDiff(w *nucular.Window, diff Diff, width *int, sel *SearchSel, scrollToSearch bool) {
+func showDiff(w *nucular.Window, diff Diff) {
 	style := w.Master().Style()
 
-	rounding := uint16(4 * style.Scaling)
-
 	lnh := nucular.FontHeight(style.Font)
-	d := font.Drawer{Face: style.Font}
-	if sel == nil {
-		sel = &SearchSel{diff.BeforeFirst(), 0, 0}
-	}
-	selpos := sel.Pos.(DiffPos)
 
-	for fileidx, filediff := range diff {
-		if selpos.InFile(fileidx) {
-			w.TreeOpen(filediff.Filename)
-		}
-		if w.TreePushNamed(nucular.TreeTab, filediff.Filename, filediff.Filedescr, len(diff) == 1) {
-			originalSpacing := style.NormalWindow.Spacing.Y
-			style.NormalWindow.Spacing.Y = 0
+	for _, filediff := range diff {
+		if w.TreePushNamed(nucular.TreeTab, filediff.Filename, filediff.Filedescr, true) {
+			c := filediff.rtxt.Rows(w, false)
+			if c == nil {
+				w.TreePop()
+				continue
+			}
 
-			if len(filediff.Headers) >= 2 {
-				w.Row(20).Static(0, 90)
-				w.LabelColored(filediff.Headers[1].Text, "LC", hunkhdrColor)
-				if w.ButtonText("Blame") {
+			c.SaveStyle()
+
+			if len(filediff.Headers) >= 0 {
+				c.SetStyle(richtext.TextStyle{Color: hunkhdrColor})
+				c.Text(filediff.Headers[1].Text)
+				c.Text(" ")
+				c.SetStyle(richtext.TextStyle{Color: color.RGBA{0x00, 0x88, 0xdd, 0xff}, Flags: richtext.Underline})
+				if c.Link("Blame", color.RGBA{0x00, 0xaa, 0xff, 0xff}, nil) {
 					NewBlameWindow(w.Master(), "", filediff.Filename)
 				}
+				c.RestoreStyle()
+				c.Text("\n")
 			}
 
-			if *width > 0 {
-				w.RowScaled(lnh).StaticScaled(*width)
-			} else {
-				w.RowScaled(lnh).Dynamic(1)
-			}
-
+			c.SetStyle(richtext.TextStyle{Color: hunkhdrColor})
 			for _, hdr := range filediff.Headers[2:] {
-				w.LabelColored(hdr.Text, "LC", hunkhdrColor)
+				c.Text(hdr.Text)
+				c.Text("\n")
 			}
+			c.RestoreStyle()
 
-			w.Spacing(1)
+			c.Text("\n")
 
-			for lineidx, linediff := range filediff.Lines {
-				bounds, out := w.Custom(nstyle.WidgetStateInactive)
-				if scrollToSearch && selpos.InLine(fileidx, lineidx) {
-					if above, below := w.Invisible(); above || below {
-						w.Scrollbar.Y = w.At().Y
-						w.Master().Changed()
-						scrollToSearch = false
-					}
-				}
-				if out == nil {
-					continue
-				}
-
+			for _, linediff := range filediff.Lines {
 				switch linediff.Opts {
 				case Addline:
-					out.FillRect(bounds, 0, addlineBg)
+					c.ParagraphStyle(richtext.AlignLeftDumb, addlineBg)
 				case Delline:
-					out.FillRect(bounds, 0, dellineBg)
+					c.ParagraphStyle(richtext.AlignLeftDumb, dellineBg)
+				default:
+					c.ParagraphStyle(richtext.AlignLeftDumb, color.RGBA{})
 				}
 
-				outchars := 0
-				selStartX, selEndX := 0, 0
-
-				dot := bounds
 				for _, chunk := range linediff.Chunks {
-					dot.W = d.MeasureString(chunk.Text).Ceil()
-
-					if dot.W > *width {
-						*width = dot.W
-					}
-
 					switch chunk.Opts {
 					case Addseg:
-						out.FillRect(dot, rounding, addsegBg)
+						c.SetStyle(richtext.TextStyle{BgColor: addsegBg})
 					case Delseg:
-						out.FillRect(dot, rounding, delsegBg)
+						c.SetStyle(richtext.TextStyle{BgColor: delsegBg})
+					default:
+						c.SetStyle(richtext.TextStyle{})
 					}
 
-					out.DrawText(dot, chunk.Text, style.Font, style.Text.Color)
-
-					if selpos.InLine(fileidx, lineidx) {
-						if sel.Start >= outchars && outchars+len(chunk.Text) > sel.Start {
-							selStartX = dot.X + d.MeasureString(chunk.Text[:sel.Start-outchars]).Ceil()
-						}
-						if sel.End >= outchars && outchars+len(chunk.Text) > sel.End {
-							selEndX = dot.X + d.MeasureString(chunk.Text[:sel.End-outchars]).Ceil()
-						}
-					}
-					outchars += len(chunk.Text)
-					dot.X += dot.W
+					c.Text(chunk.Text)
 				}
 
-				if selpos.InLine(fileidx, lineidx) {
-					maxy := bounds.Max().Y
-					out.StrokeLine(image.Pt(selStartX, maxy), image.Pt(selEndX, maxy), int(math.Ceil(style.Scaling)), style.Text.Color)
-				}
+				c.Text("\n")
 			}
 
-			style.NormalWindow.Spacing.Y = originalSpacing
-
+			c.End()
 			w.TreePop()
 		}
 	}
 
 	scrollingKeys(w, lnh)
-}
-
-func (diff Diff) BeforeFirst() DiffPos {
-	return DiffPos{diff, 0, -1}
-}
-
-func (pos DiffPos) BeforeFirst() SearchPos {
-	return pos.diff.BeforeFirst()
-}
-
-func (pos DiffPos) Next() (SearchPos, bool) {
-	it := pos
-	for it.curFileDiff < len(it.diff) {
-		it.curLineDiff++
-
-		if it.curLineDiff < len(it.diff[it.curFileDiff].Lines) {
-			return it, true
-		}
-
-		it.curLineDiff = -1
-		it.curFileDiff++
-	}
-	return DiffPos{pos.diff, 0, -1}, false
-}
-
-func (it DiffPos) Text() string {
-	if it.curFileDiff >= len(it.diff) || it.curLineDiff >= len(it.diff[it.curFileDiff].Lines) || it.curFileDiff < 0 || it.curLineDiff < 0 {
-		return ""
-	}
-	lineDiff := &it.diff[it.curFileDiff].Lines[it.curLineDiff]
-	switch len(lineDiff.Chunks) {
-	case 0:
-		return ""
-	case 1:
-		return lineDiff.Chunks[0].Text
-	default:
-		var l int
-		for i := range lineDiff.Chunks {
-			l += len(lineDiff.Chunks[i].Text)
-		}
-		b := make([]byte, 0, l)
-		for i := range lineDiff.Chunks {
-			b = append(b, []byte(lineDiff.Chunks[i].Text)...)
-		}
-		return string(b)
-	}
-}
-
-func (it *DiffPos) InFile(fileidx int) bool {
-	return it.curFileDiff == fileidx && it.curLineDiff >= 0
-}
-
-func (it *DiffPos) InLine(fileidx int, lineidx int) bool {
-	return it.curFileDiff == fileidx && it.curLineDiff == lineidx
 }
