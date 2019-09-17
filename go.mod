@@ -3,7 +3,7 @@ module github.com/aarzilli/fkgit
 go 1.13
 
 require (
-	github.com/aarzilli/nucular v0.0.0-20190902135428-56f96409e78a
+	github.com/aarzilli/nucular v0.0.0-20190917083118-58c0dc32d894
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/golang/protobuf v0.0.0-20161117033126-8ee79997227b // indirect
 	github.com/google/go-github v2.0.1-0.20160802180827-56add9d4071b+incompatible
