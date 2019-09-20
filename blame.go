@@ -244,22 +244,24 @@ func (tab *BlameTab) Update(w *nucular.Window) {
 	if w := w.GroupBegin("blame", 0); w != nil {
 		if c := tab.rtxt.Rows(w, false); c != nil {
 			for _, line := range tab.Lines {
-				if clr, ok := tab.CommitColor[line.Commit.Id]; ok {
-					c.ParagraphStyle(richtext.AlignLeftDumb, clr)
-				} else {
-					c.ParagraphStyle(richtext.AlignLeftDumb, color.RGBA{})
-				}
 				if line.Commit != nil {
+					if clr, ok := tab.CommitColor[line.Commit.Id]; ok {
+						c.ParagraphStyle(richtext.AlignLeftDumb, clr)
+					} else {
+						c.ParagraphStyle(richtext.AlignLeftDumb, color.RGBA{})
+					}
 					c.SetStyle(richtext.TextStyle{
 						TooltipWidth: tooltipsz,
 						Tooltip:      BlameCommitFn(line.Commit),
 						ContextMenu: func(w *nucular.Window) {
 							tab.blameCommitMenu(w, line.Commit)
 						}})
+					c.Text(fmt.Sprintf("%s %3s \t", abbrev(line.Commit.Id), nameInitials(line.Commit.Author)))
 				} else {
+					c.ParagraphStyle(richtext.AlignLeftDumb, color.RGBA{})
 					c.SetStyle(richtext.TextStyle{})
+					c.Text("           \t")
 				}
-				c.Text(fmt.Sprintf("%s %3s \t", abbrev(line.Commit.Id), nameInitials(line.Commit.Author)))
 				c.Text(line.Text)
 				c.Text("\n")
 			}
