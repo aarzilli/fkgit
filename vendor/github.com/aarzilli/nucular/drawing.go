@@ -5,11 +5,10 @@ import (
 	"image/color"
 
 	"github.com/aarzilli/nucular/command"
+	"github.com/aarzilli/nucular/font"
 	"github.com/aarzilli/nucular/label"
 	"github.com/aarzilli/nucular/rect"
 	nstyle "github.com/aarzilli/nucular/style"
-
-	"golang.org/x/image/font"
 )
 
 func drawSymbol(out *command.Buffer, type_ label.SymbolType, content rect.Rect, background color.RGBA, foreground color.RGBA, border_width int, font font.Face) {
@@ -120,9 +119,6 @@ func (dwh *drawableWindowHeader) Draw(z *nstyle.Style, out *command.Buffer) {
 			background = &style.Header.Normal
 			text.Text = style.Header.LabelNormal
 		}
-		if dwh.Hovered {
-		} else {
-		}
 
 		/* draw header background */
 		if background.Type == nstyle.ItemImage {
@@ -136,7 +132,6 @@ func (dwh *drawableWindowHeader) Draw(z *nstyle.Style, out *command.Buffer) {
 		text.Padding = image.Point{0, 0}
 		widgetText(out, dwh.Label, dwh.Title, &text, "LC", z.Font)
 	}
-	return
 }
 
 type drawableWindowBody struct {
@@ -155,7 +150,6 @@ func (dwb *drawableWindowBody) Draw(z *nstyle.Style, out *command.Buffer) {
 	if !dwb.NoScrollbar {
 		out.Clip.W += dwb.Style.ScrollbarSize.X
 	}
-	return
 }
 
 type drawableScalerAndBorders struct {
@@ -200,7 +194,7 @@ func (d *drawableScalerAndBorders) Draw(z *nstyle.Style, out *command.Buffer) {
 		/* draw right border */
 		out.StrokeLine(image.Point{d.Bounds.X + d.Bounds.W - d.Border, d.Bounds.Y + d.Border/2.0}, image.Point{d.Bounds.X + d.Bounds.W - d.Border, d.PaddingY - d.Border}, d.Border, d.BorderColor)
 	}
-	return
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -293,7 +287,7 @@ func drawTextButton(win *Window, bounds rect.Rect, content rect.Rect, state nsty
 	}
 
 	widgetText(out, content, txt, &text, align, font)
-	return
+
 }
 
 func drawSymbolButton(win *Window, bounds rect.Rect, content rect.Rect, state nstyle.WidgetStates, style *nstyle.Button, symbol label.SymbolType) {
@@ -328,7 +322,6 @@ func drawSymbolButton(win *Window, bounds rect.Rect, content rect.Rect, state ns
 		sym = style.TextNormal
 	}
 	drawSymbol(out, symbol, content, bg, sym, style.SymbolBorderWidth, font)
-	return
 }
 
 func drawImageButton(win *Window, bounds rect.Rect, content rect.Rect, state nstyle.WidgetStates, style *nstyle.Button, img *image.RGBA) {
@@ -345,7 +338,6 @@ func drawImageButton(win *Window, bounds rect.Rect, content rect.Rect, state nst
 	}
 	drawButton(out, bounds, state, style)
 	out.DrawImage(content, img)
-	return
 }
 
 func drawTextSymbolButton(win *Window, bounds, labelrect, symbolrect rect.Rect, state nstyle.WidgetStates, style *nstyle.Button, str string, symbol label.SymbolType) {
@@ -389,7 +381,6 @@ func drawTextSymbolButton(win *Window, bounds, labelrect, symbolrect rect.Rect, 
 	text.Padding = image.Point{0, 0}
 	drawSymbol(out, symbol, symbolrect, style.TextBackground, sym, 0, font)
 	widgetText(out, labelrect, str, &text, "CC", font)
-	return
 }
 
 func drawTextImageButton(win *Window, bounds, labelrect, imgrect rect.Rect, state nstyle.WidgetStates, style *nstyle.Button, str string, img *image.RGBA) {
@@ -427,7 +418,6 @@ func drawTextImageButton(win *Window, bounds, labelrect, imgrect rect.Rect, stat
 	text.Padding = image.Point{0, 0}
 	widgetText(out, labelrect, str, &text, "CC", font)
 	out.DrawImage(imgrect, img)
-	return
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -488,7 +478,6 @@ func drawSelectable(win *Window, state nstyle.WidgetStates, style *nstyle.Select
 	}
 
 	widgetText(out, bounds, str, &text, align, font)
-	return
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -536,7 +525,6 @@ func drawScrollbar(win *Window, state nstyle.WidgetStates, style *nstyle.Scrollb
 	} else {
 		out.FillRect(scroll, style.Rounding, cursorstyle.Data.Color)
 	}
-	return
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -612,7 +600,6 @@ func drawTogglebox(win *Window, type_ toggleType, state nstyle.WidgetStates, sty
 	text.Padding.Y = 0
 	text.Background = style.TextBackground
 	widgetText(out, labelrect, str, &text, "LC", font)
-	return
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -661,7 +648,6 @@ func drawProgress(win *Window, state nstyle.WidgetStates, style *nstyle.Progress
 	} else {
 		out.FillRect(scursor, style.Rounding, cursor.Data.Color)
 	}
-	return
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -741,7 +727,6 @@ func drawSlider(win *Window, state nstyle.WidgetStates, style *nstyle.Slider, bo
 	} else {
 		out.FillCircle(scursor, cursor.Data.Color)
 	}
-	return
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -790,7 +775,6 @@ func drawProperty(win *Window, style *nstyle.Property, bounds, labelrect rect.Re
 
 	// draw label
 	widgetText(out, labelrect, name, &text, "CC", font)
-	return
 }
 
 ///////////////////////////////////////////////////////////////////////////////////

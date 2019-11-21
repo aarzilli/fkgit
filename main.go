@@ -404,6 +404,9 @@ func guiUpdate(w *nucular.Window) {
 
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeTab):
 			currentTab = (currentTab + 1) % len(tabs)
+
+		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeF):
+			mw.SetPerf(!mw.GetPerf())
 		}
 	}
 
