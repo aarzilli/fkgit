@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"gioui.org/app/internal/gl"
+	"gioui.org/app/internal/glimpl"
 	"gioui.org/io/event"
 	"gioui.org/io/system"
 	"gioui.org/unit"
@@ -31,6 +31,15 @@ type Callbacks interface {
 	Event(e event.Event)
 }
 
+type Context interface {
+	Functions() *glimpl.Functions
+	Present() error
+	MakeCurrent() error
+	Release()
+	Lock()
+	Unlock()
+}
+
 // Driver is the interface for the platform implementation
 // of a window.
 type Driver interface {
@@ -39,7 +48,7 @@ type Driver interface {
 	SetAnimating(anim bool)
 	// ShowTextInput updates the virtual keyboard state.
 	ShowTextInput(show bool)
-	NewContext() (gl.Context, error)
+	NewContext() (Context, error)
 }
 
 type windowRendezvous struct {

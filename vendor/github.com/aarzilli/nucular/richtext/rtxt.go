@@ -46,6 +46,8 @@ type RichText struct {
 	clickCount    int // number of consecutive clicks
 
 	followCursor bool // scroll to show cursor on screen
+
+	focused bool
 }
 
 type Sel struct {
@@ -63,6 +65,7 @@ const (
 	Selectable
 	Clipboard
 	ShowTick
+	Keyboard
 )
 
 type FaceFlags uint16
@@ -199,6 +202,8 @@ type Ctor struct {
 	selsDone bool // all sels are closed
 
 	linkClick int32 // position of click in link mode
+
+	appendScroll bool
 }
 
 type ctorMode uint8
@@ -230,6 +235,7 @@ func New(flags Flags) *RichText {
 func (rtxt *RichText) Widget(w *nucular.Window, changed bool) *Ctor {
 	rtxt.initialize(w)
 	if rtxt.first || changed {
+		rtxt.changed = true
 		rtxt.ctor = Ctor{rtxt: rtxt, mode: ctorWidget, w: w}
 		return &rtxt.ctor
 	}
@@ -245,23 +251,26 @@ func (rtxt *RichText) Rows(w *nucular.Window, changed bool) *Ctor {
 		rtxt.ctor = Ctor{rtxt: rtxt, mode: ctorRows, w: w}
 		return &rtxt.ctor
 	}
-	return rtxt.drawRows(w)
+	return rtxt.drawRows(w, 0)
 }
 
 // Append allows adding text at the end of the widget. Calling Link or
 // LinkBytes on the returned constructor is illegal if callback is nil.
 // Selections for SetStyleForSel and SetAlignForSel are interpreted to be
 // relative to the newly added text.
-func (rtxt *RichText) Append() *Ctor {
+func (rtxt *RichText) Append(scroll bool) *Ctor {
 	if rtxt.first {
 		panic("Append called on a RichText widget that isn't initialized")
 	}
-	panic("Not implemented")
 	off := int32(0)
 	for _, chunk := range rtxt.chunks {
 		off += chunk.len()
 	}
-	rtxt.ctor = Ctor{rtxt: rtxt, mode: ctorAppend, off: off}
+	rtxt.ctor = Ctor{rtxt: rtxt, mode: ctorAppend, off: off, appendScroll: scroll}
+
+	lastSel := rtxt.styleSels[len(rtxt.styleSels)-1]
+
+	rtxt.ctor.alignSels = append(rtxt.ctor.alignSels, styleSel{Sel: Sel{S: int32(rtxt.ctor.off + rtxt.ctor.len)}, align: lastSel.align, paraColor: lastSel.paraColor})
 	return &rtxt.ctor
 }
 
@@ -348,6 +357,39 @@ func (rtxt *RichText) Get(sel Sel) string {
 	return out.String()
 }
 
+// Tail removes everything but the last n physical lines
+func (rtxt *RichText) Tail(n int) {
+	if len(rtxt.lines) <= n {
+		return
+	}
+
+	off := rtxt.lines[len(rtxt.lines)-n].off[0]
+	runeoff := rtxt.lines[len(rtxt.lines)-n].off[0]
+
+	off2 := int32(0)
+	for i, chunk := range rtxt.chunks {
+		if off2+chunk.len() > off {
+			rtxt.chunks = append(rtxt.chunks[:0], rtxt.chunks[i:]...)
+			s := off - off2
+			if s >= chunk.len() {
+				rtxt.chunks = append(rtxt.chunks[:0], rtxt.chunks[1:]...)
+			} else {
+				if rtxt.chunks[0].b != nil {
+					rtxt.chunks[0].b = rtxt.chunks[0].b[s:]
+				} else {
+					rtxt.chunks[0].s = rtxt.chunks[0].s[s:]
+				}
+			}
+			break
+		}
+		off2 += chunk.len()
+	}
+
+	rtxt.adv = append(rtxt.adv[:0], rtxt.adv[runeoff:]...)
+	rtxt.reflow()
+
+}
+
 func (rtxt *RichText) initialize(w *nucular.Window) {
 	style := w.Master().Style()
 	if (rtxt.SelColor != color.RGBA{}) {
@@ -375,17 +417,28 @@ func (ctor *Ctor) End() {
 	if !ctor.selsDone {
 		ctor.closeSels()
 	}
+	ctor.styleSels = removeEmptySels(ctor.styleSels)
+	ctor.alignSels = removeEmptySels(ctor.alignSels)
+	ctor.linkSels = removeEmptySels(ctor.linkSels)
 	ctor.styleSels = separateStyles(ctor.styleSels)
 	ctor.alignSels = separateStyles(ctor.alignSels)
 	styleSels := mergeStyles(ctor.styleSels, ctor.alignSels, ctor.linkSels)
+	styleSels = removeEmptySels(styleSels)
 	switch ctor.mode {
 	case ctorAppend:
-		//TODO: append text and styleSels to rtxt
-		//TODO: reflow just the new text
+		n := len(ctor.rtxt.chunks)
+		ctor.rtxt.chunks = append(ctor.rtxt.chunks, ctor.chunks...)
+		ctor.rtxt.styleSels = append(ctor.rtxt.styleSels, styleSels...)
+		ctor.rtxt.calcAdvances(n)
+		ctor.rtxt.reflow()
+		if ctor.appendScroll {
+			ctor.rtxt.Sel = Sel{ctor.off + ctor.len, ctor.off + ctor.len}
+			ctor.rtxt.followCursor = true
+		}
 	case ctorRows:
 		ctor.rtxt.styleSels = styleSels
 		ctor.rtxt.chunks = ctor.chunks
-		ctor.rtxt.drawRows(ctor.w)
+		ctor.rtxt.drawRows(ctor.w, 0)
 	case ctorWidget:
 		ctor.rtxt.styleSels = styleSels
 		ctor.rtxt.chunks = ctor.chunks
@@ -703,6 +756,16 @@ func mergeStyles(styleSels, alignSels, linkSels []styleSel) []styleSel {
 	return r
 }
 
+func removeEmptySels(styleSels []styleSel) []styleSel {
+	r := styleSels[:0]
+	for _, styleSel := range styleSels {
+		if styleSel.S < styleSel.E {
+			r = append(r, styleSel)
+		}
+	}
+	return r
+}
+
 type textIter struct {
 	rtxt     *RichText
 	chunkIdx int
@@ -782,4 +845,12 @@ func textIterMatch(titer textIter, needle string, insensitive bool) (bool, Sel) 
 		titer.Next()
 	}
 	return true, Sel{start, titer.off}
+}
+
+func (rtxt *RichText) length() int32 {
+	r := int32(0)
+	for _, chunk := range rtxt.chunks {
+		r += chunk.len()
+	}
+	return r
 }

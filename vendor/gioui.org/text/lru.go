@@ -3,7 +3,7 @@
 package text
 
 import (
-	"gioui.org/op/clip"
+	"gioui.org/op"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -20,19 +20,19 @@ type pathCache struct {
 type layoutElem struct {
 	next, prev *layoutElem
 	key        layoutKey
-	layout     *Layout
+	layout     []Line
 }
 
 type path struct {
 	next, prev *path
 	key        pathKey
-	val        clip.Op
+	val        op.CallOp
 }
 
 type layoutKey struct {
-	ppem fixed.Int26_6
-	str  string
-	opts LayoutOptions
+	ppem     fixed.Int26_6
+	maxWidth int
+	str      string
 }
 
 type pathKey struct {
@@ -42,7 +42,7 @@ type pathKey struct {
 
 const maxSize = 1000
 
-func (l *layoutCache) Get(k layoutKey) (*Layout, bool) {
+func (l *layoutCache) Get(k layoutKey) ([]Line, bool) {
 	if lt, ok := l.m[k]; ok {
 		l.remove(lt)
 		l.insert(lt)
@@ -51,7 +51,7 @@ func (l *layoutCache) Get(k layoutKey) (*Layout, bool) {
 	return nil, false
 }
 
-func (l *layoutCache) Put(k layoutKey, lt *Layout) {
+func (l *layoutCache) Put(k layoutKey, lt []Line) {
 	if l.m == nil {
 		l.m = make(map[layoutKey]*layoutElem)
 		l.head = new(layoutElem)
@@ -81,16 +81,16 @@ func (l *layoutCache) insert(lt *layoutElem) {
 	lt.next.prev = lt
 }
 
-func (c *pathCache) Get(k pathKey) (clip.Op, bool) {
+func (c *pathCache) Get(k pathKey) (op.CallOp, bool) {
 	if v, ok := c.m[k]; ok {
 		c.remove(v)
 		c.insert(v)
 		return v.val, true
 	}
-	return clip.Op{}, false
+	return op.CallOp{}, false
 }
 
-func (c *pathCache) Put(k pathKey, v clip.Op) {
+func (c *pathCache) Put(k pathKey, v op.CallOp) {
 	if c.m == nil {
 		c.m = make(map[pathKey]*path)
 		c.head = new(path)

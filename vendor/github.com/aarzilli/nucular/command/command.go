@@ -74,6 +74,10 @@ type Text struct {
 	String     string
 }
 
+type Image struct {
+	Img *image.RGBA
+}
+
 func (b *Buffer) PushScissor(r rect.Rect) {
 	b.Clip = r
 
@@ -100,7 +104,7 @@ func (b *Buffer) StrokeLine(p0, p1 image.Point, line_thickness int, c color.RGBA
 }
 
 func (b *Buffer) FillRect(rect rect.Rect, rounding uint16, c color.RGBA) {
-	if c.A == 0 {
+	if c.A == 0 && len(b.Commands) > 0 {
 		return
 	}
 	if !rect.Intersect(&b.Clip) {
@@ -161,5 +165,17 @@ func (b *Buffer) DrawText(r rect.Rect, str string, face font.Face, fg color.RGBA
 	cmd.Text.Foreground = fg
 	cmd.Text.Face = face
 	cmd.Text.String = str
+	b.Commands = append(b.Commands, cmd)
+}
+
+func (b *Buffer) DrawImage(r rect.Rect, img *image.RGBA) {
+	if !r.Intersect(&b.Clip) {
+		return
+	}
+
+	var cmd Command
+	cmd.Kind = ImageCmd
+	cmd.Rect = r
+	cmd.Image.Img = img
 	b.Commands = append(b.Commands, cmd)
 }
