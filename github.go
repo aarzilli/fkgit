@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"os"
@@ -220,14 +221,7 @@ func (gs *GithubStuff) pullRequest(lw *LogWindow, title string, ref *Ref, lc Lan
 		title = commits[0].ShortMessage()
 	}
 
-	body := []byte("```\n")
-
-	for _, commit := range commits {
-		body = append(body, []byte(commit.Message)...)
-		body = append(body, '\n')
-	}
-
-	body = append(body, []byte("```\n")...)
+	body := PRMessageBody(commits)
 
 	bodystr := string(body)
 
@@ -350,4 +344,54 @@ func (iw *GithubIssuesWindow) Update(w *nucular.Window) {
 
 func (pw *GithubIssuesWindow) Protected() bool {
 	return false
+}
+
+func PRMessageBody(commits []Commit) []byte {
+	body := new(bytes.Buffer)
+	for i := range commits {
+		if i > 0 {
+			body.WriteByte('\n')
+		}
+		prMessageBody1(body, &commits[i], len(commits) != 1)
+	}
+	return body.Bytes()
+}
+
+func prMessageBody1(body *bytes.Buffer, commit *Commit, addtitle bool) {
+	title := commit.ShortMessage()
+	if addtitle {
+		fmt.Fprintf(body, "### %s\n\n", title)
+	}
+	msg := strings.Trim(commit.Message[len(title):], "\n") + "\n"
+
+	lines := strings.Split(msg, "\n")
+
+	for i := range lines {
+		line := &lines[i]
+		if len(*line) <= 0 {
+			continue
+		}
+		if strings.HasPrefix(*line, "- ") {
+			*line = "* " + (*line)[2:]
+		}
+
+		if (*line)[len(*line)-1] == '.' {
+			isList := strings.HasPrefix(*line, "* ")
+			for i := 0; i < len(*line); i++ {
+				if (*line)[i] < '0' || (*line)[i] > '9' {
+					if (*line)[i] == '.' && i != 0 && i+2 < len(*line) && (*line)[i+1] == ' ' {
+						isList = true
+					}
+					break
+				}
+			}
+			isVerbatim := strings.HasPrefix(*line, " ") || strings.HasPrefix(*line, "\t")
+			nextIsNewline := i+1 < len(lines) && strings.TrimSpace(lines[i+1]) == ""
+			if !isList && !isVerbatim && !nextIsNewline {
+				*line = *line + "\n"
+			}
+		}
+	}
+
+	body.Write([]byte(strings.Join(lines, "\n")))
 }
