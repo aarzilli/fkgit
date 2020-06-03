@@ -436,11 +436,11 @@ func fmtscript(script []op, a, b []string) string {
 	for i := range script {
 		switch script[i].kind {
 		case matchOp:
-			fmt.Fprintf(&buf, "(%c)", a[script[i].src])
+			fmt.Fprintf(&buf, "(%s", a[script[i].src])
 		case insOp:
-			fmt.Fprintf(&buf, "(ins:%c)", b[script[i].dst])
+			fmt.Fprintf(&buf, "(ins:%s", b[script[i].dst])
 		case delOp:
-			fmt.Fprintf(&buf, "(del:%c)", a[script[i].src])
+			fmt.Fprintf(&buf, "(del:%s)", a[script[i].src])
 		}
 	}
 	fmt.Fprintf(&buf, ">")
