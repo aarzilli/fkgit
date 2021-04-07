@@ -1,9 +1,10 @@
-// +build darwin,!nucular_shiny nucular_gio
+// +build darwin,!nucular_shiny windows,!nucular_shiny nucular_gio
 
 package font
 
 import (
 	"crypto/md5"
+	"strings"
 	"sync"
 
 	"gioui.org/font/opentype"
@@ -16,7 +17,7 @@ import (
 
 type Face struct {
 	fnt     *opentype.Font
-	shaper  *text.Shaper
+	shaper  *text.Cache
 	size    int
 	fsize   fixed.Int26_6
 	metrics font.Metrics
@@ -39,13 +40,12 @@ func NewFace(ttf []byte, size int) (Face, error) {
 		}
 	}
 
-	shaper := &text.Shaper{}
-	shaper.Register(text.Font{}, fnt)
+	shaper := text.NewCache([]text.FontFace{{text.Font{}, fnt}})
 
 	face := Face{fnt, shaper, size, fixed.I(size), font.Metrics{}}
-	metricsTxt := face.shaper.Layout(face, text.Font{}, "metrics", text.LayoutOptions{MaxWidth: 1e6})
-	face.metrics.Ascent = metricsTxt.Lines[0].Ascent
-	face.metrics.Descent = metricsTxt.Lines[0].Descent
+	metricsTxt, _ := face.shaper.Layout(text.Font{}, fixed.I(size), 1e6, strings.NewReader("metrics"))
+	face.metrics.Ascent = metricsTxt[0].Ascent
+	face.metrics.Descent = metricsTxt[0].Descent
 	face.metrics.Height = face.metrics.Ascent + face.metrics.Descent
 	return face, nil
 }

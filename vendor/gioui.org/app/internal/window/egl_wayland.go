@@ -12,8 +12,9 @@ import (
 )
 
 /*
-#cgo LDFLAGS: -lwayland-egl
-#cgo CFLAGS: -I/usr/include/wayland
+#cgo linux pkg-config: egl wayland-egl
+#cgo freebsd openbsd LDFLAGS: -lwayland-egl
+#cgo CFLAGS: -DEGL_NO_X11
 
 #include <EGL/egl.h>
 #include <wayland-client.h>

@@ -16,6 +16,7 @@ import (
 
 	"gioui.org/internal/opconst"
 	"gioui.org/internal/ops"
+	"gioui.org/io/clipboard"
 	"gioui.org/io/event"
 	"gioui.org/io/key"
 	"gioui.org/io/pointer"
@@ -28,6 +29,7 @@ import (
 type Router struct {
 	pqueue pointerQueue
 	kqueue keyQueue
+	cqueue clipboardQueue
 
 	handlers handlerEvents
 
@@ -38,18 +40,17 @@ type Router struct {
 	wakeupTime time.Time
 
 	// ProfileOp summary.
-	profiling    bool
-	profHandlers map[event.Key]struct{}
+	profHandlers map[event.Tag]struct{}
 	profile      profile.Event
 }
 
 type handlerEvents struct {
-	handlers  map[event.Key][]event.Event
+	handlers  map[event.Tag][]event.Event
 	hadEvents bool
 }
 
 // Events returns the available events for the handler key.
-func (q *Router) Events(k event.Key) []event.Event {
+func (q *Router) Events(k event.Tag) []event.Event {
 	events := q.handlers.Events(k)
 	if _, isprof := q.profHandlers[k]; isprof {
 		delete(q.profHandlers, k)
@@ -64,7 +65,6 @@ func (q *Router) Events(k event.Key) []event.Event {
 func (q *Router) Frame(ops *op.Ops) {
 	q.handlers.Clear()
 	q.wakeup = false
-	q.profiling = false
 	for k := range q.profHandlers {
 		delete(q.profHandlers, k)
 	}
@@ -79,14 +79,19 @@ func (q *Router) Frame(ops *op.Ops) {
 	}
 }
 
-func (q *Router) Add(e event.Event) bool {
-	switch e := e.(type) {
-	case profile.Event:
-		q.profile = e
-	case pointer.Event:
-		q.pqueue.Push(e, &q.handlers)
-	case key.EditEvent, key.Event, key.FocusEvent:
-		q.kqueue.Push(e, &q.handlers)
+// Queue an event and report whether at least one handler had an event queued.
+func (q *Router) Queue(events ...event.Event) bool {
+	for _, e := range events {
+		switch e := e.(type) {
+		case profile.Event:
+			q.profile = e
+		case pointer.Event:
+			q.pqueue.Push(e, &q.handlers)
+		case key.EditEvent, key.Event, key.FocusEvent:
+			q.kqueue.Push(e, &q.handlers)
+		case clipboard.Event:
+			q.cqueue.Push(e, &q.handlers)
+		}
 	}
 	return q.handlers.HadEvents()
 }
@@ -95,6 +100,23 @@ func (q *Router) Add(e event.Event) bool {
 // call to Frame.
 func (q *Router) TextInputState() TextInputState {
 	return q.kqueue.InputState()
+}
+
+// WriteClipboard returns the most recent text to be copied
+// to the clipboard, if any.
+func (q *Router) WriteClipboard() (string, bool) {
+	return q.cqueue.WriteClipboard()
+}
+
+// ReadClipboard reports if any new handler is waiting
+// to read the clipboard.
+func (q *Router) ReadClipboard() bool {
+	return q.cqueue.ReadClipboard()
+}
+
+// Cursor returns the last cursor set.
+func (q *Router) Cursor() pointer.CursorName {
+	return q.pqueue.cursor
 }
 
 func (q *Router) collect() {
@@ -109,10 +131,13 @@ func (q *Router) collect() {
 		case opconst.TypeProfile:
 			op := decodeProfileOp(encOp.Data, encOp.Refs)
 			if q.profHandlers == nil {
-				q.profHandlers = make(map[event.Key]struct{})
+				q.profHandlers = make(map[event.Tag]struct{})
 			}
-			q.profiling = true
-			q.profHandlers[op.Key] = struct{}{}
+			q.profHandlers[op.Tag] = struct{}{}
+		case opconst.TypeClipboardRead:
+			q.cqueue.ProcessReadClipboard(encOp.Data, encOp.Refs)
+		case opconst.TypeClipboardWrite:
+			q.cqueue.ProcessWriteClipboard(encOp.Data, encOp.Refs)
 		}
 	}
 }
@@ -120,7 +145,7 @@ func (q *Router) collect() {
 // Profiling reports whether there was profile handlers in the
 // most recent Frame call.
 func (q *Router) Profiling() bool {
-	return q.profiling
+	return len(q.profHandlers) > 0
 }
 
 // WakeupTime returns the most recent time for doing another frame,
@@ -131,19 +156,17 @@ func (q *Router) WakeupTime() (time.Time, bool) {
 
 func (h *handlerEvents) init() {
 	if h.handlers == nil {
-		h.handlers = make(map[event.Key][]event.Event)
+		h.handlers = make(map[event.Tag][]event.Event)
 	}
 }
 
-func (h *handlerEvents) Set(k event.Key, evts []event.Event) {
-	h.init()
-	h.handlers[k] = evts
-	h.hadEvents = true
-}
-
-func (h *handlerEvents) Add(k event.Key, e event.Event) {
+func (h *handlerEvents) AddNoRedraw(k event.Tag, e event.Event) {
 	h.init()
 	h.handlers[k] = append(h.handlers[k], e)
+}
+
+func (h *handlerEvents) Add(k event.Tag, e event.Event) {
+	h.AddNoRedraw(k, e)
 	h.hadEvents = true
 }
 
@@ -153,11 +176,11 @@ func (h *handlerEvents) HadEvents() bool {
 	return u
 }
 
-func (h *handlerEvents) Events(k event.Key) []event.Event {
+func (h *handlerEvents) Events(k event.Tag) []event.Event {
 	if events, ok := h.handlers[k]; ok {
 		h.handlers[k] = h.handlers[k][:0]
 		// Schedule another frame if we delivered events to the user
-		// to flush half-updated state. This is important when a an
+		// to flush half-updated state. This is important when an
 		// event changes UI state that has already been laid out. In
 		// the worst case, we waste a frame, increasing power usage.
 		//
@@ -182,7 +205,7 @@ func decodeProfileOp(d []byte, refs []interface{}) profile.Op {
 		panic("invalid op")
 	}
 	return profile.Op{
-		Key: refs[0].(event.Key),
+		Tag: refs[0].(event.Tag),
 	}
 }
 

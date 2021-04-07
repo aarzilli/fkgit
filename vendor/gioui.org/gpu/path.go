@@ -6,16 +6,19 @@ package gpu
 // Pathfinder (https://github.com/servo/pathfinder).
 
 import (
+	"encoding/binary"
 	"image"
+	"math"
 	"unsafe"
 
 	"gioui.org/f32"
-	"gioui.org/internal/path"
+	"gioui.org/gpu/backend"
+	"gioui.org/internal/f32color"
 	gunsafe "gioui.org/internal/unsafe"
 )
 
 type pather struct {
-	ctx Backend
+	ctx backend.Device
 
 	viewport image.Point
 
@@ -24,30 +27,79 @@ type pather struct {
 }
 
 type coverer struct {
-	ctx  Backend
-	prog [2]Program
-	vars [2]struct {
-		z                             Uniform
-		uScale, uOffset               Uniform
-		uUVScale, uUVOffset           Uniform
-		uCoverUVScale, uCoverUVOffset Uniform
-		uColor                        Uniform
+	ctx                    backend.Device
+	prog                   [3]*program
+	texUniforms            *coverTexUniforms
+	colUniforms            *coverColUniforms
+	linearGradientUniforms *coverLinearGradientUniforms
+	layout                 backend.InputLayout
+}
+
+type coverTexUniforms struct {
+	vert struct {
+		coverUniforms
+		_ [12]byte // Padding to multiple of 16.
 	}
 }
 
+type coverColUniforms struct {
+	vert struct {
+		coverUniforms
+		_ [12]byte // Padding to multiple of 16.
+	}
+	frag struct {
+		colorUniforms
+	}
+}
+
+type coverLinearGradientUniforms struct {
+	vert struct {
+		coverUniforms
+		_ [12]byte // Padding to multiple of 16.
+	}
+	frag struct {
+		gradientUniforms
+	}
+}
+
+type coverUniforms struct {
+	transform        [4]float32
+	uvCoverTransform [4]float32
+	uvTransformR1    [4]float32
+	uvTransformR2    [4]float32
+	z                float32
+}
+
 type stenciler struct {
-	ctx                Backend
-	defFBO             Framebuffer
-	indexBufQuads      int
-	prog               Program
-	iprog              Program
-	fbos               fboSet
-	intersections      fboSet
-	uScale, uOffset    Uniform
-	uPathOffset        Uniform
-	uIntersectUVOffset Uniform
-	uIntersectUVScale  Uniform
-	indexBuf           Buffer
+	ctx  backend.Device
+	prog struct {
+		prog     *program
+		uniforms *stencilUniforms
+		layout   backend.InputLayout
+	}
+	iprog struct {
+		prog     *program
+		uniforms *intersectUniforms
+		layout   backend.InputLayout
+	}
+	fbos          fboSet
+	intersections fboSet
+	indexBuf      backend.Buffer
+}
+
+type stencilUniforms struct {
+	vert struct {
+		transform  [4]float32
+		pathOffset [2]float32
+		_          [8]byte // Padding to multiple of 16.
+	}
+}
+
+type intersectUniforms struct {
+	vert struct {
+		uvTransform    [4]float32
+		subUVTransform [4]float32
+	}
 }
 
 type fboSet struct {
@@ -56,29 +108,45 @@ type fboSet struct {
 
 type stencilFBO struct {
 	size image.Point
-	fbo  Framebuffer
-	tex  Texture
+	fbo  backend.Framebuffer
+	tex  backend.Texture
 }
 
 type pathData struct {
 	ncurves int
-	data    Buffer
+	data    backend.Buffer
 }
 
-var (
-	pathAttribs      = []string{"corner", "maxy", "from", "ctrl", "to"}
-	intersectAttribs = []string{"pos", "uv"}
-)
+// vertex data suitable for passing to vertex programs.
+type vertex struct {
+	// Corner encodes the corner: +0.5 for south, +.25 for east.
+	Corner       float32
+	MaxY         float32
+	FromX, FromY float32
+	CtrlX, CtrlY float32
+	ToX, ToY     float32
+}
+
+func (v vertex) encode(d []byte, maxy uint32) {
+	bo := binary.LittleEndian
+	bo.PutUint32(d[0:], math.Float32bits(v.Corner))
+	bo.PutUint32(d[4:], maxy)
+	bo.PutUint32(d[8:], math.Float32bits(v.FromX))
+	bo.PutUint32(d[12:], math.Float32bits(v.FromY))
+	bo.PutUint32(d[16:], math.Float32bits(v.CtrlX))
+	bo.PutUint32(d[20:], math.Float32bits(v.CtrlY))
+	bo.PutUint32(d[24:], math.Float32bits(v.ToX))
+	bo.PutUint32(d[28:], math.Float32bits(v.ToY))
+}
 
 const (
-	attribPathCorner = 0
-	attribPathMaxY   = 1
-	attribPathFrom   = 2
-	attribPathCtrl   = 3
-	attribPathTo     = 4
+	// Number of path quads per draw batch.
+	pathBatchSize = 10000
+	// Size of a vertex as sent to gpu
+	vertStride = 8 * 4
 )
 
-func newPather(ctx Backend) *pather {
+func newPather(ctx backend.Device) *pather {
 	return &pather{
 		ctx:       ctx,
 		stenciler: newStenciler(ctx),
@@ -86,69 +154,85 @@ func newPather(ctx Backend) *pather {
 	}
 }
 
-func newCoverer(ctx Backend) *coverer {
-	prog, err := createColorPrograms(ctx, coverVSrc, coverFSrc)
+func newCoverer(ctx backend.Device) *coverer {
+	c := &coverer{
+		ctx: ctx,
+	}
+	c.colUniforms = new(coverColUniforms)
+	c.texUniforms = new(coverTexUniforms)
+	c.linearGradientUniforms = new(coverLinearGradientUniforms)
+	prog, layout, err := createColorPrograms(ctx, shader_cover_vert, shader_cover_frag,
+		[3]interface{}{&c.colUniforms.vert, &c.linearGradientUniforms.vert, &c.texUniforms.vert},
+		[3]interface{}{&c.colUniforms.frag, &c.linearGradientUniforms.frag, nil},
+	)
 	if err != nil {
 		panic(err)
 	}
-	c := &coverer{
-		ctx:  ctx,
-		prog: prog,
-	}
-	for i, prog := range prog {
-		switch materialType(i) {
-		case materialTexture:
-			uTex := prog.UniformFor("tex")
-			prog.Uniform1i(uTex, 0)
-			c.vars[i].uUVScale = prog.UniformFor("uvScale")
-			c.vars[i].uUVOffset = prog.UniformFor("uvOffset")
-		case materialColor:
-			c.vars[i].uColor = prog.UniformFor("color")
-		}
-		uCover := prog.UniformFor("cover")
-		prog.Uniform1i(uCover, 1)
-		c.vars[i].z = prog.UniformFor("z")
-		c.vars[i].uScale = prog.UniformFor("scale")
-		c.vars[i].uOffset = prog.UniformFor("offset")
-		c.vars[i].uCoverUVScale = prog.UniformFor("uvCoverScale")
-		c.vars[i].uCoverUVOffset = prog.UniformFor("uvCoverOffset")
-	}
+	c.prog = prog
+	c.layout = layout
 	return c
 }
 
-func newStenciler(ctx Backend) *stenciler {
-	defFBO := ctx.DefaultFramebuffer()
-	prog, err := ctx.NewProgram(stencilVSrc, stencilFSrc, pathAttribs)
+func newStenciler(ctx backend.Device) *stenciler {
+	// Allocate a suitably large index buffer for drawing paths.
+	indices := make([]uint16, pathBatchSize*6)
+	for i := 0; i < pathBatchSize; i++ {
+		i := uint16(i)
+		indices[i*6+0] = i*4 + 0
+		indices[i*6+1] = i*4 + 1
+		indices[i*6+2] = i*4 + 2
+		indices[i*6+3] = i*4 + 2
+		indices[i*6+4] = i*4 + 1
+		indices[i*6+5] = i*4 + 3
+	}
+	indexBuf, err := ctx.NewImmutableBuffer(backend.BufferBindingIndices, gunsafe.BytesView(indices))
 	if err != nil {
 		panic(err)
 	}
-	iprog, err := ctx.NewProgram(intersectVSrc, intersectFSrc, intersectAttribs)
+	progLayout, err := ctx.NewInputLayout(shader_stencil_vert, []backend.InputDesc{
+		{Type: backend.DataTypeFloat, Size: 1, Offset: int(unsafe.Offsetof((*(*vertex)(nil)).Corner))},
+		{Type: backend.DataTypeFloat, Size: 1, Offset: int(unsafe.Offsetof((*(*vertex)(nil)).MaxY))},
+		{Type: backend.DataTypeFloat, Size: 2, Offset: int(unsafe.Offsetof((*(*vertex)(nil)).FromX))},
+		{Type: backend.DataTypeFloat, Size: 2, Offset: int(unsafe.Offsetof((*(*vertex)(nil)).CtrlX))},
+		{Type: backend.DataTypeFloat, Size: 2, Offset: int(unsafe.Offsetof((*(*vertex)(nil)).ToX))},
+	})
 	if err != nil {
 		panic(err)
 	}
-	coverLoc := iprog.UniformFor("cover")
-	iprog.Uniform1i(coverLoc, 0)
-	return &stenciler{
-		ctx:                ctx,
-		defFBO:             defFBO,
-		prog:               prog,
-		iprog:              iprog,
-		uScale:             prog.UniformFor("scale"),
-		uOffset:            prog.UniformFor("offset"),
-		uPathOffset:        prog.UniformFor("pathOffset"),
-		uIntersectUVScale:  iprog.UniformFor("uvScale"),
-		uIntersectUVOffset: iprog.UniformFor("uvOffset"),
-		indexBuf:           ctx.NewBuffer(BufferTypeIndices),
+	iprogLayout, err := ctx.NewInputLayout(shader_intersect_vert, []backend.InputDesc{
+		{Type: backend.DataTypeFloat, Size: 2, Offset: 0},
+		{Type: backend.DataTypeFloat, Size: 2, Offset: 4 * 2},
+	})
+	if err != nil {
+		panic(err)
 	}
+	st := &stenciler{
+		ctx:      ctx,
+		indexBuf: indexBuf,
+	}
+	prog, err := ctx.NewProgram(shader_stencil_vert, shader_stencil_frag)
+	if err != nil {
+		panic(err)
+	}
+	st.prog.uniforms = new(stencilUniforms)
+	vertUniforms := newUniformBuffer(ctx, &st.prog.uniforms.vert)
+	st.prog.prog = newProgram(prog, vertUniforms, nil)
+	st.prog.layout = progLayout
+	iprog, err := ctx.NewProgram(shader_intersect_vert, shader_intersect_frag)
+	if err != nil {
+		panic(err)
+	}
+	st.iprog.uniforms = new(intersectUniforms)
+	vertUniforms = newUniformBuffer(ctx, &st.iprog.uniforms.vert)
+	st.iprog.prog = newProgram(iprog, vertUniforms, nil)
+	st.iprog.layout = iprogLayout
+	return st
 }
 
-func (s *fboSet) resize(ctx Backend, sizes []image.Point) {
+func (s *fboSet) resize(ctx backend.Device, sizes []image.Point) {
 	// Add fbos.
 	for i := len(s.fbos); i < len(sizes); i++ {
-		s.fbos = append(s.fbos, stencilFBO{
-			fbo: ctx.NewFramebuffer(),
-			tex: ctx.NewTexture(FilterNearest, FilterNearest),
-		})
+		s.fbos = append(s.fbos, stencilFBO{})
 	}
 	// Resize fbos.
 	for i, sz := range sizes {
@@ -159,22 +243,35 @@ func (s *fboSet) resize(ctx Backend, sizes []image.Point) {
 		waste := float32(sz.X*sz.Y) / float32(f.size.X*f.size.Y)
 		resize = resize || waste > 1.2
 		if resize {
+			if f.fbo != nil {
+				f.fbo.Release()
+				f.tex.Release()
+			}
+			tex, err := ctx.NewTexture(backend.TextureFormatFloat, sz.X, sz.Y, backend.FilterNearest, backend.FilterNearest,
+				backend.BufferBindingTexture|backend.BufferBindingFramebuffer)
+			if err != nil {
+				panic(err)
+			}
+			fbo, err := ctx.NewFramebuffer(tex, 0)
+			if err != nil {
+				panic(err)
+			}
 			f.size = sz
-			f.tex.Resize(TextureFormatFloat, sz.X, sz.Y)
-			f.fbo.BindTexture(f.tex)
+			f.tex = tex
+			f.fbo = fbo
 		}
 	}
 	// Delete extra fbos.
 	s.delete(ctx, len(sizes))
 }
 
-func (s *fboSet) invalidate(ctx Backend) {
+func (s *fboSet) invalidate(ctx backend.Device) {
 	for _, f := range s.fbos {
 		f.fbo.Invalidate()
 	}
 }
 
-func (s *fboSet) delete(ctx Backend, idx int) {
+func (s *fboSet) delete(ctx backend.Device, idx int) {
 	for i := idx; i < len(s.fbos); i++ {
 		f := s.fbos[i]
 		f.fbo.Release()
@@ -185,7 +282,10 @@ func (s *fboSet) delete(ctx Backend, idx int) {
 
 func (s *stenciler) release() {
 	s.fbos.delete(s.ctx, 0)
-	s.prog.Release()
+	s.prog.layout.Release()
+	s.prog.prog.Release()
+	s.iprog.layout.Release()
+	s.iprog.prog.Release()
 	s.indexBuf.Release()
 }
 
@@ -198,18 +298,21 @@ func (c *coverer) release() {
 	for _, p := range c.prog {
 		p.Release()
 	}
+	c.layout.Release()
 }
 
-func buildPath(ctx Backend, p []byte) *pathData {
-	buf := ctx.NewBuffer(BufferTypeData)
-	buf.Upload(BufferUsageStaticDraw, p)
-	return &pathData{
-		ncurves: len(p) / path.VertStride,
+func buildPath(ctx backend.Device, p []byte) pathData {
+	buf, err := ctx.NewImmutableBuffer(backend.BufferBindingVertices, p)
+	if err != nil {
+		panic(err)
+	}
+	return pathData{
+		ncurves: len(p) / vertStride,
 		data:    buf,
 	}
 }
 
-func (p *pathData) release() {
+func (p pathData) release() {
 	p.data.Release()
 }
 
@@ -217,33 +320,22 @@ func (p *pather) begin(sizes []image.Point) {
 	p.stenciler.begin(sizes)
 }
 
-func (p *pather) end() {
-	p.stenciler.end()
-}
-
-func (p *pather) stencilPath(bounds image.Rectangle, offset f32.Point, uv image.Point, data *pathData) {
+func (p *pather) stencilPath(bounds image.Rectangle, offset f32.Point, uv image.Point, data pathData) {
 	p.stenciler.stencilPath(bounds, offset, uv, data)
 }
 
 func (s *stenciler) beginIntersect(sizes []image.Point) {
-	s.ctx.NilTexture().Bind(1)
-	s.ctx.BlendFunc(BlendFactorDstColor, BlendFactorZero)
+	s.ctx.BlendFunc(backend.BlendFactorDstColor, backend.BlendFactorZero)
 	// 8 bit coverage is enough, but OpenGL ES only supports single channel
 	// floating point formats. Replace with GL_RGB+GL_UNSIGNED_BYTE if
 	// no floating point support is available.
 	s.intersections.resize(s.ctx, sizes)
-	s.ctx.ClearColor(1.0, 0.0, 0.0, 0.0)
-	s.iprog.Bind()
-}
-
-func (s *stenciler) endIntersect() {
-	s.defFBO.Bind()
+	s.ctx.BindProgram(s.iprog.prog.prog)
 }
 
 func (s *stenciler) invalidateFBO() {
 	s.intersections.invalidate(s.ctx)
 	s.fbos.invalidate(s.ctx)
-	s.defFBO.Bind()
 }
 
 func (s *stenciler) cover(idx int) stencilFBO {
@@ -251,297 +343,74 @@ func (s *stenciler) cover(idx int) stencilFBO {
 }
 
 func (s *stenciler) begin(sizes []image.Point) {
-	s.ctx.NilTexture().Bind(1)
-	s.ctx.BlendFunc(BlendFactorOne, BlendFactorOne)
+	s.ctx.BlendFunc(backend.BlendFactorOne, backend.BlendFactorOne)
 	s.fbos.resize(s.ctx, sizes)
-	s.ctx.ClearColor(0.0, 0.0, 0.0, 0.0)
-	s.prog.Bind()
-	s.indexBuf.Bind()
+	s.ctx.BindProgram(s.prog.prog.prog)
+	s.ctx.BindInputLayout(s.prog.layout)
+	s.ctx.BindIndexBuffer(s.indexBuf)
 }
 
-func (s *stenciler) stencilPath(bounds image.Rectangle, offset f32.Point, uv image.Point, data *pathData) {
-	data.data.Bind()
+func (s *stenciler) stencilPath(bounds image.Rectangle, offset f32.Point, uv image.Point, data pathData) {
 	s.ctx.Viewport(uv.X, uv.Y, bounds.Dx(), bounds.Dy())
 	// Transform UI coordinates to OpenGL coordinates.
 	texSize := f32.Point{X: float32(bounds.Dx()), Y: float32(bounds.Dy())}
 	scale := f32.Point{X: 2 / texSize.X, Y: 2 / texSize.Y}
 	orig := f32.Point{X: -1 - float32(bounds.Min.X)*2/texSize.X, Y: -1 - float32(bounds.Min.Y)*2/texSize.Y}
-	s.prog.Uniform2f(s.uScale, scale.X, scale.Y)
-	s.prog.Uniform2f(s.uOffset, orig.X, orig.Y)
-	s.prog.Uniform2f(s.uPathOffset, offset.X, offset.Y)
+	s.prog.uniforms.vert.transform = [4]float32{scale.X, scale.Y, orig.X, orig.Y}
+	s.prog.uniforms.vert.pathOffset = [2]float32{offset.X, offset.Y}
+	s.prog.prog.UploadUniforms()
 	// Draw in batches that fit in uint16 indices.
 	start := 0
 	nquads := data.ncurves / 4
 	for start < nquads {
 		batch := nquads - start
-		if max := int(^uint16(0)) / 6; batch > max {
+		if max := pathBatchSize; batch > max {
 			batch = max
 		}
-		// Enlarge VBO if necessary.
-		if batch > s.indexBufQuads {
-			indices := make([]uint16, batch*6)
-			for i := 0; i < batch; i++ {
-				i := uint16(i)
-				indices[i*6+0] = i*4 + 0
-				indices[i*6+1] = i*4 + 1
-				indices[i*6+2] = i*4 + 2
-				indices[i*6+3] = i*4 + 2
-				indices[i*6+4] = i*4 + 1
-				indices[i*6+5] = i*4 + 3
-			}
-			s.indexBuf.Upload(BufferUsageStaticDraw, gunsafe.BytesView(indices))
-			s.indexBufQuads = batch
-		}
-		off := path.VertStride * start * 4
-		s.ctx.SetupVertexArray(attribPathCorner, 2, DataTypeShort, path.VertStride, off+int(unsafe.Offsetof((*(*path.Vertex)(nil)).CornerX)))
-		s.ctx.SetupVertexArray(attribPathMaxY, 1, DataTypeFloat, path.VertStride, off+int(unsafe.Offsetof((*(*path.Vertex)(nil)).MaxY)))
-		s.ctx.SetupVertexArray(attribPathFrom, 2, DataTypeFloat, path.VertStride, off+int(unsafe.Offsetof((*(*path.Vertex)(nil)).FromX)))
-		s.ctx.SetupVertexArray(attribPathCtrl, 2, DataTypeFloat, path.VertStride, off+int(unsafe.Offsetof((*(*path.Vertex)(nil)).CtrlX)))
-		s.ctx.SetupVertexArray(attribPathTo, 2, DataTypeFloat, path.VertStride, off+int(unsafe.Offsetof((*(*path.Vertex)(nil)).ToX)))
-		s.ctx.DrawElements(DrawModeTriangles, 0, batch*6)
+		off := vertStride * start * 4
+		s.ctx.BindVertexBuffer(data.data, vertStride, off)
+		s.ctx.DrawElements(backend.DrawModeTriangles, 0, batch*6)
 		start += batch
 	}
 }
 
-func (s *stenciler) end() {
-	s.defFBO.Bind()
+func (p *pather) cover(z float32, mat materialType, col f32color.RGBA, col1, col2 f32color.RGBA, scale, off f32.Point, uvTrans f32.Affine2D, coverScale, coverOff f32.Point) {
+	p.coverer.cover(z, mat, col, col1, col2, scale, off, uvTrans, coverScale, coverOff)
 }
 
-func (p *pather) cover(z float32, mat materialType, col [4]float32, scale, off, uvScale, uvOff, coverScale, coverOff f32.Point) {
-	p.coverer.cover(z, mat, col, scale, off, uvScale, uvOff, coverScale, coverOff)
-}
-
-func (c *coverer) cover(z float32, mat materialType, col [4]float32, scale, off, uvScale, uvOff, coverScale, coverOff f32.Point) {
+func (c *coverer) cover(z float32, mat materialType, col f32color.RGBA, col1, col2 f32color.RGBA, scale, off f32.Point, uvTrans f32.Affine2D, coverScale, coverOff f32.Point) {
 	p := c.prog[mat]
-	p.Bind()
+	c.ctx.BindProgram(p.prog)
+	var uniforms *coverUniforms
 	switch mat {
 	case materialColor:
-		p.Uniform4f(c.vars[mat].uColor, col[0], col[1], col[2], col[3])
+		c.colUniforms.frag.color = col
+		uniforms = &c.colUniforms.vert.coverUniforms
+	case materialLinearGradient:
+		c.linearGradientUniforms.frag.color1 = col1
+		c.linearGradientUniforms.frag.color2 = col2
+
+		t1, t2, t3, t4, t5, t6 := uvTrans.Elems()
+		c.linearGradientUniforms.vert.uvTransformR1 = [4]float32{t1, t2, t3, 0}
+		c.linearGradientUniforms.vert.uvTransformR2 = [4]float32{t4, t5, t6, 0}
+		uniforms = &c.linearGradientUniforms.vert.coverUniforms
 	case materialTexture:
-		p.Uniform2f(c.vars[mat].uUVScale, uvScale.X, uvScale.Y)
-		p.Uniform2f(c.vars[mat].uUVOffset, uvOff.X, uvOff.Y)
+		t1, t2, t3, t4, t5, t6 := uvTrans.Elems()
+		c.texUniforms.vert.uvTransformR1 = [4]float32{t1, t2, t3, 0}
+		c.texUniforms.vert.uvTransformR2 = [4]float32{t4, t5, t6, 0}
+		uniforms = &c.texUniforms.vert.coverUniforms
 	}
-	p.Uniform1f(c.vars[mat].z, z)
-	p.Uniform2f(c.vars[mat].uScale, scale.X, scale.Y)
-	p.Uniform2f(c.vars[mat].uOffset, off.X, off.Y)
-	p.Uniform2f(c.vars[mat].uCoverUVScale, coverScale.X, coverScale.Y)
-	p.Uniform2f(c.vars[mat].uCoverUVOffset, coverOff.X, coverOff.Y)
-	c.ctx.DrawArrays(DrawModeTriangleStrip, 0, 4)
+	uniforms.z = z
+	uniforms.transform = [4]float32{scale.X, scale.Y, off.X, off.Y}
+	uniforms.uvCoverTransform = [4]float32{coverScale.X, coverScale.Y, coverOff.X, coverOff.Y}
+	p.UploadUniforms()
+	c.ctx.DrawArrays(backend.DrawModeTriangleStrip, 0, 4)
 }
 
-const stencilVSrc = `
-#version 100
-
-precision highp float;
-
-uniform vec2 scale;
-uniform vec2 offset;
-uniform vec2 pathOffset;
-
-attribute vec2 corner;
-attribute float maxy;
-attribute vec2 from;
-attribute vec2 ctrl;
-attribute vec2 to;
-
-varying vec2 vFrom;
-varying vec2 vCtrl;
-varying vec2 vTo;
-
-void main() {
-	// Add a one pixel overlap so curve quads cover their
-	// entire curves. Could use conservative rasterization
-	// if available.
-	vec2 from = from + pathOffset;
-	vec2 ctrl = ctrl + pathOffset;
-	vec2 to = to + pathOffset;
-	float maxy = maxy + pathOffset.y;
-	vec2 pos;
-	if (corner.x > 0.0) {
-		// East.
-		pos.x = max(max(from.x, ctrl.x), to.x)+1.0;
-	} else {
-		// West.
-		pos.x = min(min(from.x, ctrl.x), to.x)-1.0;
+func init() {
+	// Check that struct vertex has the expected size and
+	// that it contains no padding.
+	if unsafe.Sizeof(*(*vertex)(nil)) != vertStride {
+		panic("unexpected struct size")
 	}
-	if (corner.y > 0.0) {
-		// North.
-		pos.y = maxy + 1.0;
-	} else {
-		// South.
-		pos.y = min(min(from.y, ctrl.y), to.y) - 1.0;
-	}
-	vFrom = from-pos;
-	vCtrl = ctrl-pos;
-	vTo = to-pos;
-    pos *= scale;
-    pos += offset;
-    gl_Position = vec4(pos, 1, 1);
 }
-`
-
-const stencilFSrc = `
-#version 100
-
-precision mediump float;
-
-varying vec2 vFrom;
-varying vec2 vCtrl;
-varying vec2 vTo;
-
-uniform sampler2D areaLUT;
-
-void main() {
-	float dx = vTo.x - vFrom.x;
-	// Sort from and to in increasing order so the root below
-	// is always the positive square root, if any.
-	// We need the direction of the curve below, so this can't be
-	// done from the vertex shader.
-	bool increasing = vTo.x >= vFrom.x;
-	vec2 left = increasing ? vFrom : vTo;
-	vec2 right = increasing ? vTo : vFrom;
-
-	// The signed horizontal extent of the fragment.
-	vec2 extent = clamp(vec2(vFrom.x, vTo.x), -0.5, 0.5);
-	// Find the t where the curve crosses the middle of the
-	// extent, x₀.
-	// Given the Bézier curve with x coordinates P₀, P₁, P₂
-	// where P₀ is at the origin, its x coordinate in t
-	// is given by:
-	//
-	// x(t) = 2(1-t)tP₁ + t²P₂
-	// 
-	// Rearranging:
-	//
-	// x(t) = (P₂ - 2P₁)t² + 2P₁t
-	//
-	// Setting x(t) = x₀ and using Muller's quadratic formula ("Citardauq")
-	// for robustnesss,
-	//
-	// t = 2x₀/(2P₁±√(4P₁²+4(P₂-2P₁)x₀))
-	//
-	// which simplifies to
-	//
-	// t = x₀/(P₁±√(P₁²+(P₂-2P₁)x₀))
-	//
-	// Setting v = P₂-P₁,
-	//
-	// t = x₀/(P₁±√(P₁²+(v-P₁)x₀))
-	//
-	// t lie in [0; 1]; P₂ ≥ P₁ and P₁ ≥ 0 since we split curves where
-	// the control point lies before the start point or after the end point.
-	// It can then be shown that only the positive square root is valid.
-	float midx = mix(extent.x, extent.y, 0.5);
-	float x0 = midx - left.x;
-	vec2 p1 = vCtrl - left;
-	vec2 v = right - vCtrl;
-	float t = x0/(p1.x+sqrt(p1.x*p1.x+(v.x-p1.x)*x0));
-	// Find y(t) on the curve.
-	float y = mix(mix(left.y, vCtrl.y, t), mix(vCtrl.y, right.y, t), t);
-	// And the slope.
-	vec2 d_half = mix(p1, v, t);
-	float dy = d_half.y/d_half.x;
-	// Together, y and dy form a line approximation.
-
-	// Compute the fragment area above the line.
-	// The area is symmetric around dy = 0. Scale slope with extent width.
-	float width = extent.y - extent.x;
-	dy = abs(dy*width);
-
-	vec4 sides = vec4(dy*+0.5 + y, dy*-0.5 + y, (+0.5-y)/dy, (-0.5-y)/dy);
-	sides = clamp(sides+0.5, 0.0, 1.0);
-
-	float area = 0.5*(sides.z - sides.z*sides.y + 1.0 - sides.x+sides.x*sides.w);
-	area *= width;
-
-	// Work around issue #13.
-	if (width == 0.0)
-		area = 0.0;
-
-	gl_FragColor.r = area;
-}
-`
-
-const coverVSrc = `
-#version 100
-
-precision highp float;
-
-uniform float z;
-uniform vec2 scale;
-uniform vec2 offset;
-uniform vec2 uvScale;
-uniform vec2 uvOffset;
-uniform vec2 uvCoverScale;
-uniform vec2 uvCoverOffset;
-
-attribute vec2 pos;
-
-varying vec2 vCoverUV;
-
-attribute vec2 uv;
-varying vec2 vUV;
-
-void main() {
-    gl_Position = vec4(pos*scale + offset, z, 1);
-	vUV = uv*uvScale + uvOffset;
-	vCoverUV = uv*uvCoverScale+uvCoverOffset;
-}
-`
-
-const coverFSrc = `
-#version 100
-
-precision mediump float;
-
-// Use high precision to be pixel accurate for
-// large cover atlases.
-varying highp vec2 vCoverUV;
-uniform sampler2D cover;
-varying vec2 vUV;
-
-HEADER
-
-void main() {
-    gl_FragColor = GET_COLOR;
-	float cover = abs(texture2D(cover, vCoverUV).r);
-	gl_FragColor *= cover;
-}
-`
-
-const intersectVSrc = `
-#version 100
-
-precision highp float;
-
-attribute vec2 pos;
-attribute vec2 uv;
-
-uniform vec2 uvScale;
-uniform vec2 uvOffset;
-
-varying vec2 vUV;
-
-void main() {
-	vec2 p = pos;
-	p.y = -p.y;
-	gl_Position = vec4(p, 0, 1);
-	vUV = uv*uvScale + uvOffset;
-}
-`
-
-const intersectFSrc = `
-#version 100
-
-precision mediump float;
-
-// Use high precision to be pixel accurate for
-// large cover atlases.
-varying highp vec2 vUV;
-uniform sampler2D cover;
-
-void main() {
-	float cover = abs(texture2D(cover, vUV).r);
-    gl_FragColor.r = cover;
-}
-`

@@ -19,9 +19,9 @@ import (
 )
 
 /*
-#cgo LDFLAGS: -lxkbcommon
+#cgo linux pkg-config: xkbcommon
 #cgo freebsd openbsd CFLAGS: -I/usr/local/include
-#cgo freebsd openbsd LDFLAGS: -L/usr/local/lib
+#cgo freebsd openbsd LDFLAGS: -L/usr/local/lib -lxkbcommon
 
 #include <stdlib.h>
 #include <xkbcommon/xkbcommon.h>
@@ -133,7 +133,24 @@ func (x *Context) LoadKeymap(format int, fd int, size int) error {
 	return nil
 }
 
-func (x *Context) DispatchKey(keyCode uint32) (events []event.Event) {
+func (x *Context) Modifiers() key.Modifiers {
+	var mods key.Modifiers
+	if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_CTRL[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
+		mods |= key.ModCtrl
+	}
+	if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_SHIFT[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
+		mods |= key.ModShift
+	}
+	if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_ALT[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
+		mods |= key.ModAlt
+	}
+	if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_LOGO[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
+		mods |= key.ModSuper
+	}
+	return mods
+}
+
+func (x *Context) DispatchKey(keyCode uint32, state key.State) (events []event.Event) {
 	if x.state == nil {
 		return
 	}
@@ -143,23 +160,15 @@ func (x *Context) DispatchKey(keyCode uint32) (events []event.Event) {
 	}
 	sym := C.xkb_state_key_get_one_sym(x.state, kc)
 	if name, ok := convertKeysym(sym); ok {
-		cmd := key.Event{Name: name}
+		cmd := key.Event{
+			Name:      name,
+			Modifiers: x.Modifiers(),
+			State:     state,
+		}
 		// Ensure that a physical backtab key is translated to
 		// Shift-Tab.
 		if sym == C.XKB_KEY_ISO_Left_Tab {
 			cmd.Modifiers |= key.ModShift
-		}
-		if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_CTRL[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
-			cmd.Modifiers |= key.ModCtrl
-		}
-		if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_SHIFT[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
-			cmd.Modifiers |= key.ModShift
-		}
-		if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_ALT[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
-			cmd.Modifiers |= key.ModAlt
-		}
-		if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_LOGO[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
-			cmd.Modifiers |= key.ModSuper
 		}
 		events = append(events, cmd)
 	}
@@ -177,7 +186,10 @@ func (x *Context) DispatchKey(keyCode uint32) (events []event.Event) {
 		C.xkb_compose_state_reset(x.compState)
 		str = x.utf8Buf[:size]
 	case C.XKB_COMPOSE_NOTHING:
-		str = x.charsForKeycode(kc)
+		mod := x.Modifiers()
+		if mod&(key.ModCtrl|key.ModAlt|key.ModSuper) == 0 {
+			str = x.charsForKeycode(kc)
+		}
 	}
 	// Report only printable runes.
 	var n int
@@ -190,7 +202,7 @@ func (x *Context) DispatchKey(keyCode uint32) (events []event.Event) {
 			str = str[:len(str)-s]
 		}
 	}
-	if len(str) > 0 {
+	if state == key.Press && len(str) > 0 {
 		events = append(events, key.EditEvent{Text: string(str)})
 	}
 	return
@@ -220,10 +232,10 @@ func (x *Context) UpdateMask(depressed, latched, locked, depressedGroup, latched
 
 func convertKeysym(s C.xkb_keysym_t) (string, bool) {
 	if 'a' <= s && s <= 'z' {
-		return string(s - 'a' + 'A'), true
+		return string(rune(s - 'a' + 'A')), true
 	}
 	if ' ' <= s && s <= '~' {
-		return string(s), true
+		return string(rune(s)), true
 	}
 	var n string
 	switch s {

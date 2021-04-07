@@ -6,18 +6,19 @@ package window
 
 import (
 	"errors"
-	"math"
-	"time"
 
-	"gioui.org/app/internal/glimpl"
+	"gioui.org/gpu/backend"
 	"gioui.org/io/event"
+	"gioui.org/io/pointer"
 	"gioui.org/io/system"
 	"gioui.org/unit"
 )
 
 type Options struct {
-	Width, Height unit.Value
-	Title         string
+	Width, Height       unit.Value
+	MinWidth, MinHeight unit.Value
+	MaxWidth, MaxHeight unit.Value
+	Title               string
 }
 
 type FrameEvent struct {
@@ -32,13 +33,18 @@ type Callbacks interface {
 }
 
 type Context interface {
-	Functions() *glimpl.Functions
+	Backend() (backend.Device, error)
 	Present() error
 	MakeCurrent() error
 	Release()
 	Lock()
 	Unlock()
 }
+
+// ErrDeviceLost is returned from Context.Present when
+// the underlying GPU device is gone and should be
+// recreated.
+var ErrDeviceLost = errors.New("GPU device lost")
 
 // Driver is the interface for the platform implementation
 // of a window.
@@ -49,6 +55,17 @@ type Driver interface {
 	// ShowTextInput updates the virtual keyboard state.
 	ShowTextInput(show bool)
 	NewContext() (Context, error)
+
+	// ReadClipboard requests the clipboard content.
+	ReadClipboard()
+	// WriteClipboard requests a clipboard write.
+	WriteClipboard(s string)
+
+	// SetCursor updates the current cursor to name.
+	SetCursor(name pointer.CursorName)
+
+	// Close the window.
+	Close()
 }
 
 type windowRendezvous struct {
@@ -60,34 +77,6 @@ type windowRendezvous struct {
 type windowAndOptions struct {
 	window Callbacks
 	opts   *Options
-}
-
-// config implements the system.Config interface.
-type config struct {
-	// Device pixels per dp.
-	pxPerDp float32
-	// Device pixels per sp.
-	pxPerSp float32
-	now     time.Time
-}
-
-func (c *config) Now() time.Time {
-	return c.now
-}
-
-func (c *config) Px(v unit.Value) int {
-	var r float32
-	switch v.U {
-	case unit.UnitPx:
-		r = v.V
-	case unit.UnitDp:
-		r = c.pxPerDp * v.V
-	case unit.UnitSp:
-		r = c.pxPerSp * v.V
-	default:
-		panic("unknown unit")
-	}
-	return int(math.Round(float64(r)))
 }
 
 func newWindowRendezvous() *windowRendezvous {

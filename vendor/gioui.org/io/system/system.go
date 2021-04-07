@@ -8,33 +8,48 @@ import (
 	"image"
 	"time"
 
+	"gioui.org/io/event"
 	"gioui.org/op"
 	"gioui.org/unit"
 )
 
-// A FrameEvent asks for a new frame in the form of a list of
-// operations.
+// A FrameEvent requests a new frame in the form of a list of
+// operations that describes what to display and how to handle
+// input.
 type FrameEvent struct {
-	Config Config
+	// Now is the current animation. Use Now instead of time.Now to
+	// synchronize animation and to avoid the time.Now call overhead.
+	Now time.Time
+	// Metric converts device independent dp and sp to device pixels.
+	Metric unit.Metric
 	// Size is the dimensions of the window.
 	Size image.Point
 	// Insets is the insets to apply.
 	Insets Insets
-	// Frame replaces the window's frame with the new
-	// frame.
+	// Frame is the callback to supply the list of
+	// operations to complete the FrameEvent.
+	//
+	// Note that the operation list and the operations themselves
+	// may not be mutated until another FrameEvent is received from
+	// the same event source.
+	// That means that calls to frame.Reset and changes to referenced
+	// data such as ImageOp backing images should happen between
+	// receiving a FrameEvent and calling Frame.
+	//
+	// Example:
+	//
+	//  var w *app.Window
+	//  var frame *op.Ops
+	//  for e := range w.Events() {
+	//      if e, ok := e.(system.FrameEvent); ok {
+	//          // Call frame.Reset and manipulate images for ImageOps
+	//          // here.
+	//          e.Frame(frame)
+	//      }
+	//  }
 	Frame func(frame *op.Ops)
-	// Whether this draw is system generated and needs a complete
-	// frame before proceeding.
-	sync bool
-}
-
-// Config defines the essential properties of
-// the environment.
-type Config interface {
-	// Now returns the current animation time.
-	Now() time.Time
-
-	unit.Converter
+	// Queue supplies the events for event handlers.
+	Queue event.Queue
 }
 
 // DestroyEvent is the last event sent through
@@ -58,10 +73,11 @@ type StageEvent struct {
 	Stage Stage
 }
 
-// CommandEvent is a system event.
+// CommandEvent is a system event. Unlike most other events, CommandEvent is
+// delivered as a pointer to allow Cancel to suppress it.
 type CommandEvent struct {
 	Type CommandType
-	// Suppress the default action of the command.
+	// Cancel suppress the default action of the command.
 	Cancel bool
 }
 
@@ -96,7 +112,7 @@ func (l Stage) String() string {
 	}
 }
 
-func (_ FrameEvent) ImplementsEvent()    {}
-func (_ StageEvent) ImplementsEvent()    {}
-func (_ *CommandEvent) ImplementsEvent() {}
-func (_ DestroyEvent) ImplementsEvent()  {}
+func (FrameEvent) ImplementsEvent()    {}
+func (StageEvent) ImplementsEvent()    {}
+func (*CommandEvent) ImplementsEvent() {}
+func (DestroyEvent) ImplementsEvent()  {}

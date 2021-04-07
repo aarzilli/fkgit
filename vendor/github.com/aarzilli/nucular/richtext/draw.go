@@ -51,12 +51,12 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 	rtxt.first = false
 	// this small row is necessary so that LayoutAvailableWidth will give us
 	// the correct available width for our shit.
-	if rtxt.flags&AutoWrap != 0 {
-		w.RowScaled(1).Dynamic(1)
-	} else {
-		w.RowScaled(1).StaticScaled(1)
+	w.RowScaled(1).Dynamic(1)
+	width := rtxt.Width
+	if width <= 0 {
+		bounds := w.WidgetBounds()
+		width = bounds.W
 	}
-	width := w.LayoutAvailableWidth()
 	if rtxt.changed {
 		rtxt.calcAdvances(0)
 	}
@@ -65,6 +65,10 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 		if rtxt.changed || rtxt.flags&AutoWrap != 0 {
 			rtxt.reflow()
 		}
+	}
+
+	if rtxt.Sel.S > rtxt.Sel.E {
+		rtxt.Sel.E = rtxt.Sel.S
 	}
 
 	rtxt.changed = false
@@ -229,7 +233,7 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 		}
 
 		// click after the last chunk of text on the line
-		rtxt.handleClick(w, rect.Rect{X: p.X, Y: p.Y, W: rtxt.width - p.X, H: line.h + rowSpacing}, in, siter.styleSel, line, len(line.chunks)-1, nil, nil)
+		rtxt.handleClick(w, rect.Rect{X: p.X, Y: p.Y, W: rtxt.width + bounds.X - p.X, H: line.h + rowSpacing}, in, siter.styleSel, line, len(line.chunks)-1, nil, nil)
 
 		if insel == selTick && (rtxt.flags&ShowTick != 0) && (wasFocused || (rtxt.flags&Keyboard == 0)) && (line.endoff() == rtxt.Sel.S) {
 			rtxt.drawTick(w, out, p, line.h, siter.styleSel.Color, lineidx)
@@ -251,7 +255,7 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 
 	if rtxt.followCursor {
 		rtxt.followCursor = false
-		if above, below := w.Invisible(); above || below {
+		if above, below := w.Invisible(0); above || below {
 			scrollbary = w.At().Y - w.Bounds.H/2
 			if scrollbary < 0 {
 				scrollbary = 0

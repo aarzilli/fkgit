@@ -105,7 +105,7 @@ func selectFromList(w *nucular.Window, name string, idx int, list []string, keys
 			selected := idx == i
 
 			if moveselection && selected {
-				above, below := sw.Invisible()
+				above, below := sw.Invisible(10)
 				if above || below {
 					// recenter around selection
 					sw.Scrollbar.Y = sw.At().Y

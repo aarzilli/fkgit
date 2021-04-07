@@ -852,7 +852,7 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 
 	for i, lc := range lw.commits[skip:] {
 		if !moveToSelected {
-			if _, below := w.Invisible(); below {
+			if _, below := w.Invisible(10); below {
 				// fill the space that would be occupied by commits below the fold
 				// with a big row
 				emptyCommitRows(len(lw.commits[skip:]) - i)
@@ -876,7 +876,7 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 
 		if selected && moveToSelected {
 			lw.selectCommit(&lc)
-			if above, below := w.Invisible(); above || below {
+			if above, below := w.Invisible(10); above || below {
 				w.Scrollbar.Y = w.At().Y - w.Bounds.H/2
 				if w.Scrollbar.Y < 0 {
 					w.Scrollbar.Y = 0

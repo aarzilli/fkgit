@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense OR MIT
 
-package gl
+package glimpl
 
 import (
 	"errors"
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func CreateProgram(ctx Functions, vsSrc, fsSrc string, attribs []string) (Program, error) {
+func CreateProgram(ctx *Functions, vsSrc, fsSrc string, attribs []string) (Program, error) {
 	vs, err := createShader(ctx, VERTEX_SHADER, vsSrc)
 	if err != nil {
 		return Program{}, err
@@ -20,7 +20,7 @@ func CreateProgram(ctx Functions, vsSrc, fsSrc string, attribs []string) (Progra
 	}
 	defer ctx.DeleteShader(fs)
 	prog := ctx.CreateProgram()
-	if !prog.valid() {
+	if !prog.Valid() {
 		return Program{}, errors.New("glCreateProgram failed")
 	}
 	ctx.AttachShader(prog, vs)
@@ -37,17 +37,29 @@ func CreateProgram(ctx Functions, vsSrc, fsSrc string, attribs []string) (Progra
 	return prog, nil
 }
 
-func GetUniformLocation(ctx Functions, prog Program, name string) Uniform {
-	loc := ctx.GetUniformLocation(prog, name)
-	if !loc.valid() {
-		panic(fmt.Errorf("uniform %s not found", name))
+func CreateComputeProgram(ctx *Functions, src string) (Program, error) {
+	cs, err := createShader(ctx, COMPUTE_SHADER, src)
+	if err != nil {
+		return Program{}, err
 	}
-	return loc
+	defer ctx.DeleteShader(cs)
+	prog := ctx.CreateProgram()
+	if !prog.Valid() {
+		return Program{}, errors.New("glCreateProgram failed")
+	}
+	ctx.AttachShader(prog, cs)
+	ctx.LinkProgram(prog)
+	if ctx.GetProgrami(prog, LINK_STATUS) == 0 {
+		log := ctx.GetProgramInfoLog(prog)
+		ctx.DeleteProgram(prog)
+		return Program{}, fmt.Errorf("program link failed: %s", strings.TrimSpace(log))
+	}
+	return prog, nil
 }
 
-func createShader(ctx Functions, typ Enum, src string) (Shader, error) {
+func createShader(ctx *Functions, typ Enum, src string) (Shader, error) {
 	sh := ctx.CreateShader(typ)
-	if !sh.valid() {
+	if !sh.Valid() {
 		return Shader{}, errors.New("glCreateShader failed")
 	}
 	ctx.ShaderSource(sh, src)
@@ -60,16 +72,16 @@ func createShader(ctx Functions, typ Enum, src string) (Shader, error) {
 	return sh, nil
 }
 
-func ParseGLVersion(glVer string) ([2]int, error) {
+func ParseGLVersion(glVer string) (version [2]int, gles bool, err error) {
 	var ver [2]int
 	if _, err := fmt.Sscanf(glVer, "OpenGL ES %d.%d", &ver[0], &ver[1]); err == nil {
-		return ver, nil
+		return ver, true, nil
 	} else if _, err := fmt.Sscanf(glVer, "WebGL %d.%d", &ver[0], &ver[1]); err == nil {
 		// WebGL major version v corresponds to OpenGL ES version v + 1
 		ver[0]++
-		return ver, nil
+		return ver, true, nil
 	} else if _, err := fmt.Sscanf(glVer, "%d.%d", &ver[0], &ver[1]); err == nil {
-		return ver, nil
+		return ver, false, nil
 	}
-	return ver, fmt.Errorf("failed to parse OpenGL ES version (%s)", glVer)
+	return ver, false, fmt.Errorf("failed to parse OpenGL ES version (%s)", glVer)
 }

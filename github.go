@@ -284,7 +284,7 @@ func (gs *GithubStuff) update(issues bool, w *nucular.Window) {
 				selected = gs.selectedPull == i
 			}
 			if moveselection && selected {
-				above, below := sw.Invisible()
+				above, below := sw.Invisible(10)
 				if above || below {
 					sw.Scrollbar.Y = sw.At().Y
 				}

@@ -10,6 +10,7 @@ import (
 
 	"gioui.org/app/internal/window"
 	"gioui.org/io/event"
+	"gioui.org/io/pointer"
 	"gioui.org/io/profile"
 	"gioui.org/io/router"
 	"gioui.org/io/system"
@@ -25,6 +26,7 @@ type Option func(opts *window.Options)
 // Window represents an operating system window.
 type Window struct {
 	driver window.Driver
+	ctx    window.Context
 	loop   *renderLoop
 
 	// driverFuncs is a channel of functions to run when
@@ -37,6 +39,8 @@ type Window struct {
 	invalidates chan struct{}
 	frames      chan *op.Ops
 	frameAck    chan struct{}
+	// dead is closed when the window is destroyed.
+	dead chan struct{}
 
 	stage        system.Stage
 	animating    bool
@@ -44,7 +48,8 @@ type Window struct {
 	nextFrame    time.Time
 	delayedDraw  *time.Timer
 
-	queue Queue
+	queue  queue
+	cursor pointer.CursorName
 
 	callbacks callbacks
 }
@@ -53,9 +58,9 @@ type callbacks struct {
 	w *Window
 }
 
-// Queue is an event.Queue implementation that distributes system events
+// queue is an event.Queue implementation that distributes system events
 // to the input handlers declared in the most recent frame.
-type Queue struct {
+type queue struct {
 	q router.Router
 }
 
@@ -72,13 +77,12 @@ var ackEvent event.Event
 // options. The options are hints; the platform is free to
 // ignore or adjust them.
 //
-// If opts are nil, a set of sensible defaults are used.
-//
 // If the current program is running on iOS and Android,
 // NewWindow returns the window previously created by the
 // platform.
 //
-// BUG: Calling NewWindow more than once is not yet supported.
+// Calling NewWindow more than once is not supported on
+// iOS, Android, WebAssembly.
 func NewWindow(options ...Option) *Window {
 	opts := &window.Options{
 		Width:  unit.Dp(800),
@@ -98,6 +102,7 @@ func NewWindow(options ...Option) *Window {
 		frames:      make(chan *op.Ops),
 		frameAck:    make(chan struct{}),
 		driverFuncs: make(chan func()),
+		dead:        make(chan struct{}),
 	}
 	w.callbacks.w = w
 	go w.run(opts)
@@ -109,12 +114,6 @@ func (w *Window) Events() <-chan event.Event {
 	return w.out
 }
 
-// Queue returns the Window's event queue. The queue contains
-// the events received since the last frame.
-func (w *Window) Queue() *Queue {
-	return &w.queue
-}
-
 // update updates the Window. Paint operations updates the
 // window contents, input operations declare input handlers,
 // and so on. The supplied operations list completely replaces
@@ -124,7 +123,44 @@ func (w *Window) update(frame *op.Ops) {
 	<-w.frameAck
 }
 
-func (w *Window) draw(frameStart time.Time, size image.Point, frame *op.Ops) {
+func (w *Window) validateAndProcess(frameStart time.Time, size image.Point, sync bool, frame *op.Ops) error {
+	for {
+		if w.loop != nil {
+			if err := w.loop.Flush(); err != nil {
+				w.destroyGPU()
+				if err == window.ErrDeviceLost {
+					continue
+				}
+				return err
+			}
+		}
+		if w.loop == nil {
+			var err error
+			w.ctx, err = w.driver.NewContext()
+			if err != nil {
+				return err
+			}
+			w.loop, err = newLoop(w.ctx)
+			if err != nil {
+				w.ctx.Release()
+				return err
+			}
+		}
+		w.processFrame(frameStart, size, frame)
+		if sync {
+			if err := w.loop.Flush(); err != nil {
+				w.destroyGPU()
+				if err == window.ErrDeviceLost {
+					continue
+				}
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func (w *Window) processFrame(frameStart time.Time, size image.Point, frame *op.Ops) {
 	sync := w.loop.Draw(size, frame)
 	w.queue.q.Frame(frame)
 	switch w.queue.q.TextInputState() {
@@ -133,29 +169,89 @@ func (w *Window) draw(frameStart time.Time, size image.Point, frame *op.Ops) {
 	case router.TextInputClose:
 		w.driver.ShowTextInput(false)
 	}
+	if txt, ok := w.queue.q.WriteClipboard(); ok {
+		go w.WriteClipboard(txt)
+	}
+	if w.queue.q.ReadClipboard() {
+		go w.ReadClipboard()
+	}
 	if w.queue.q.Profiling() {
 		frameDur := time.Since(frameStart)
 		frameDur = frameDur.Truncate(100 * time.Microsecond)
 		q := 100 * time.Microsecond
 		timings := fmt.Sprintf("tot:%7s %s", frameDur.Round(q), w.loop.Summary())
-		w.queue.q.Add(profile.Event{Timings: timings})
+		w.queue.q.Queue(profile.Event{Timings: timings})
 	}
 	if t, ok := w.queue.q.WakeupTime(); ok {
 		w.setNextFrame(t)
+	}
+	// Opportunistically check whether Invalidate has been called, to avoid
+	// stopping and starting animation mode.
+	select {
+	case <-w.invalidates:
+		w.setNextFrame(time.Time{})
+	default:
 	}
 	w.updateAnimation()
 	// Wait for the GPU goroutine to finish processing frame.
 	<-sync
 }
 
-// Invalidate the window such that a FrameEvent will be generated
-// immediately. If the window is inactive, the event is sent when the
-// window becomes active.
+// Invalidate the window such that a FrameEvent will be generated immediately.
+// If the window is inactive, the event is sent when the window becomes active.
+//
+// Note that Invalidate is intended for externally triggered updates, such as a
+// response from a network request. InvalidateOp is more efficient for animation
+// and similar internal updates.
+//
 // Invalidate is safe for concurrent use.
 func (w *Window) Invalidate() {
 	select {
 	case w.invalidates <- struct{}{}:
 	default:
+	}
+}
+
+// ReadClipboard initiates a read of the clipboard in the form
+// of a clipboard.Event. Multiple reads may be coalesced
+// to a single event.
+func (w *Window) ReadClipboard() {
+	go w.driverDo(func() {
+		w.driver.ReadClipboard()
+	})
+}
+
+// WriteClipboard writes a string to the clipboard.
+func (w *Window) WriteClipboard(s string) {
+	go w.driverDo(func() {
+		w.driver.WriteClipboard(s)
+	})
+}
+
+// SetCursorName changes the current window cursor to name.
+func (w *Window) SetCursorName(name pointer.CursorName) {
+	go w.driverDo(func() {
+		w.driver.SetCursor(name)
+	})
+}
+
+// Close the window. The window's event loop should exit when it receives
+// system.DestroyEvent.
+//
+// Currently, only macOS, Windows and X11 drivers implement this functionality,
+// all others are stubbed.
+func (w *Window) Close() {
+	go w.driverDo(func() {
+		w.driver.Close()
+	})
+}
+
+// driverDo waits for the window to have a valid driver attached and calls f.
+// It does nothing if the if the window was destroyed while waiting.
+func (w *Window) driverDo(f func()) {
+	select {
+	case w.driverFuncs <- f:
+	case <-w.dead:
 	}
 }
 
@@ -190,8 +286,11 @@ func (c *callbacks) SetDriver(d window.Driver) {
 }
 
 func (c *callbacks) Event(e event.Event) {
-	c.w.in <- e
-	<-c.w.ack
+	select {
+	case c.w.in <- e:
+		<-c.w.ack
+	case <-c.w.dead:
+	}
 }
 
 func (w *Window) waitAck() {
@@ -207,6 +306,7 @@ func (w *Window) destroy(err error) {
 	// Ack the current event.
 	w.ack <- struct{}{}
 	w.out <- system.DestroyEvent{Err: err}
+	close(w.dead)
 	for e := range w.in {
 		w.ack <- struct{}{}
 		if _, ok := e.(system.DestroyEvent); ok {
@@ -220,6 +320,25 @@ func (w *Window) destroyGPU() {
 		w.loop.Release()
 		w.loop = nil
 	}
+	if w.ctx != nil {
+		w.ctx.Release()
+		w.ctx = nil
+	}
+}
+
+// waitFrame waits for the client to either call FrameEvent.Frame
+// or to continue event handling. It returns whether the client
+// called Frame or not.
+func (w *Window) waitFrame() (*op.Ops, bool) {
+	select {
+	case frame := <-w.frames:
+		// The client called FrameEvent.Frame.
+		return frame, true
+	case w.out <- ackEvent:
+		// The client ignored FrameEvent and continued processing
+		// events.
+		return nil, false
+	}
 }
 
 func (w *Window) run(opts *window.Options) {
@@ -230,7 +349,7 @@ func (w *Window) run(opts *window.Options) {
 		return
 	}
 	for {
-		var driverFuncs chan func() = nil
+		var driverFuncs chan func()
 		if w.driver != nil {
 			driverFuncs = w.driverFuncs
 		}
@@ -252,8 +371,7 @@ func (w *Window) run(opts *window.Options) {
 			case system.StageEvent:
 				if w.loop != nil {
 					if e2.Stage < system.StageRunning {
-						w.loop.Release()
-						w.loop = nil
+						w.destroyGPU()
 					} else {
 						w.loop.Refresh()
 					}
@@ -273,56 +391,25 @@ func (w *Window) run(opts *window.Options) {
 				frameStart := time.Now()
 				w.hasNextFrame = false
 				e2.Frame = w.update
+				e2.Queue = &w.queue
 				w.out <- e2.FrameEvent
-				var err error
 				if w.loop != nil {
 					if e2.Sync {
 						w.loop.Refresh()
 					}
-					if err = w.loop.Flush(); err != nil {
-						w.loop.Release()
-						w.loop = nil
-					}
-				} else {
-					var ctx window.Context
-					ctx, err = w.driver.NewContext()
-					if err == nil {
-						w.loop, err = newLoop(ctx)
-						if err != nil {
-							ctx.Release()
-						}
-					}
 				}
-				var frame *op.Ops
-				// Wait for either a frame or an ack event to go
-				// through, which means that the client didn't give us
-				// a frame.
-				gotFrame := false
-				select {
-				case frame = <-w.frames:
-					gotFrame = true
-				case w.out <- ackEvent:
-				}
-				if err != nil {
-					if gotFrame {
-						w.frameAck <- struct{}{}
-					}
-					w.destroy(err)
-					return
-				}
-				w.draw(frameStart, e2.Size, frame)
+				frame, gotFrame := w.waitFrame()
+				err := w.validateAndProcess(frameStart, e2.Size, e2.Sync, frame)
 				if gotFrame {
 					// We're done with frame, let the client continue.
 					w.frameAck <- struct{}{}
 				}
-				if e2.Sync {
-					if err := w.loop.Flush(); err != nil {
-						w.loop.Release()
-						w.loop = nil
-						w.destroy(err)
-						return
-					}
+				if err != nil {
+					w.destroyGPU()
+					w.destroy(err)
+					return
 				}
+				w.updateCursor()
 			case *system.CommandEvent:
 				w.out <- e
 				w.waitAck()
@@ -334,10 +421,11 @@ func (w *Window) run(opts *window.Options) {
 				w.ack <- struct{}{}
 				return
 			case event.Event:
-				if w.queue.q.Add(e2) {
+				if w.queue.q.Queue(e2) {
 					w.setNextFrame(time.Time{})
 					w.updateAnimation()
 				}
+				w.updateCursor()
 				w.out <- e
 			}
 			w.ack <- struct{}{}
@@ -345,7 +433,14 @@ func (w *Window) run(opts *window.Options) {
 	}
 }
 
-func (q *Queue) Events(k event.Key) []event.Event {
+func (w *Window) updateCursor() {
+	if c := w.queue.q.Cursor(); c != w.cursor {
+		w.cursor = c
+		w.SetCursorName(c)
+	}
+}
+
+func (q *queue) Events(k event.Tag) []event.Event {
 	return q.q.Events(k)
 }
 
@@ -367,6 +462,34 @@ func Size(w, h unit.Value) Option {
 	return func(opts *window.Options) {
 		opts.Width = w
 		opts.Height = h
+	}
+}
+
+// MaxSize sets the maximum size of the window.
+func MaxSize(w, h unit.Value) Option {
+	if w.V <= 0 {
+		panic("width must be larger than or equal to 0")
+	}
+	if h.V <= 0 {
+		panic("height must be larger than or equal to 0")
+	}
+	return func(opts *window.Options) {
+		opts.MaxWidth = w
+		opts.MaxHeight = h
+	}
+}
+
+// MinSize sets the minimum size of the window.
+func MinSize(w, h unit.Value) Option {
+	if w.V <= 0 {
+		panic("width must be larger than or equal to 0")
+	}
+	if h.V <= 0 {
+		panic("height must be larger than or equal to 0")
+	}
+	return func(opts *window.Options) {
+		opts.MinWidth = w
+		opts.MinHeight = h
 	}
 }
 

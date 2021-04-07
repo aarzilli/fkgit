@@ -5,16 +5,16 @@
 package egl
 
 /*
-#cgo LDFLAGS: -lEGL
+#cgo linux,!android  pkg-config: egl
+#cgo freebsd openbsd android LDFLAGS: -lEGL
 #cgo freebsd CFLAGS: -I/usr/local/include
 #cgo freebsd LDFLAGS: -L/usr/local/lib
 #cgo openbsd CFLAGS: -I/usr/X11R6/include
 #cgo openbsd LDFLAGS: -L/usr/X11R6/lib
+#cgo CFLAGS: -DEGL_NO_X11
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
-#include <GLES2/gl2.h>
-#include <GLES3/gl3.h>
 */
 import "C"
 
@@ -36,7 +36,7 @@ func eglChooseConfig(disp _EGLDisplay, attribs []_EGLint) (_EGLConfig, bool) {
 	var cfg C.EGLConfig
 	var ncfg C.EGLint
 	if C.eglChooseConfig(disp, &attribs[0], &cfg, 1, &ncfg) != C.EGL_TRUE {
-		return nil, false
+		return nilEGLConfig, false
 	}
 	return _EGLConfig(cfg), true
 }

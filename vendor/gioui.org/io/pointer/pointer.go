@@ -31,11 +31,6 @@ type Event struct {
 	Time time.Duration
 	// Buttons are the set of pressed mouse buttons for this event.
 	Buttons Buttons
-	// Hit is set when the event was within the registered
-	// area for the handler. Hit can be false when a pointer
-	// was pressed within the hit area, and then dragged
-	// outside it.
-	Hit bool
 	// Position is the position of the event, relative to
 	// the current transformation, as set by op.TransformOp.
 	Position f32.Point
@@ -54,13 +49,20 @@ type AreaOp struct {
 	rect image.Rectangle
 }
 
+// CursorNameOp sets the cursor for the current area.
+type CursorNameOp struct {
+	Name CursorName
+}
+
 // InputOp declares an input handler ready for pointer
 // events.
 type InputOp struct {
-	Key event.Key
+	Tag event.Tag
 	// Grab, if set, request that the handler get
 	// Grabbed priority.
 	Grab bool
+	// Types is a bitwise-or of event types to receive.
+	Types Type
 }
 
 // PassOp sets the pass-through mode.
@@ -82,19 +84,49 @@ type Source uint8
 // Buttons is a set of mouse buttons
 type Buttons uint8
 
+// CursorName is the name of a cursor.
+type CursorName string
+
 // Must match app/internal/input.areaKind
 type areaKind uint8
 
 const (
+	// CursorDefault is the default cursor.
+	CursorDefault CursorName = ""
+	// CursorText is the cursor for text.
+	CursorText CursorName = "text"
+	// CursorPointer is the cursor for a link.
+	CursorPointer CursorName = "pointer"
+	// CursorCrossHair is the cursor for precise location.
+	CursorCrossHair CursorName = "crosshair"
+	// CursorColResize is the cursor for vertical resize.
+	CursorColResize CursorName = "col-resize"
+	// CursorRowResize is the cursor for horizontal resize.
+	CursorRowResize CursorName = "row-resize"
+	// CursorGrab is the cursor for moving object in any direction.
+	CursorGrab CursorName = "grab"
+	// CursorNone hides the cursor. To show it again, use any other cursor.
+	CursorNone CursorName = "none"
+)
+
+const (
 	// A Cancel event is generated when the current gesture is
 	// interrupted by other handlers or the system.
-	Cancel Type = iota
+	Cancel Type = (1 << iota) >> 1
 	// Press of a pointer.
 	Press
 	// Release of a pointer.
 	Release
 	// Move of a pointer.
 	Move
+	// Drag of a pointer.
+	Drag
+	// Pointer enters an area watching for pointer input
+	Enter
+	// Pointer leaves an area watching for pointer input
+	Leave
+	// Scroll of a pointer.
+	Scroll
 )
 
 const (
@@ -108,6 +140,9 @@ const (
 	// Shared priority is for handlers that
 	// are part of a matching set larger than 1.
 	Shared Priority = iota
+	// Foremost priority is like Shared, but the
+	// handler is the foremost of the matching set.
+	Foremost
 	// Grabbed is used for matching sets of size 1.
 	Grabbed
 )
@@ -150,12 +185,21 @@ func (op AreaOp) Add(o *op.Ops) {
 	bo.PutUint32(data[14:], uint32(op.rect.Max.Y))
 }
 
+func (op CursorNameOp) Add(o *op.Ops) {
+	data := o.Write1(opconst.TypeCursorLen, op.Name)
+	data[0] = byte(opconst.TypeCursor)
+}
+
 func (h InputOp) Add(o *op.Ops) {
-	data := o.Write(opconst.TypePointerInputLen, h.Key)
+	if h.Tag == nil {
+		panic("Tag must be non-nil")
+	}
+	data := o.Write1(opconst.TypePointerInputLen, h.Tag)
 	data[0] = byte(opconst.TypePointerInput)
 	if h.Grab {
 		data[1] = 1
 	}
+	data[2] = byte(h.Types)
 }
 
 func (op PassOp) Add(o *op.Ops) {
@@ -176,6 +220,14 @@ func (t Type) String() string {
 		return "Cancel"
 	case Move:
 		return "Move"
+	case Drag:
+		return "Drag"
+	case Enter:
+		return "Enter"
+	case Leave:
+		return "Leave"
+	case Scroll:
+		return "Scroll"
 	default:
 		panic("unknown Type")
 	}
@@ -185,6 +237,8 @@ func (p Priority) String() string {
 	switch p {
 	case Shared:
 		return "Shared"
+	case Foremost:
+		return "Foremost"
 	case Grabbed:
 		return "Grabbed"
 	default:
@@ -221,6 +275,13 @@ func (b Buttons) String() string {
 		strs = append(strs, "ButtonMiddle")
 	}
 	return strings.Join(strs, "|")
+}
+
+func (c CursorName) String() string {
+	if c == CursorDefault {
+		return "default"
+	}
+	return string(c)
 }
 
 func (Event) ImplementsEvent() {}

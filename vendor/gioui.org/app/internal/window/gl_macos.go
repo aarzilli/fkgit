@@ -5,7 +5,9 @@
 package window
 
 import (
-	"gioui.org/app/internal/glimpl"
+	"gioui.org/gpu/backend"
+	"gioui.org/gpu/gl"
+	"gioui.org/internal/glimpl"
 )
 
 /*
@@ -13,7 +15,14 @@ import (
 #include <CoreGraphics/CoreGraphics.h>
 #include <AppKit/AppKit.h>
 #include <OpenGL/gl3.h>
-#include "gl_macos.h"
+
+__attribute__ ((visibility ("hidden"))) CFTypeRef gio_createGLView(void);
+__attribute__ ((visibility ("hidden"))) CFTypeRef gio_contextForView(CFTypeRef viewRef);
+__attribute__ ((visibility ("hidden"))) void gio_makeCurrentContext(CFTypeRef ctx);
+__attribute__ ((visibility ("hidden"))) void gio_flushContextBuffer(CFTypeRef ctx);
+__attribute__ ((visibility ("hidden"))) void gio_clearCurrentContext(void);
+__attribute__ ((visibility ("hidden"))) void gio_lockContext(CFTypeRef ctxRef);
+__attribute__ ((visibility ("hidden"))) void gio_unlockContext(CFTypeRef ctxRef);
 */
 import "C"
 
@@ -34,20 +43,24 @@ func newContext(w *window) (*context, error) {
 	ctx := C.gio_contextForView(view)
 	c := &context{
 		ctx:  ctx,
-		c:    new(glimpl.Functions),
 		view: view,
 	}
 	return c, nil
 }
 
-func (c *context) Functions() *glimpl.Functions {
-	return c.c
+func (c *context) Backend() (backend.Device, error) {
+	return gl.NewBackend(nil)
 }
 
 func (c *context) Release() {
 	c.Lock()
 	defer c.Unlock()
 	C.gio_clearCurrentContext()
+	// We could release the context with [view clearGLContext]
+	// and rely on [view openGLContext] auto-creating a new context.
+	// However that second context is not properly set up by
+	// OpenGLContextView, so we'll stay on the safe side and keep
+	// the first context around.
 }
 
 func (c *context) Present() error {

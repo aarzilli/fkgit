@@ -7,6 +7,8 @@ gioui.org v0.0.0-20191120192806-6a2b5a8d3b93/go.mod h1:KqFFi2Dq5gYA3FJ0sDOt8OBXo
 gioui.org v0.0.0-20191218180754-3dd7c8121c67/go.mod h1:KqFFi2Dq5gYA3FJ0sDOt8OBXoMsuxMtE8v2f0JExXAY=
 gioui.org v0.0.0-20200223075147-73b99a80e29a h1:MtUGIT0iPCZLqKSoEUcJ5yq9YWsk+Nz1UVj/bjQroi4=
 gioui.org v0.0.0-20200223075147-73b99a80e29a/go.mod h1:AHI9rFr6AEEHCb8EPVtb/p5M+NMJRKH58IOp8O3Je04=
+gioui.org v0.0.0-20210222172543-284659d3eac9 h1:rEhi0IMfjyzZu73tiAaPOtprJd9Z3QxJ0/VeY42dLv8=
+gioui.org v0.0.0-20210222172543-284659d3eac9/go.mod h1:Y+uS7hHMvku1Q+ooaoq6fYD5B2LGoT8JtFgvmYmRzTw=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802 h1:1BDTz0u9nC3//pOCMdNH+CiXJVYJh5UQNCOBG7jbELc=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/aarzilli/nucular v0.0.0-20190830160826-65c2df339915 h1:V64SUjuBhQiKy3YsupHzZm22y/V8ftIuYaqPJCnrIng=
@@ -27,6 +29,8 @@ github.com/aarzilli/nucular v0.0.0-20191121102842-79821a6607c4 h1:Is4FzUGFhOsXLV
 github.com/aarzilli/nucular v0.0.0-20191121102842-79821a6607c4/go.mod h1:txUB5i+5ws0r2wBPeUNu0O58OPqlk7GZUdPdXhNJITo=
 github.com/aarzilli/nucular v0.0.0-20191227141642-cca133278403 h1:oJ1LIl1e9w/n4S7QZJKn1jv6OgJVoJ4hGrhdsjBFxow=
 github.com/aarzilli/nucular v0.0.0-20191227141642-cca133278403/go.mod h1:drQTQBMTqUYxz2MFdKCp1yFG/jBJkPp1Y4IY/6DrjOI=
+github.com/aarzilli/nucular v0.0.0-20210406161005-5b7b86bf3de4 h1:YXEzHPGIBohi19hY44mLLLPT6LAEsPdqpofK9Y0giLQ=
+github.com/aarzilli/nucular v0.0.0-20210406161005-5b7b86bf3de4/go.mod h1:xclln5tB2/qDMW4O4l0RBRqLuPsuY1hWgJcpE6f56zc=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1 h1:QbL/5oDUmRBzO9/Z7Seo6zf912W/a6Sr4Eu0G/3Jho0=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
 github.com/go-gl/glfw v0.0.0-20200222043503-6f7a984d4dc4 h1:5Bg3HS4orH8S9vQARwWJHnEkz0dvhRKf3xxGlyDpjhE=
@@ -75,6 +79,8 @@ golang.org/x/image v0.0.0-20190829233526-b3c06291d021 h1:j6QOxNFMpEL1wIQX6TUdBPN
 golang.org/x/image v0.0.0-20190829233526-b3c06291d021/go.mod h1:FeLwcggjj3mMvU+oOTbSwawSJRM1uh48EjtB4UJZlP0=
 golang.org/x/image v0.0.0-20200119044424-58c23975cae1 h1:5h3ngYt7+vXCDZCup/HkCQgW5XwmSvR/nA2JmJ0RErg=
 golang.org/x/image v0.0.0-20200119044424-58c23975cae1/go.mod h1:FeLwcggjj3mMvU+oOTbSwawSJRM1uh48EjtB4UJZlP0=
+golang.org/x/image v0.0.0-20200618115811-c13761719519 h1:1e2ufUJNM3lCHEY5jIgac/7UTjd6cgJNdatjPdFWf34=
+golang.org/x/image v0.0.0-20200618115811-c13761719519/go.mod h1:FeLwcggjj3mMvU+oOTbSwawSJRM1uh48EjtB4UJZlP0=
 golang.org/x/mobile v0.0.0-20170307115833-eb9032959f05 h1:SfnKURPqpZR7R25slH48KrxWWFWNkMWMkE9ntmoPgTg=
 golang.org/x/mobile v0.0.0-20170307115833-eb9032959f05/go.mod h1:z+o9i4GpDbdi3rU15maQ/Ox0txvL9dWGYEHz965HBQE=
 golang.org/x/mobile v0.0.0-20190312151609-d3739f865fa6/go.mod h1:z+o9i4GpDbdi3rU15maQ/Ox0txvL9dWGYEHz965HBQE=

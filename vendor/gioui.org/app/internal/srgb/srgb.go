@@ -7,120 +7,123 @@ import (
 	"runtime"
 	"strings"
 
-	"gioui.org/app/internal/glimpl"
-	"gioui.org/gpu/gl"
+	"gioui.org/internal/glimpl"
 	"gioui.org/internal/unsafe"
 )
 
-// SRGBFBO implements an intermediate sRGB FBO
+// FBO implements an intermediate sRGB FBO
 // for gamma-correct rendering on platforms without
 // sRGB enabled native framebuffers.
-type SRGBFBO struct {
+type FBO struct {
 	c             *glimpl.Functions
 	width, height int
-	frameBuffer   gl.Framebuffer
-	depthBuffer   gl.Renderbuffer
-	colorTex      gl.Texture
+	frameBuffer   glimpl.Framebuffer
+	depthBuffer   glimpl.Renderbuffer
+	colorTex      glimpl.Texture
 	blitted       bool
-	quad          gl.Buffer
-	prog          gl.Program
-	es3           bool
+	quad          glimpl.Buffer
+	prog          glimpl.Program
+	gl3           bool
 }
 
-func NewSRGBFBO(f *glimpl.Functions) (*SRGBFBO, error) {
-	var es3 bool
-	glVer := f.GetString(gl.VERSION)
-	ver, err := gl.ParseGLVersion(glVer)
+func New(ctx glimpl.Context) (*FBO, error) {
+	f, err := glimpl.NewFunctions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var gl3 bool
+	glVer := f.GetString(glimpl.VERSION)
+	ver, _, err := glimpl.ParseGLVersion(glVer)
 	if err != nil {
 		return nil, err
 	}
 	if ver[0] >= 3 {
-		es3 = true
+		gl3 = true
 	} else {
-		exts := f.GetString(gl.EXTENSIONS)
+		exts := f.GetString(glimpl.EXTENSIONS)
 		if !strings.Contains(exts, "EXT_sRGB") {
 			return nil, fmt.Errorf("no support for OpenGL ES 3 nor EXT_sRGB")
 		}
 	}
-	s := &SRGBFBO{
+	s := &FBO{
 		c:           f,
-		es3:         es3,
+		gl3:         gl3,
 		frameBuffer: f.CreateFramebuffer(),
 		colorTex:    f.CreateTexture(),
 		depthBuffer: f.CreateRenderbuffer(),
 	}
-	f.BindTexture(gl.TEXTURE_2D, s.colorTex)
-	f.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	f.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	f.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	f.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	f.BindTexture(glimpl.TEXTURE_2D, s.colorTex)
+	f.TexParameteri(glimpl.TEXTURE_2D, glimpl.TEXTURE_WRAP_S, glimpl.CLAMP_TO_EDGE)
+	f.TexParameteri(glimpl.TEXTURE_2D, glimpl.TEXTURE_WRAP_T, glimpl.CLAMP_TO_EDGE)
+	f.TexParameteri(glimpl.TEXTURE_2D, glimpl.TEXTURE_MAG_FILTER, glimpl.NEAREST)
+	f.TexParameteri(glimpl.TEXTURE_2D, glimpl.TEXTURE_MIN_FILTER, glimpl.NEAREST)
 	return s, nil
 }
 
-func (s *SRGBFBO) Blit() {
+func (s *FBO) Blit() {
 	if !s.blitted {
-		prog, err := gl.CreateProgram(s.c, blitVSrc, blitFSrc, []string{"pos", "uv"})
+		prog, err := glimpl.CreateProgram(s.c, blitVSrc, blitFSrc, []string{"pos", "uv"})
 		if err != nil {
 			panic(err)
 		}
 		s.prog = prog
 		s.c.UseProgram(prog)
-		s.c.Uniform1i(gl.GetUniformLocation(s.c, prog, "tex"), 0)
+		s.c.Uniform1i(s.c.GetUniformLocation(prog, "tex"), 0)
 		s.quad = s.c.CreateBuffer()
-		s.c.BindBuffer(gl.ARRAY_BUFFER, s.quad)
-		s.c.BufferData(gl.ARRAY_BUFFER,
-			unsafe.BytesView([]float32{
-				-1, +1, 0, 1,
-				+1, +1, 1, 1,
-				-1, -1, 0, 0,
-				+1, -1, 1, 0,
-			}),
-			gl.STATIC_DRAW)
+		s.c.BindBuffer(glimpl.ARRAY_BUFFER, s.quad)
+		coords := unsafe.BytesView([]float32{
+			-1, +1, 0, 1,
+			+1, +1, 1, 1,
+			-1, -1, 0, 0,
+			+1, -1, 1, 0,
+		})
+		s.c.BufferData(glimpl.ARRAY_BUFFER, len(coords), glimpl.STATIC_DRAW)
+		s.c.BufferSubData(glimpl.ARRAY_BUFFER, 0, coords)
 		s.blitted = true
 	}
-	s.c.BindFramebuffer(gl.FRAMEBUFFER, gl.Framebuffer{})
+	s.c.BindFramebuffer(glimpl.FRAMEBUFFER, glimpl.Framebuffer{})
 	s.c.UseProgram(s.prog)
-	s.c.BindTexture(gl.TEXTURE_2D, s.colorTex)
-	s.c.BindBuffer(gl.ARRAY_BUFFER, s.quad)
-	s.c.VertexAttribPointer(0 /* pos */, 2, gl.FLOAT, false, 4*4, 0)
-	s.c.VertexAttribPointer(1 /* uv */, 2, gl.FLOAT, false, 4*4, 4*2)
+	s.c.BindTexture(glimpl.TEXTURE_2D, s.colorTex)
+	s.c.BindBuffer(glimpl.ARRAY_BUFFER, s.quad)
+	s.c.VertexAttribPointer(0 /* pos */, 2, glimpl.FLOAT, false, 4*4, 0)
+	s.c.VertexAttribPointer(1 /* uv */, 2, glimpl.FLOAT, false, 4*4, 4*2)
 	s.c.EnableVertexAttribArray(0)
 	s.c.EnableVertexAttribArray(1)
-	s.c.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
-	s.c.BindTexture(gl.TEXTURE_2D, gl.Texture{})
+	s.c.DrawArrays(glimpl.TRIANGLE_STRIP, 0, 4)
+	s.c.BindTexture(glimpl.TEXTURE_2D, glimpl.Texture{})
 	s.c.DisableVertexAttribArray(0)
 	s.c.DisableVertexAttribArray(1)
-	s.c.BindFramebuffer(gl.FRAMEBUFFER, s.frameBuffer)
-	s.c.InvalidateFramebuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0)
-	s.c.InvalidateFramebuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT)
+	s.c.BindFramebuffer(glimpl.FRAMEBUFFER, s.frameBuffer)
+	s.c.InvalidateFramebuffer(glimpl.FRAMEBUFFER, glimpl.COLOR_ATTACHMENT0)
+	s.c.InvalidateFramebuffer(glimpl.FRAMEBUFFER, glimpl.DEPTH_ATTACHMENT)
 	// The Android emulator requires framebuffer 0 bound at eglSwapBuffer time.
 	// Bind the sRGB framebuffer again in afterPresent.
-	s.c.BindFramebuffer(gl.FRAMEBUFFER, gl.Framebuffer{})
+	s.c.BindFramebuffer(glimpl.FRAMEBUFFER, glimpl.Framebuffer{})
 }
 
-func (s *SRGBFBO) AfterPresent() {
-	s.c.BindFramebuffer(gl.FRAMEBUFFER, s.frameBuffer)
+func (s *FBO) AfterPresent() {
+	s.c.BindFramebuffer(glimpl.FRAMEBUFFER, s.frameBuffer)
 }
 
-func (s *SRGBFBO) Refresh(w, h int) error {
+func (s *FBO) Refresh(w, h int) error {
 	s.width, s.height = w, h
 	if w == 0 || h == 0 {
 		return nil
 	}
-	s.c.BindTexture(gl.TEXTURE_2D, s.colorTex)
-	if s.es3 {
-		s.c.TexImage2D(gl.TEXTURE_2D, 0, gl.SRGB8_ALPHA8, w, h, gl.RGBA, gl.UNSIGNED_BYTE, nil)
+	s.c.BindTexture(glimpl.TEXTURE_2D, s.colorTex)
+	if s.gl3 {
+		s.c.TexImage2D(glimpl.TEXTURE_2D, 0, glimpl.SRGB8_ALPHA8, w, h, glimpl.RGBA, glimpl.UNSIGNED_BYTE)
 	} else /* EXT_sRGB */ {
-		s.c.TexImage2D(gl.TEXTURE_2D, 0, gl.SRGB_ALPHA_EXT, w, h, gl.SRGB_ALPHA_EXT, gl.UNSIGNED_BYTE, nil)
+		s.c.TexImage2D(glimpl.TEXTURE_2D, 0, glimpl.SRGB_ALPHA_EXT, w, h, glimpl.SRGB_ALPHA_EXT, glimpl.UNSIGNED_BYTE)
 	}
-	currentRB := gl.Renderbuffer(s.c.GetBinding(gl.RENDERBUFFER_BINDING))
-	s.c.BindRenderbuffer(gl.RENDERBUFFER, s.depthBuffer)
-	s.c.RenderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h)
-	s.c.BindRenderbuffer(gl.RENDERBUFFER, currentRB)
-	s.c.BindFramebuffer(gl.FRAMEBUFFER, s.frameBuffer)
-	s.c.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.colorTex, 0)
-	s.c.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, s.depthBuffer)
-	if st := s.c.CheckFramebufferStatus(gl.FRAMEBUFFER); st != gl.FRAMEBUFFER_COMPLETE {
+	currentRB := glimpl.Renderbuffer(s.c.GetBinding(glimpl.RENDERBUFFER_BINDING))
+	s.c.BindRenderbuffer(glimpl.RENDERBUFFER, s.depthBuffer)
+	s.c.RenderbufferStorage(glimpl.RENDERBUFFER, glimpl.DEPTH_COMPONENT16, w, h)
+	s.c.BindRenderbuffer(glimpl.RENDERBUFFER, currentRB)
+	s.c.BindFramebuffer(glimpl.FRAMEBUFFER, s.frameBuffer)
+	s.c.FramebufferTexture2D(glimpl.FRAMEBUFFER, glimpl.COLOR_ATTACHMENT0, glimpl.TEXTURE_2D, s.colorTex, 0)
+	s.c.FramebufferRenderbuffer(glimpl.FRAMEBUFFER, glimpl.DEPTH_ATTACHMENT, glimpl.RENDERBUFFER, s.depthBuffer)
+	if st := s.c.CheckFramebufferStatus(glimpl.FRAMEBUFFER); st != glimpl.FRAMEBUFFER_COMPLETE {
 		return fmt.Errorf("sRGB framebuffer incomplete (%dx%d), status: %#x error: %x", s.width, s.height, st, s.c.GetError())
 	}
 
@@ -129,12 +132,12 @@ func (s *SRGBFBO) Refresh(w, h int) error {
 		// texture result in twice gamma corrected colors. Using a plain RGBA
 		// texture seems to work.
 		s.c.ClearColor(.5, .5, .5, 1.0)
-		s.c.Clear(gl.COLOR_BUFFER_BIT)
+		s.c.Clear(glimpl.COLOR_BUFFER_BIT)
 		var pixel [4]byte
-		s.c.ReadPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel[:])
+		s.c.ReadPixels(0, 0, 1, 1, glimpl.RGBA, glimpl.UNSIGNED_BYTE, pixel[:])
 		if pixel[0] == 128 { // Correct sRGB color value is ~188
-			s.c.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, gl.RGBA, gl.UNSIGNED_BYTE, nil)
-			if st := s.c.CheckFramebufferStatus(gl.FRAMEBUFFER); st != gl.FRAMEBUFFER_COMPLETE {
+			s.c.TexImage2D(glimpl.TEXTURE_2D, 0, glimpl.RGBA, w, h, glimpl.RGBA, glimpl.UNSIGNED_BYTE)
+			if st := s.c.CheckFramebufferStatus(glimpl.FRAMEBUFFER); st != glimpl.FRAMEBUFFER_COMPLETE {
 				return fmt.Errorf("fallback RGBA framebuffer incomplete (%dx%d), status: %#x error: %x", s.width, s.height, st, s.c.GetError())
 			}
 		}
@@ -143,7 +146,7 @@ func (s *SRGBFBO) Refresh(w, h int) error {
 	return nil
 }
 
-func (s *SRGBFBO) Release() {
+func (s *FBO) Release() {
 	s.c.DeleteFramebuffer(s.frameBuffer)
 	s.c.DeleteTexture(s.colorTex)
 	s.c.DeleteRenderbuffer(s.depthBuffer)
