@@ -144,7 +144,11 @@ func (gs *GithubStuff) reload() {
 		if len(label) > 1 {
 			branch = label[1]
 		}
-		gs.prs = append(gs.prs, pull{number: *pr.Number, url: *pr.HTMLURL, title: *pr.Title, owner: *pr.Head.Repo.Owner.Login, branch: branch})
+		login := ""
+		if pr.Head != nil && pr.Head.Repo != nil && pr.Head.Repo.Owner != nil {
+			login = *pr.Head.Repo.Owner.Login
+		}
+		gs.prs = append(gs.prs, pull{number: *pr.Number, url: *pr.HTMLURL, title: *pr.Title, owner: login, branch: branch})
 	}
 
 	gs.loaded = true
