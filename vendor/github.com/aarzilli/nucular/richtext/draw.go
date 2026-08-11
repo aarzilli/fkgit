@@ -21,7 +21,20 @@ func (rtxt *RichText) drawWidget(w *nucular.Window) *Ctor {
 
 	var flags nucular.WindowFlags = 0
 	if rtxt.flags&AutoWrap != 0 {
-		flags = nucular.WindowNoHScrollbar
+		flags |= nucular.WindowNoHScrollbar
+	}
+	if rtxt.flags&MimicLabel != 0 {
+		flags |= nucular.WindowNoHScrollbar | nucular.WindowNoScrollbar
+		// edit GroupWindow style to be more like the containing window
+		style := w.Master().Style()
+		ws := w.WindowStyle()
+		gws := style.GroupWindow
+		defer func() {
+			style.GroupWindow = gws
+		}()
+		style.GroupWindow.FixedBackground = ws.FixedBackground
+		style.GroupWindow.Background = ws.Background
+		style.GroupWindow.BorderColor = ws.BorderColor
 	}
 
 	wp := w
@@ -34,18 +47,13 @@ func (rtxt *RichText) drawWidget(w *nucular.Window) *Ctor {
 	return nil
 }
 
+type activateEditor interface {
+	ActivatingEditor() interface{}
+}
+
 func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
-	arrowKey, pageKey := 0, 0
-	if rtxt.focused && rtxt.flags&Keyboard != 0 {
-		arrowKey, pageKey = rtxt.handleKeyboard(w.Input())
-	}
 	if viewporth == 0 {
 		viewporth = w.Bounds.H - w.At().Y
-	}
-
-	wasFocused := rtxt.focused
-	if rtxt.flags&Keyboard != 0 && (w.Input().Mouse.Buttons[mouse.ButtonLeft].Down || w.Input().Mouse.Buttons[mouse.ButtonRight].Down) {
-		rtxt.focused = false
 	}
 
 	rtxt.first = false
@@ -113,6 +121,25 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 			}
 		}
 		if out == nil {
+			if rtxt.Sel.S != rtxt.Sel.E && insel != selAfter {
+				for i, chunk := range line.chunks {
+					chunkrng := Sel{line.off[i], line.off[i] + chunk.len()}
+					switch insel {
+					case selBefore:
+						if chunkrng.contains(rtxt.Sel.S) {
+							if chunkrng.contains(rtxt.Sel.E) {
+								insel = selAfter
+							} else {
+								insel = selInside
+							}
+						}
+					case selInside:
+						if chunkrng.contains(rtxt.Sel.E) || chunkrng.S >= rtxt.Sel.E {
+							insel = selAfter
+						}
+					}
+				}
+			}
 			continue
 		}
 		if debugDrawBoundingBoxes {
@@ -172,22 +199,22 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 					s := rtxt.Sel.S - line.off[i]
 					chunk1 := chunk.sub(0, s)
 					w1 := line.chunkWidthEx(i, 0, chunk1, rtxt.adv)
-					drawChunk(w, out, &p, chunk1, siter.styleSel, w1, line.h, line.asc)
+					drawChunk(w, out, &p, chunk1, siter.styleSel, w1, line.h, line.asc, rowSpacing)
 
 					if chunkrng.contains(rtxt.Sel.E) {
 						e := rtxt.Sel.E - line.off[i]
 						chunk2 := chunk.sub(s, e)
 						w2 := line.chunkWidthEx(i, s, chunk2, rtxt.adv)
-						rtxt.drawSelectedChunk(w, out, &p, chunk2, siter.styleSel, w2, line.h, line.asc)
+						rtxt.drawSelectedChunk(w, out, &p, chunk2, siter.styleSel, w2, line.h, line.asc, rowSpacing)
 
 						chunk3 := chunk.sub(e, chunk.len())
 						w3 := line.chunkWidthEx(i, e, chunk3, rtxt.adv)
-						drawChunk(w, out, &p, chunk3, siter.styleSel, w3, line.h, line.asc)
+						drawChunk(w, out, &p, chunk3, siter.styleSel, w3, line.h, line.asc, rowSpacing)
 						insel = selAfter
 					} else {
 						chunk2 := chunk.sub(s, chunk.len())
 						w2 := line.chunkWidthEx(i, s, chunk2, rtxt.adv)
-						rtxt.drawSelectedChunk(w, out, &p, chunk2, siter.styleSel, w2, line.h, line.asc)
+						rtxt.drawSelectedChunk(w, out, &p, chunk2, siter.styleSel, w2, line.h, line.asc, rowSpacing)
 						insel = selInside
 					}
 				} else {
@@ -199,17 +226,17 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 					e := rtxt.Sel.E - line.off[i]
 					chunk1 := chunk.sub(0, e)
 					w1 := line.chunkWidthEx(i, 0, chunk1, rtxt.adv)
-					rtxt.drawSelectedChunk(w, out, &p, chunk1, siter.styleSel, w1, line.h, line.asc)
+					rtxt.drawSelectedChunk(w, out, &p, chunk1, siter.styleSel, w1, line.h, line.asc, rowSpacing)
 
 					chunk2 := chunk.sub(e, chunk.len())
 					w2 := line.chunkWidthEx(i, e, chunk2, rtxt.adv)
-					drawChunk(w, out, &p, chunk2, siter.styleSel, w2, line.h, line.asc)
+					drawChunk(w, out, &p, chunk2, siter.styleSel, w2, line.h, line.asc, rowSpacing)
 					insel = selAfter
 				} else if chunkrng.S >= rtxt.Sel.E {
 					insel = selAfter
 					simpleDrawChunk = true
 				} else {
-					rtxt.drawSelectedChunk(w, out, &p, chunk, siter.styleSel, line.w[i], line.h, line.asc)
+					rtxt.drawSelectedChunk(w, out, &p, chunk, siter.styleSel, line.w[i], line.h, line.asc, rowSpacing)
 				}
 
 			case selAfter:
@@ -220,8 +247,8 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 			}
 
 			if simpleDrawChunk {
-				drawChunk(w, out, &p, chunk, siter.styleSel, line.w[i], line.h, line.asc)
-				if insel == selTick && (rtxt.flags&ShowTick != 0) && (wasFocused || (rtxt.flags&Keyboard == 0)) && chunkrng.contains(rtxt.Sel.S) {
+				drawChunk(w, out, &p, chunk, siter.styleSel, line.w[i], line.h, line.asc, rowSpacing)
+				if insel == selTick && (rtxt.flags&ShowTick != 0) && (rtxt.wasFocused || (rtxt.flags&Keyboard == 0 && rtxt.flags&Editable == 0)) && chunkrng.contains(rtxt.Sel.S) {
 					x := p.X - line.w[i] + line.chunkWidth(i, rtxt.Sel.S-line.off[i], rtxt.adv)
 					rtxt.drawTick(w, out, image.Point{x, p.Y}, line.h, siter.styleSel.Color, lineidx)
 				}
@@ -235,7 +262,7 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 		// click after the last chunk of text on the line
 		rtxt.handleClick(w, rect.Rect{X: p.X, Y: p.Y, W: rtxt.width + bounds.X - p.X, H: line.h + rowSpacing}, in, siter.styleSel, line, len(line.chunks)-1, nil, nil)
 
-		if insel == selTick && (rtxt.flags&ShowTick != 0) && (wasFocused || (rtxt.flags&Keyboard == 0)) && (line.endoff() == rtxt.Sel.S) {
+		if insel == selTick && (rtxt.flags&ShowTick != 0) && (rtxt.wasFocused || (rtxt.flags&Keyboard == 0 && rtxt.flags&Editable == 0)) && (line.endoff() == rtxt.Sel.S) {
 			rtxt.drawTick(w, out, p, line.h, siter.styleSel.Color, lineidx)
 		}
 
@@ -263,13 +290,13 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 		}
 	}
 
-	if pageKey != 0 && viewporth > 0 {
-		scrollbary += (pageKey * viewporth) - nucular.FontHeight(rtxt.face)
+	if rtxt.pageKey != 0 && viewporth > 0 {
+		scrollbary += (rtxt.pageKey * viewporth) - nucular.FontHeight(rtxt.face)
 		if scrollbary < 0 {
 			scrollbary = 0
 		}
-	} else if arrowKey != 0 {
-		scrollbary += arrowKey * nucular.FontHeight(rtxt.face)
+	} else if rtxt.arrowKey != 0 {
+		scrollbary += rtxt.arrowKey * nucular.FontHeight(rtxt.face)
 		if scrollbary < 0 {
 			scrollbary = 0
 		}
@@ -278,7 +305,7 @@ func (rtxt *RichText) drawRows(w *nucular.Window, viewporth int) *Ctor {
 	if scrollbary != w.Scrollbar.Y {
 		w.Scrollbar.Y = scrollbary
 		w.Master().Changed()
-	} else if wasFocused != rtxt.focused {
+	} else if rtxt.wasFocused != rtxt.focused {
 		w.Master().Changed()
 	}
 
@@ -294,13 +321,13 @@ func (rtxt *RichText) drawTick(w *nucular.Window, out *command.Buffer, p image.P
 	out.StrokeLine(image.Point{p.X, p.Y}, image.Point{p.X, p.Y + lineh}, linethick, color)
 }
 
-func (rtxt *RichText) drawSelectedChunk(w *nucular.Window, out *command.Buffer, p *image.Point, chunk chunk, styleSel styleSel, width, lineh, lineasc int) {
+func (rtxt *RichText) drawSelectedChunk(w *nucular.Window, out *command.Buffer, p *image.Point, chunk chunk, styleSel styleSel, width, lineh, lineasc int, rowSpacing int) {
 	styleSel.BgColor = rtxt.selColor
 	styleSel.Color = styleSel.SelFgColor
-	drawChunk(w, out, p, chunk, styleSel, width, lineh, lineasc)
+	drawChunk(w, out, p, chunk, styleSel, width, lineh, lineasc, rowSpacing)
 }
 
-func drawChunk(w *nucular.Window, out *command.Buffer, p *image.Point, chunk chunk, styleSel styleSel, width, lineh, lineasc int) {
+func drawChunk(w *nucular.Window, out *command.Buffer, p *image.Point, chunk chunk, styleSel styleSel, width, lineh, lineasc int, rowSpacing int) {
 	if chunk.isspacing() {
 		if debugDrawBoundingBoxes && width > 0 {
 			yoff := alignBaseline(lineh, lineasc, styleSel.Face)
@@ -310,6 +337,10 @@ func drawChunk(w *nucular.Window, out *command.Buffer, p *image.Point, chunk chu
 		if styleSel.BgColor != (color.RGBA{}) && width > 0 {
 			r := rect.Rect{X: p.X, Y: p.Y, H: lineh, W: width}
 			out.FillRect(r, 0, styleSel.BgColor)
+		}
+		if styleSel.Cursor != 0 {
+			b2 := rect.Rect{X: p.X, Y: p.Y, H: lineh + rowSpacing, W: width}
+			out.Cursor(b2, styleSel.Cursor)
 		}
 	} else {
 		r := rect.Rect{X: p.X, Y: p.Y, H: lineh, W: width}
@@ -344,6 +375,17 @@ func drawChunk(w *nucular.Window, out *command.Buffer, p *image.Point, chunk chu
 			m := styleSel.Face.Metrics()
 			y := p.Y + lineasc + m.Descent.Ceil() - m.Ascent.Ceil()/2
 			out.StrokeLine(image.Point{p.X, y}, image.Point{p.X + width, y}, linethick, styleSel.Color)
+		}
+
+		b2 := r
+		b2.H += rowSpacing
+
+		if styleSel.isLink && styleSel.Cursor == 0 {
+			out.Cursor(b2, font.PointerCursor)
+		}
+
+		if styleSel.Cursor != 0 {
+			out.Cursor(b2, styleSel.Cursor)
 		}
 	}
 
@@ -393,6 +435,10 @@ func (rtxt *RichText) reflow() {
 
 	lastEmptyChunkOff := int32(0)
 
+	rtxtWidth := rtxt.width
+	userSetLeftMargin := 0
+	nextLeftMargin := 0
+
 	flushLine := func(runedelta int) {
 		lnwidth := ln.width()
 		diff := rtxt.width - lnwidth
@@ -408,6 +454,14 @@ func (rtxt *RichText) reflow() {
 		case AlignJustified:
 			if runeoff+runedelta == splitruneoff && rtxt.flags&AutoWrap != 0 {
 				justifyLine(ln, diff)
+			}
+		default:
+			if userSetLeftMargin != 0 {
+				ln.leftMargin = userSetLeftMargin
+			} else if nextLeftMargin > 0 {
+				rtxtWidth -= nextLeftMargin
+				userSetLeftMargin = nextLeftMargin
+				nextLeftMargin = 0
 			}
 		}
 		if len(ln.chunks) == 0 {
@@ -482,7 +536,7 @@ func (rtxt *RichText) reflow() {
 			}
 
 			if rtxt.Flags&AutoWrap != 0 {
-				if siter.styleSel.align == AlignLeftDumb && (linew+chunkw).Ceil() > rtxt.width && (j-int32(rsz)-start) > 0 {
+				if siter.styleSel.align == AlignLeftDumb && (linew+chunkw).Ceil() > rtxtWidth && (j-int32(rsz)-start) > 0 {
 					chunkw -= a
 					flushChunk(j-int32(rsz), siter.styleSel)
 					flushLine(-1)
@@ -508,6 +562,9 @@ func (rtxt *RichText) reflow() {
 			styleSel := siter.styleSel
 			if siter.AdvanceRune(rsz) {
 				flushChunk(j, styleSel)
+				if siter.styleSel.LeftMarginHere {
+					nextLeftMargin = linew.Ceil()
+				}
 			}
 
 			if doWordWrap && (rtxt.flags&AutoWrap != 0) && siter.styleSel.align != AlignLeftDumb {

@@ -22,7 +22,7 @@ type MouseInput struct {
 	Pos         image.Point
 	Prev        image.Point
 	Delta       image.Point
-	ScrollDelta int
+	ScrollDelta float32
 }
 
 type KeyboardInput struct {
@@ -33,6 +33,9 @@ type KeyboardInput struct {
 type Input struct {
 	Keyboard KeyboardInput
 	Mouse    MouseInput
+
+	activateEditor interface{}
+	activateWindow *Window
 }
 
 func (win *Window) Input() *Input {

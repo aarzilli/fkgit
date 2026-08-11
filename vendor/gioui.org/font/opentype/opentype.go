@@ -2,411 +2,189 @@
 
 // Package opentype implements text layout and shaping for OpenType
 // files.
+//
+// NOTE: the OpenType specification allows for fonts to include bitmap images
+// in a variety of formats. In the interest of small binary sizes, the opentype
+// package only automatically imports the PNG image decoder. If you have a font
+// with glyphs in JPEG or TIFF formats, register those decoders with the image
+// package in order to ensure those glyphs are visible in text.
 package opentype
 
 import (
 	"bytes"
-	"io"
-	"unicode"
-	"unicode/utf8"
+	"fmt"
+	_ "image/png"
 
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/sfnt"
-	"golang.org/x/image/math/fixed"
-
-	"gioui.org/f32"
-	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/text"
+	giofont "gioui.org/font"
+	fontapi "github.com/go-text/typesetting/font"
+	"github.com/go-text/typesetting/font/opentype"
 )
 
-// Font implements text.Face. Its methods are safe to use
-// concurrently.
-type Font struct {
-	font *sfnt.Font
+// Face is a thread-safe representation of a loaded font. For efficiency, applications
+// should construct a face for any given font file once, reusing it across different
+// text shapers.
+type Face struct {
+	face *fontapi.Font
+	font giofont.Font
 }
 
-// Collection is a collection of one or more fonts. When used as a text.Face,
-// each rune will be assigned a glyph from the first font in the collection
-// that supports it.
-type Collection struct {
-	fonts []*opentype
+// Parse constructs a Face from source bytes.
+func Parse(src []byte) (Face, error) {
+	ld, err := opentype.NewLoader(bytes.NewReader(src))
+	if err != nil {
+		return Face{}, err
+	}
+	font, md, err := parseLoader(ld)
+	if err != nil {
+		return Face{}, fmt.Errorf("failed parsing truetype font: %w", err)
+	}
+	return Face{
+		face: font,
+		font: md,
+	}, nil
 }
 
-type opentype struct {
-	Font    *sfnt.Font
-	Hinting font.Hinting
-}
-
-// a glyph represents a rune and its advance according to a Font.
-// TODO: remove this type and work on io.Readers directly.
-type glyph struct {
-	Rune    rune
-	Advance fixed.Int26_6
-}
-
-// NewFont parses an SFNT font, such as TTF or OTF data, from a []byte
-// data source.
-func Parse(src []byte) (*Font, error) {
-	fnt, err := sfnt.Parse(src)
+// ParseCollection parse an Opentype font file, with support for collections.
+// Single font files are supported, returning a slice with length 1.
+// The returned fonts are automatically wrapped in a text.FontFace with
+// inferred font font.
+// BUG(whereswaldon): the only Variant that can be detected automatically is
+// "Mono".
+func ParseCollection(src []byte) ([]giofont.FontFace, error) {
+	lds, err := opentype.NewLoaders(bytes.NewReader(src))
 	if err != nil {
 		return nil, err
 	}
-	return &Font{font: fnt}, nil
-}
-
-// ParseCollection parses an SFNT font collection, such as TTC or OTC data,
-// from a []byte data source.
-//
-// If passed data for a single font, a TTF or OTF instead of a TTC or OTC,
-// it will return a collection containing 1 font.
-func ParseCollection(src []byte) (*Collection, error) {
-	c, err := sfnt.ParseCollection(src)
-	if err != nil {
-		return nil, err
-	}
-	return newCollectionFrom(c)
-}
-
-// ParseCollectionReaderAt parses an SFNT collection, such as TTC or OTC data,
-// from an io.ReaderAt data source.
-//
-// If passed data for a single font, a TTF or OTF instead of a TTC or OTC, it
-// will return a collection containing 1 font.
-func ParseCollectionReaderAt(src io.ReaderAt) (*Collection, error) {
-	c, err := sfnt.ParseCollectionReaderAt(src)
-	if err != nil {
-		return nil, err
-	}
-	return newCollectionFrom(c)
-}
-
-func newCollectionFrom(coll *sfnt.Collection) (*Collection, error) {
-	fonts := make([]*opentype, coll.NumFonts())
-	for i := range fonts {
-		fnt, err := coll.Font(i)
+	out := make([]giofont.FontFace, len(lds))
+	for i, ld := range lds {
+		face, md, err := parseLoader(ld)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("reading font %d of collection: %s", i, err)
 		}
-		fonts[i] = &opentype{
-			Font:    fnt,
-			Hinting: font.HintingFull,
+		ff := Face{
+			face: face,
+			font: md,
+		}
+		out[i] = giofont.FontFace{
+			Face: ff,
+			Font: ff.Font(),
 		}
 	}
-	return &Collection{fonts: fonts}, nil
+
+	return out, nil
 }
 
-// NumFonts returns the number of fonts in the collection.
-func (c *Collection) NumFonts() int {
-	return len(c.fonts)
-}
-
-// Font returns the i'th font in the collection.
-func (c *Collection) Font(i int) (*Font, error) {
-	if i < 0 || len(c.fonts) <= i {
-		return nil, sfnt.ErrNotFound
+func DescriptionToFont(md fontapi.Description) giofont.Font {
+	return giofont.Font{
+		Typeface: giofont.Typeface(md.Family),
+		Style:    gioStyle(md.Aspect.Style),
+		Weight:   gioWeight(md.Aspect.Weight),
 	}
-	return &Font{font: c.fonts[i].Font}, nil
 }
 
-func (f *Font) Layout(ppem fixed.Int26_6, maxWidth int, txt io.Reader) ([]text.Line, error) {
-	glyphs, err := readGlyphs(txt)
+func FontToDescription(font giofont.Font) fontapi.Description {
+	return fontapi.Description{
+		Family: string(font.Typeface),
+		Aspect: fontapi.Aspect{
+			Style:  mdStyle(font.Style),
+			Weight: mdWeight(font.Weight),
+		},
+	}
+}
+
+// parseLoader parses the contents of the loader into a face and its font.
+func parseLoader(ld *opentype.Loader) (*fontapi.Font, giofont.Font, error) {
+	ft, err := fontapi.NewFont(ld)
 	if err != nil {
-		return nil, err
+		return nil, giofont.Font{}, err
 	}
-	fonts := []*opentype{{Font: f.font, Hinting: font.HintingFull}}
-	var buf sfnt.Buffer
-	return layoutText(&buf, ppem, maxWidth, fonts, glyphs)
+	data := DescriptionToFont(ft.Describe())
+	return ft, data, nil
 }
 
-func (f *Font) Shape(ppem fixed.Int26_6, str text.Layout) op.CallOp {
-	var buf sfnt.Buffer
-	return textPath(&buf, ppem, []*opentype{{Font: f.font, Hinting: font.HintingFull}}, str)
+// Face returns a thread-unsafe wrapper for this Face suitable for use by a single shaper.
+// Face many be invoked any number of times and is safe so long as each return value is
+// only used by one goroutine.
+func (f Face) Face() *fontapi.Face {
+	return &fontapi.Face{Font: f.face}
 }
 
-func (f *Font) Metrics(ppem fixed.Int26_6) font.Metrics {
-	o := &opentype{Font: f.font, Hinting: font.HintingFull}
-	var buf sfnt.Buffer
-	return o.Metrics(&buf, ppem)
+// FontFace returns a text.Font with populated font metadata for the
+// font.
+// BUG(whereswaldon): the only Variant that can be detected automatically is
+// "Mono".
+func (f Face) Font() giofont.Font {
+	return f.font
 }
 
-func (c *Collection) Layout(ppem fixed.Int26_6, maxWidth int, txt io.Reader) ([]text.Line, error) {
-	glyphs, err := readGlyphs(txt)
-	if err != nil {
-		return nil, err
+func gioStyle(s fontapi.Style) giofont.Style {
+	switch s {
+	case fontapi.StyleItalic:
+		return giofont.Italic
+	case fontapi.StyleNormal:
+		fallthrough
+	default:
+		return giofont.Regular
 	}
-	var buf sfnt.Buffer
-	return layoutText(&buf, ppem, maxWidth, c.fonts, glyphs)
 }
 
-func (c *Collection) Shape(ppem fixed.Int26_6, str text.Layout) op.CallOp {
-	var buf sfnt.Buffer
-	return textPath(&buf, ppem, c.fonts, str)
+func mdStyle(g giofont.Style) fontapi.Style {
+	switch g {
+	case giofont.Italic:
+		return fontapi.StyleItalic
+	case giofont.Regular:
+		fallthrough
+	default:
+		return fontapi.StyleNormal
+	}
 }
 
-func fontForGlyph(buf *sfnt.Buffer, fonts []*opentype, r rune) *opentype {
-	if len(fonts) < 1 {
-		return nil
+func gioWeight(w fontapi.Weight) giofont.Weight {
+	switch w {
+	case fontapi.WeightThin:
+		return giofont.Thin
+	case fontapi.WeightExtraLight:
+		return giofont.ExtraLight
+	case fontapi.WeightLight:
+		return giofont.Light
+	case fontapi.WeightNormal:
+		return giofont.Normal
+	case fontapi.WeightMedium:
+		return giofont.Medium
+	case fontapi.WeightSemibold:
+		return giofont.SemiBold
+	case fontapi.WeightBold:
+		return giofont.Bold
+	case fontapi.WeightExtraBold:
+		return giofont.ExtraBold
+	case fontapi.WeightBlack:
+		return giofont.Black
+	default:
+		return giofont.Normal
 	}
-	for _, f := range fonts {
-		if f.HasGlyph(buf, r) {
-			return f
-		}
-	}
-	return fonts[0] // Use replacement character from the first font if necessary
 }
 
-func layoutText(sbuf *sfnt.Buffer, ppem fixed.Int26_6, maxWidth int, fonts []*opentype, glyphs []glyph) ([]text.Line, error) {
-	var lines []text.Line
-	var nextLine text.Line
-	updateBounds := func(f *opentype) {
-		m := f.Metrics(sbuf, ppem)
-		if m.Ascent > nextLine.Ascent {
-			nextLine.Ascent = m.Ascent
-		}
-		// m.Height is equal to m.Ascent + m.Descent + linegap.
-		// Compute the descent including the linegap.
-		descent := m.Height - m.Ascent
-		if descent > nextLine.Descent {
-			nextLine.Descent = descent
-		}
-		b := f.Bounds(sbuf, ppem)
-		nextLine.Bounds = nextLine.Bounds.Union(b)
+func mdWeight(g giofont.Weight) fontapi.Weight {
+	switch g {
+	case giofont.Thin:
+		return fontapi.WeightThin
+	case giofont.ExtraLight:
+		return fontapi.WeightExtraLight
+	case giofont.Light:
+		return fontapi.WeightLight
+	case giofont.Normal:
+		return fontapi.WeightNormal
+	case giofont.Medium:
+		return fontapi.WeightMedium
+	case giofont.SemiBold:
+		return fontapi.WeightSemibold
+	case giofont.Bold:
+		return fontapi.WeightBold
+	case giofont.ExtraBold:
+		return fontapi.WeightExtraBold
+	case giofont.Black:
+		return fontapi.WeightBlack
+	default:
+		return fontapi.WeightNormal
 	}
-	maxDotX := fixed.I(maxWidth)
-	type state struct {
-		r     rune
-		f     *opentype
-		adv   fixed.Int26_6
-		x     fixed.Int26_6
-		idx   int
-		len   int
-		valid bool
-	}
-	var prev, word state
-	endLine := func() {
-		if prev.f == nil && len(fonts) > 0 {
-			prev.f = fonts[0]
-		}
-		updateBounds(prev.f)
-		nextLine.Layout = toLayout(glyphs[:prev.idx:prev.idx])
-		nextLine.Width = prev.x + prev.adv
-		nextLine.Bounds.Max.X += prev.x
-		lines = append(lines, nextLine)
-		glyphs = glyphs[prev.idx:]
-		nextLine = text.Line{}
-		prev = state{}
-		word = state{}
-	}
-	for prev.idx < len(glyphs) {
-		g := &glyphs[prev.idx]
-		next := state{
-			r:   g.Rune,
-			f:   fontForGlyph(sbuf, fonts, g.Rune),
-			idx: prev.idx + 1,
-			len: prev.len + utf8.RuneLen(g.Rune),
-			x:   prev.x + prev.adv,
-		}
-		if next.f != nil {
-			if next.f != prev.f {
-				updateBounds(next.f)
-			}
-			next.adv, next.valid = next.f.GlyphAdvance(sbuf, ppem, g.Rune)
-		}
-		if g.Rune == '\n' {
-			// The newline is zero width; use the previous
-			// character for line measurements.
-			prev.idx = next.idx
-			prev.len = next.len
-			endLine()
-			continue
-		}
-		var k fixed.Int26_6
-		if prev.valid && next.f != nil {
-			k = next.f.Kern(sbuf, ppem, prev.r, next.r)
-		}
-		// Break the line if we're out of space.
-		if prev.idx > 0 && next.x+next.adv+k > maxDotX {
-			// If the line contains no word breaks, break off the last rune.
-			if word.idx == 0 {
-				word = prev
-			}
-			next.x -= word.x + word.adv
-			next.idx -= word.idx
-			next.len -= word.len
-			prev = word
-			endLine()
-		} else if k != 0 {
-			glyphs[prev.idx-1].Advance += k
-			next.x += k
-		}
-		g.Advance = next.adv
-		if unicode.IsSpace(g.Rune) {
-			word = next
-		}
-		prev = next
-	}
-	endLine()
-	return lines, nil
-}
-
-// toLayout converts a slice of glyphs to a text.Layout.
-func toLayout(glyphs []glyph) text.Layout {
-	var buf bytes.Buffer
-	advs := make([]fixed.Int26_6, len(glyphs))
-	for i, g := range glyphs {
-		buf.WriteRune(g.Rune)
-		advs[i] = glyphs[i].Advance
-	}
-	return text.Layout{Text: buf.String(), Advances: advs}
-}
-
-func textPath(buf *sfnt.Buffer, ppem fixed.Int26_6, fonts []*opentype, str text.Layout) op.CallOp {
-	var lastPos f32.Point
-	var builder clip.Path
-	ops := new(op.Ops)
-	m := op.Record(ops)
-	var x fixed.Int26_6
-	builder.Begin(ops)
-	rune := 0
-	for _, r := range str.Text {
-		if !unicode.IsSpace(r) {
-			f := fontForGlyph(buf, fonts, r)
-			if f == nil {
-				continue
-			}
-			segs, ok := f.LoadGlyph(buf, ppem, r)
-			if !ok {
-				continue
-			}
-			// Move to glyph position.
-			pos := f32.Point{
-				X: float32(x) / 64,
-			}
-			builder.Move(pos.Sub(lastPos))
-			lastPos = pos
-			var lastArg f32.Point
-			// Convert sfnt.Segments to relative segments.
-			for _, fseg := range segs {
-				nargs := 1
-				switch fseg.Op {
-				case sfnt.SegmentOpQuadTo:
-					nargs = 2
-				case sfnt.SegmentOpCubeTo:
-					nargs = 3
-				}
-				var args [3]f32.Point
-				for i := 0; i < nargs; i++ {
-					a := f32.Point{
-						X: float32(fseg.Args[i].X) / 64,
-						Y: float32(fseg.Args[i].Y) / 64,
-					}
-					args[i] = a.Sub(lastArg)
-					if i == nargs-1 {
-						lastArg = a
-					}
-				}
-				switch fseg.Op {
-				case sfnt.SegmentOpMoveTo:
-					builder.Move(args[0])
-				case sfnt.SegmentOpLineTo:
-					builder.Line(args[0])
-				case sfnt.SegmentOpQuadTo:
-					builder.Quad(args[0], args[1])
-				case sfnt.SegmentOpCubeTo:
-					builder.Cube(args[0], args[1], args[2])
-				default:
-					panic("unsupported segment op")
-				}
-			}
-			lastPos = lastPos.Add(lastArg)
-		}
-		x += str.Advances[rune]
-		rune++
-	}
-	clip.Outline{
-		Path: builder.End(),
-	}.Op().Add(ops)
-	return m.Stop()
-}
-
-func readGlyphs(r io.Reader) ([]glyph, error) {
-	var glyphs []glyph
-	buf := make([]byte, 0, 1024)
-	for {
-		n, err := r.Read(buf[len(buf):cap(buf)])
-		buf = buf[:len(buf)+n]
-		lim := len(buf)
-		// Read full runes if possible.
-		if err != io.EOF {
-			lim -= utf8.UTFMax - 1
-		}
-		i := 0
-		for i < lim {
-			c, s := utf8.DecodeRune(buf[i:])
-			i += s
-			glyphs = append(glyphs, glyph{Rune: c})
-		}
-		n = copy(buf, buf[i:])
-		buf = buf[:n]
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-	}
-	return glyphs, nil
-}
-
-func (f *opentype) HasGlyph(buf *sfnt.Buffer, r rune) bool {
-	g, err := f.Font.GlyphIndex(buf, r)
-	return g != 0 && err == nil
-}
-
-func (f *opentype) GlyphAdvance(buf *sfnt.Buffer, ppem fixed.Int26_6, r rune) (advance fixed.Int26_6, ok bool) {
-	g, err := f.Font.GlyphIndex(buf, r)
-	if err != nil {
-		return 0, false
-	}
-	adv, err := f.Font.GlyphAdvance(buf, g, ppem, f.Hinting)
-	return adv, err == nil
-}
-
-func (f *opentype) Kern(buf *sfnt.Buffer, ppem fixed.Int26_6, r0, r1 rune) fixed.Int26_6 {
-	g0, err := f.Font.GlyphIndex(buf, r0)
-	if err != nil {
-		return 0
-	}
-	g1, err := f.Font.GlyphIndex(buf, r1)
-	if err != nil {
-		return 0
-	}
-	adv, err := f.Font.Kern(buf, g0, g1, ppem, f.Hinting)
-	if err != nil {
-		return 0
-	}
-	return adv
-}
-
-func (f *opentype) Metrics(buf *sfnt.Buffer, ppem fixed.Int26_6) font.Metrics {
-	m, _ := f.Font.Metrics(buf, ppem, f.Hinting)
-	return m
-}
-
-func (f *opentype) Bounds(buf *sfnt.Buffer, ppem fixed.Int26_6) fixed.Rectangle26_6 {
-	r, _ := f.Font.Bounds(buf, ppem, f.Hinting)
-	return r
-}
-
-func (f *opentype) LoadGlyph(buf *sfnt.Buffer, ppem fixed.Int26_6, r rune) ([]sfnt.Segment, bool) {
-	g, err := f.Font.GlyphIndex(buf, r)
-	if err != nil {
-		return nil, false
-	}
-	segs, err := f.Font.LoadGlyph(buf, g, ppem, nil)
-	if err != nil {
-		return nil, false
-	}
-	return segs, true
 }

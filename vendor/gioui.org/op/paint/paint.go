@@ -10,16 +10,25 @@ import (
 	"math"
 
 	"gioui.org/f32"
-	"gioui.org/internal/opconst"
+	"gioui.org/internal/ops"
 	"gioui.org/op"
 	"gioui.org/op/clip"
 )
 
+// ImageFilter is the scaling filter for images.
+type ImageFilter byte
+
+const (
+	// FilterLinear uses linear interpolation for scaling.
+	FilterLinear ImageFilter = iota
+	// FilterNearest uses nearest neighbor interpolation for scaling.
+	FilterNearest
+)
+
 // ImageOp sets the brush to an image.
-//
-// Note: the ImageOp may keep a reference to the backing image.
-// See NewImageOp for details.
 type ImageOp struct {
+	Filter ImageFilter
+
 	uniform bool
 	color   color.NRGBA
 	src     *image.RGBA
@@ -43,13 +52,19 @@ type LinearGradientOp struct {
 	Color2 color.NRGBA
 }
 
-// PaintOp fills fills the current clip area with the current brush.
+// PaintOp fills the current clip area with the current brush.
 type PaintOp struct {
 }
 
-// NewImageOp creates an ImageOp backed by src. See
-// gioui.org/io/system.FrameEvent for a description of when data
-// referenced by operations is safe to re-use.
+// OpacityStack represents an opacity applied to all painting operations
+// until Pop is called.
+type OpacityStack struct {
+	id      ops.StackID
+	macroID uint32
+	ops     *ops.Ops
+}
+
+// NewImageOp creates an ImageOp backed by src.
 //
 // NewImageOp assumes the backing image is immutable, and may cache a
 // copy of its contents in a GPU-friendly way. Create new ImageOps to
@@ -64,12 +79,9 @@ func NewImageOp(src image.Image) ImageOp {
 			color:   col,
 		}
 	case *image.RGBA:
-		bounds := src.Bounds()
-		if bounds.Min == (image.Point{}) && src.Stride == bounds.Dx()*4 {
-			return ImageOp{
-				src:    src,
-				handle: new(int),
-			}
+		return ImageOp{
+			src:    src,
+			handle: new(int),
 		}
 	}
 
@@ -98,14 +110,17 @@ func (i ImageOp) Add(o *op.Ops) {
 			Color: i.color,
 		}.Add(o)
 		return
+	} else if i.src == nil || i.src.Bounds().Empty() {
+		return
 	}
-	data := o.Write2(opconst.TypeImageLen, i.src, i.handle)
-	data[0] = byte(opconst.TypeImage)
+	data := ops.Write2(&o.Internal, ops.TypeImageLen, i.src, i.handle)
+	data[0] = byte(ops.TypeImage)
+	data[1] = byte(i.Filter)
 }
 
 func (c ColorOp) Add(o *op.Ops) {
-	data := o.Write(opconst.TypeColorLen)
-	data[0] = byte(opconst.TypeColor)
+	data := ops.Write(&o.Internal, ops.TypeColorLen)
+	data[0] = byte(ops.TypeColor)
 	data[1] = c.Color.R
 	data[2] = c.Color.G
 	data[3] = c.Color.B
@@ -113,8 +128,8 @@ func (c ColorOp) Add(o *op.Ops) {
 }
 
 func (c LinearGradientOp) Add(o *op.Ops) {
-	data := o.Write(opconst.TypeLinearGradientLen)
-	data[0] = byte(opconst.TypeLinearGradient)
+	data := ops.Write(&o.Internal, ops.TypeLinearGradientLen)
+	data[0] = byte(ops.TypeLinearGradient)
 
 	bo := binary.LittleEndian
 	bo.PutUint32(data[1:], math.Float32bits(c.Stop1.X))
@@ -133,14 +148,13 @@ func (c LinearGradientOp) Add(o *op.Ops) {
 }
 
 func (d PaintOp) Add(o *op.Ops) {
-	data := o.Write(opconst.TypePaintLen)
-	data[0] = byte(opconst.TypePaint)
+	data := ops.Write(&o.Internal, ops.TypePaintLen)
+	data[0] = byte(ops.TypePaint)
 }
 
 // FillShape fills the clip shape with a color.
 func FillShape(ops *op.Ops, c color.NRGBA, shape clip.Op) {
-	defer op.Save(ops).Load()
-	shape.Add(ops)
+	defer shape.Push(ops).Pop()
 	Fill(ops, c)
 }
 
@@ -149,7 +163,34 @@ func FillShape(ops *op.Ops, c color.NRGBA, shape clip.Op) {
 // the painted area. Use FillShape unless you need to paint several
 // times within the same clip.Op.
 func Fill(ops *op.Ops, c color.NRGBA) {
-	defer op.Save(ops).Load()
 	ColorOp{Color: c}.Add(ops)
 	PaintOp{}.Add(ops)
+}
+
+// PushOpacity creates a drawing layer with an opacity in the range [0;1].
+// The layer includes every subsequent drawing operation until [OpacityStack.Pop]
+// is called.
+//
+// The layer is drawn in two steps. First, the layer operations are
+// drawn to a separate image. Then, the image is blended on top of
+// the frame, with the opacity used as the blending factor.
+func PushOpacity(o *op.Ops, opacity float32) OpacityStack {
+	if opacity > 1 {
+		opacity = 1
+	}
+	if opacity < 0 {
+		opacity = 0
+	}
+	id, macroID := ops.PushOp(&o.Internal, ops.OpacityStack)
+	data := ops.Write(&o.Internal, ops.TypePushOpacityLen)
+	bo := binary.LittleEndian
+	data[0] = byte(ops.TypePushOpacity)
+	bo.PutUint32(data[1:], math.Float32bits(opacity))
+	return OpacityStack{ops: &o.Internal, id: id, macroID: macroID}
+}
+
+func (t OpacityStack) Pop() {
+	ops.PopOp(t.ops, ops.OpacityStack, t.id, t.macroID)
+	data := ops.Write(t.ops, ops.TypePopOpacityLen)
+	data[0] = byte(ops.TypePopOpacity)
 }

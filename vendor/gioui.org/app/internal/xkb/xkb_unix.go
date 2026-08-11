@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense OR MIT
 
+//go:build (linux && !android) || freebsd || openbsd
 // +build linux,!android freebsd openbsd
 
 // Package xkb implements a Go interface for the X Keyboard Extension library.
@@ -135,6 +136,10 @@ func (x *Context) LoadKeymap(format int, fd int, size int) error {
 
 func (x *Context) Modifiers() key.Modifiers {
 	var mods key.Modifiers
+	if x.state == nil {
+		return mods
+	}
+
 	if C.xkb_state_mod_name_is_active(x.state, (*C.char)(unsafe.Pointer(&_XKB_MOD_NAME_CTRL[0])), C.XKB_STATE_MODS_EFFECTIVE) == 1 {
 		mods |= key.ModCtrl
 	}
@@ -218,6 +223,9 @@ func (x *Context) charsForKeycode(keyCode C.xkb_keycode_t) []byte {
 }
 
 func (x *Context) IsRepeatKey(keyCode uint32) bool {
+	if x.state == nil {
+		return false
+	}
 	kc := C.xkb_keycode_t(keyCode)
 	return C.xkb_keymap_key_repeats(x.keyMap, kc) == 1
 }
@@ -230,14 +238,17 @@ func (x *Context) UpdateMask(depressed, latched, locked, depressedGroup, latched
 		C.xkb_layout_index_t(depressedGroup), C.xkb_layout_index_t(latchedGroup), C.xkb_layout_index_t(lockedGroup))
 }
 
-func convertKeysym(s C.xkb_keysym_t) (string, bool) {
+func convertKeysym(s C.xkb_keysym_t) (key.Name, bool) {
 	if 'a' <= s && s <= 'z' {
-		return string(rune(s - 'a' + 'A')), true
+		return key.Name(rune(s - 'a' + 'A')), true
 	}
-	if ' ' <= s && s <= '~' {
-		return string(rune(s)), true
+	if C.XKB_KEY_KP_0 <= s && s <= C.XKB_KEY_KP_9 {
+		return key.Name(rune(s - C.XKB_KEY_KP_0 + '0')), true
 	}
-	var n string
+	if ' ' < s && s <= '~' {
+		return key.Name(rune(s)), true
+	}
+	var n key.Name
 	switch s {
 	case C.XKB_KEY_Escape:
 		n = key.NameEscape
@@ -247,8 +258,6 @@ func convertKeysym(s C.xkb_keysym_t) (string, bool) {
 		n = key.NameRightArrow
 	case C.XKB_KEY_Return:
 		n = key.NameReturn
-	case C.XKB_KEY_KP_Enter:
-		n = key.NameEnter
 	case C.XKB_KEY_Up:
 		n = key.NameUpArrow
 	case C.XKB_KEY_Down:
@@ -266,33 +275,99 @@ func convertKeysym(s C.xkb_keysym_t) (string, bool) {
 	case C.XKB_KEY_Page_Down:
 		n = key.NamePageDown
 	case C.XKB_KEY_F1:
-		n = "F1"
+		n = key.NameF1
 	case C.XKB_KEY_F2:
-		n = "F2"
+		n = key.NameF2
 	case C.XKB_KEY_F3:
-		n = "F3"
+		n = key.NameF3
 	case C.XKB_KEY_F4:
-		n = "F4"
+		n = key.NameF4
 	case C.XKB_KEY_F5:
-		n = "F5"
+		n = key.NameF5
 	case C.XKB_KEY_F6:
-		n = "F6"
+		n = key.NameF6
 	case C.XKB_KEY_F7:
-		n = "F7"
+		n = key.NameF7
 	case C.XKB_KEY_F8:
-		n = "F8"
+		n = key.NameF8
 	case C.XKB_KEY_F9:
-		n = "F9"
+		n = key.NameF9
 	case C.XKB_KEY_F10:
-		n = "F10"
+		n = key.NameF10
 	case C.XKB_KEY_F11:
-		n = "F11"
+		n = key.NameF11
 	case C.XKB_KEY_F12:
-		n = "F12"
-	case C.XKB_KEY_Tab, C.XKB_KEY_KP_Tab, C.XKB_KEY_ISO_Left_Tab:
+		n = key.NameF12
+	case C.XKB_KEY_Tab, C.XKB_KEY_ISO_Left_Tab:
 		n = key.NameTab
-	case 0x20, C.XKB_KEY_KP_Space:
-		n = "Space"
+	case 0x20:
+		n = key.NameSpace
+	case C.XKB_KEY_Control_L, C.XKB_KEY_Control_R:
+		n = key.NameCtrl
+	case C.XKB_KEY_Shift_L, C.XKB_KEY_Shift_R:
+		n = key.NameShift
+	case C.XKB_KEY_Alt_L, C.XKB_KEY_Alt_R:
+		n = key.NameAlt
+	case C.XKB_KEY_Super_L, C.XKB_KEY_Super_R:
+		n = key.NameSuper
+
+	case C.XKB_KEY_KP_Space:
+		n = key.NameSpace
+	case C.XKB_KEY_KP_Tab:
+		n = key.NameTab
+	case C.XKB_KEY_KP_Enter:
+		n = key.NameEnter
+	case C.XKB_KEY_KP_F1:
+		n = key.NameF1
+	case C.XKB_KEY_KP_F2:
+		n = key.NameF2
+	case C.XKB_KEY_KP_F3:
+		n = key.NameF3
+	case C.XKB_KEY_KP_F4:
+		n = key.NameF4
+	case C.XKB_KEY_KP_Home:
+		n = key.NameHome
+	case C.XKB_KEY_KP_Left:
+		n = key.NameLeftArrow
+	case C.XKB_KEY_KP_Up:
+		n = key.NameUpArrow
+	case C.XKB_KEY_KP_Right:
+		n = key.NameRightArrow
+	case C.XKB_KEY_KP_Down:
+		n = key.NameDownArrow
+	case C.XKB_KEY_KP_Prior:
+		// not supported
+		return "", false
+	case C.XKB_KEY_KP_Next:
+		// not supported
+		return "", false
+	case C.XKB_KEY_KP_End:
+		n = key.NameEnd
+	case C.XKB_KEY_KP_Begin:
+		n = key.NameHome
+	case C.XKB_KEY_KP_Insert:
+		// not supported
+		return "", false
+	case C.XKB_KEY_KP_Delete:
+		n = key.NameDeleteForward
+	case C.XKB_KEY_KP_Multiply:
+		n = "*"
+	case C.XKB_KEY_KP_Add:
+		n = "+"
+	case C.XKB_KEY_KP_Separator:
+		// not supported
+		return "", false
+	case C.XKB_KEY_KP_Subtract:
+		n = "-"
+	case C.XKB_KEY_KP_Decimal:
+		// TODO(dh): does a German keyboard layout also translate the numpad key to XKB_KEY_KP_DECIMAL? Because in
+		// German, the decimal is a comma, not a period.
+		n = "."
+	case C.XKB_KEY_KP_Divide:
+		n = "/"
+	case C.XKB_KEY_KP_Equal:
+		n = "="
+
 	default:
 		return "", false
 	}

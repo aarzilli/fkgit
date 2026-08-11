@@ -5,85 +5,72 @@ Package pointer implements pointer events and operations.
 A pointer is either a mouse controlled cursor or a touch
 object such as a finger.
 
-The InputOp operation is used to declare a handler ready for pointer
-events. Use an event.Queue to receive events.
+The [event.Op] operation is used to declare a handler ready for pointer
+events.
 
-Types
+# Hit areas
 
-Only events that match a specified list of types are delivered to a handler.
+Clip operations from package [op/clip] are used for specifying
+hit areas where handlers may receive events.
 
-For example, to receive Press, Drag, and Release events (but not Move, Enter,
-Leave, or Scroll):
-
-	var ops op.Ops
-	var h *Handler = ...
-
-	pointer.InputOp{
-		Tag:   h,
-		Types: pointer.Press | pointer.Drag | pointer.Release,
-	}.Add(ops)
-
-Cancel events are always delivered.
-
-Areas
-
-The area operations are used for specifying the area where
-subsequent InputOp are active.
-
-For example, to set up a rectangular hit area:
+For example, to set up a handler with a rectangular hit area:
 
 	r := image.Rectangle{...}
-	pointer.Rect(r).Add(ops)
-	pointer.InputOp{Tag: h}.Add(ops)
+	area := clip.Rect(r).Push(ops)
+	event.Op{Tag: h}.Add(ops)
+	area.Pop()
 
-Note that areas compound: the effective area of multiple area
-operations is the intersection of the areas.
+Note that hit areas behave similar to painting: the effective area of a stack
+of multiple area operations is the intersection of the areas.
 
-Matching events
+BUG: Clip operations other than clip.Rect and clip.Ellipse are approximated
+with their bounding boxes.
 
-StackOp operations and input handlers form an implicit tree.
-Each stack operation is a node, and each input handler is associated
-with the most recent node.
+# Matching events
+
+Areas form an implicit tree, with input handlers as leaves. The children of
+an area is every area and handler added between its Push and corresponding Pop.
 
 For example:
 
 	ops := new(op.Ops)
-	var stack op.StackOp
 	var h1, h2 *Handler
 
-	state := op.Save(ops)
-	pointer.InputOp{Tag: h1}.Add(Ops)
-	state.Load()
+	area := clip.Rect(...).Push(ops)
+	event.Op(Ops, h1)
+	area.Pop()
 
-	state = op.Save(ops)
-	pointer.InputOp{Tag: h2}.Add(ops)
-	state.Load()
+	area := clip.Rect(...).Push(ops)
+	event.Op(Ops, h2)
+	area.Pop()
 
-implies a tree of two inner nodes, each with one pointer handler.
+implies a tree of two inner nodes, each with one pointer handler attached.
 
-When determining which handlers match an Event, only handlers whose
-areas contain the event position are considered. The matching
-proceeds as follows.
+The matching proceeds as follows.
 
-First, the foremost matching handler is included. If the handler
-has pass-through enabled, this step is repeated.
+First, the foremost area that contains the event is found. Only areas whose
+parent areas all contain the event is considered.
 
-Then, all matching handlers from the current node and all parent
-nodes are included.
+Then, every handler attached to the area is matched with the event.
 
-In the example above, all events will go to h2 only even though both
-handlers have the same area (the entire screen).
+If all attached handlers are marked pass-through or if no handlers are
+attached, the matching repeats with the next foremost (sibling) area. Otherwise
+the matching repeats with the parent area.
 
-Pass-through
+In the example above, all events will go to h2 because it and h1 are siblings
+and none are pass-through.
 
-The PassOp operations controls the pass-through setting. A handler's
-pass-through setting is recorded along with the InputOp.
+# Pass-through
 
-Pass-through handlers are useful for overlay widgets such as a hidden
-side drawer. When the user touches the side, both the (transparent)
-drawer handle and the interface below should receive pointer events.
+The PassOp operations controls the pass-through setting. All handlers added
+inside one or more PassOp scopes are marked pass-through.
 
-Disambiguation
+Pass-through is useful for overlay widgets. Consider a hidden side drawer: when
+the user touches the side, both the (transparent) drawer handle and the
+interface below should receive pointer events. This effect is achieved by
+marking the drawer handle pass-through.
+
+# Disambiguation
 
 When more than one handler matches a pointer event, the event queue
 follows a set of rules for distributing the event.
@@ -106,7 +93,7 @@ The losing handlers are notified by a Cancel event.
 
 For multiple grabbing handlers, the foremost handler wins.
 
-Priorities
+# Priorities
 
 Handlers know their position in a matching set of a pointer through
 event priorities. The Shared priority is for matching sets with

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gioui.org/io/event"
+	"gioui.org/io/input"
 	"gioui.org/io/system"
 	"gioui.org/op"
 	"gioui.org/unit"
@@ -20,57 +21,44 @@ type Context struct {
 	Constraints Constraints
 
 	Metric unit.Metric
-	// By convention, a nil Queue is a signal to widgets to draw themselves
-	// in a disabled state.
-	Queue event.Queue
 	// Now is the animation time.
 	Now time.Time
 
+	// Locale provides information on the system's language preferences.
+	// BUG(whereswaldon): this field is not currently populated automatically.
+	// Interested users must look up and populate these values manually.
+	Locale system.Locale
+
+	disabled bool
+	input.Source
 	*op.Ops
 }
 
-// NewContext is a shorthand for
-//
-//   Context{
-//     Ops: ops,
-//     Now: e.Now,
-//     Queue: e.Queue,
-//     Config: e.Config,
-//     Constraints: Exact(e.Size),
-//   }
-//
-// NewContext calls ops.Reset.
-func NewContext(ops *op.Ops, e system.FrameEvent) Context {
-	ops.Reset()
-	return Context{
-		Ops:         ops,
-		Now:         e.Now,
-		Queue:       e.Queue,
-		Metric:      e.Metric,
-		Constraints: Exact(e.Size),
+// Dp converts v to pixels.
+func (c Context) Dp(v unit.Dp) int {
+	return c.Metric.Dp(v)
+}
+
+// Sp converts v to pixels.
+func (c Context) Sp(v unit.Sp) int {
+	return c.Metric.Sp(v)
+}
+
+func (c Context) Event(filters ...event.Filter) (event.Event, bool) {
+	if c.disabled {
+		return nil, false
 	}
+	return c.Source.Event(filters...)
 }
 
-// Px maps the value to pixels.
-func (c Context) Px(v unit.Value) int {
-	return c.Metric.Px(v)
+// Enabled reports whether this context is enabled. Disabled contexts
+// don't report events.
+func (c Context) Enabled() bool {
+	return !c.disabled
 }
 
-// Events returns the events available for the key. If no
-// queue is configured, Events returns nil.
-func (c Context) Events(k event.Tag) []event.Event {
-	if c.Queue == nil {
-		return nil
-	}
-	return c.Queue.Events(k)
-}
-
-// Disabled returns a copy of this context with a nil Queue,
-// blocking events to widgets using it.
-//
-// By convention, a nil Queue is a signal to widgets to draw themselves
-// in a disabled state.
+// Disabled returns a copy of this context that don't deliver any events.
 func (c Context) Disabled() Context {
-	c.Queue = nil
+	c.disabled = true
 	return c
 }

@@ -1,3 +1,5 @@
+![Go Build](https://github.com/aarzilli/nucular/actions/workflows/build.yml/badge.svg)
+
 Mostly-immediate-mode GUI library for Go.
 Source port to go of an early version of [nuklear](https://github.com/vurtun/nuklear).
 
@@ -7,7 +9,7 @@ Source port to go of an early version of [nuklear](https://github.com/vurtun/nuk
 
 ## Documentation
 
-See [godoc](https://godoc.org/github.com/aarzilli/nucular), `_examples/simple/main.go` and `_examples/overview/main.go` for single window examples, `_examples/demo/demo.go` for a multi-window example, and [gdlv](http://github.com/aarzilli/gdlv) for a more complex application built using nucular.
+See [godoc](https://godoc.org/github.com/aarzilli/nucular), `_examples/simple/main.go` and `_examples/overview/main.go` for single window examples, `_examples/demo/demo.go` for a multi-window example, and [gdlv](https://github.com/aarzilli/gdlv) for a more complex application built using nucular.
 
 ## Screenshots
 
@@ -36,4 +38,4 @@ go build -tags nucular_shiny,metal
 
 Selects the shiny backend but uses metal to render on macOS.
 
-By default shiny is used on all operating systems except macOS and Windows, where gio is used.
+By default shiny is used on all operating systems except macOS, where gio is used.

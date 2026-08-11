@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 // Package mtl provides access to Apple's Metal API (https://developer.apple.com/documentation/metal).
@@ -19,6 +20,7 @@ import (
 /*
 #cgo LDFLAGS: -framework Metal -framework CoreGraphics -framework Foundation
 #include <stdlib.h>
+#include <stdbool.h>
 #include "mtl.h"
 struct Library Go_Device_MakeLibrary(void * device, _GoString_ source) {
 	return Device_MakeLibrary(device, _GoStringPtr(source), _GoStringLen(source));
@@ -26,7 +28,32 @@ struct Library Go_Device_MakeLibrary(void * device, _GoString_ source) {
 */
 import "C"
 
+// GPUFamily is a family of GPUs.
+//
+// Reference: https://developer.apple.com/documentation/metal/mtlgpufamily.
+type GPUFamily uint16
+
+// Options for families of GPUs.
+const (
+	GPUFamilyApple1  GPUFamily = 1001 // Apple family 1 GPU features that correspond to the Apple A7 GPUs.
+	GPUFamilyApple2  GPUFamily = 1002 // Apple family 2 GPU features that correspond to the Apple A8 GPUs.
+	GPUFamilyApple3  GPUFamily = 1003 // Apple family 3 GPU features that correspond to the Apple A9 and A10 GPUs.
+	GPUFamilyApple4  GPUFamily = 1004 // Apple family 4 GPU features that correspond to the Apple A11 GPUs.
+	GPUFamilyApple5  GPUFamily = 1005 // Apple family 5 GPU features that correspond to the Apple A12 GPUs.
+	GPUFamilyApple6  GPUFamily = 1006 // Apple family 6 GPU features that correspond to the Apple A13 GPUs.
+	GPUFamilyApple7  GPUFamily = 1007 // Apple family 7 GPU features that correspond to the Apple A14 and M1 GPUs.
+	GPUFamilyApple8  GPUFamily = 1008 // Apple family 8 GPU features that correspond to the Apple A15 and M2 GPUs.
+	GPUFamilyMac1    GPUFamily = 2001 // Mac family 1 GPU features.
+	GPUFamilyMac2    GPUFamily = 2002 // Mac family 2 GPU features.
+	GPUFamilyCommon1 GPUFamily = 3001 // Common family 1 GPU features.
+	GPUFamilyCommon2 GPUFamily = 3002 // Common family 2 GPU features.
+	GPUFamilyCommon3 GPUFamily = 3003 // Common family 3 GPU features.
+	GPUFamilyMetal3  GPUFamily = 5001 // Metal 3 features.
+)
+
 // FeatureSet defines a specific platform, hardware, and software configuration.
+//
+// Deprecated: Use GPUFamily instead.
 //
 // Reference: https://developer.apple.com/documentation/metal/mtlfeatureset.
 type FeatureSet uint16
@@ -301,9 +328,9 @@ func CreateSystemDefaultDevice() (Device, error) {
 
 	return Device{
 		device:     d.Device,
-		Headless:   d.Headless != 0,
-		LowPower:   d.LowPower != 0,
-		Removable:  d.Removable != 0,
+		Headless:   bool(d.Headless),
+		LowPower:   bool(d.LowPower),
+		Removable:  bool(d.Removable),
 		RegistryID: uint64(d.RegistryID),
 		Name:       C.GoString(d.Name),
 	}, nil
@@ -321,9 +348,9 @@ func CopyAllDevices() []Device {
 		d := (*C.struct_Device)(unsafe.Pointer(uintptr(unsafe.Pointer(d.Devices)) + uintptr(i)*C.sizeof_struct_Device))
 
 		ds[i].device = d.Device
-		ds[i].Headless = d.Headless != 0
-		ds[i].LowPower = d.LowPower != 0
-		ds[i].Removable = d.Removable != 0
+		ds[i].Headless = bool(d.Headless)
+		ds[i].LowPower = bool(d.LowPower)
+		ds[i].Removable = bool(d.Removable)
 		ds[i].RegistryID = uint64(d.RegistryID)
 		ds[i].Name = C.GoString(d.Name)
 	}
@@ -333,11 +360,21 @@ func CopyAllDevices() []Device {
 // Device returns the underlying id<MTLDevice> pointer.
 func (d Device) Device() unsafe.Pointer { return d.device }
 
+// SupportsFamily reports whether device d supports
+// the feature set of GPU family gf.
+//
+// Reference: https://developer.apple.com/documentation/metal/mtldevice/3143473-supportsfamily.
+func (d Device) SupportsFamily(gf GPUFamily) bool {
+	return bool(C.Device_SupportsFamily(d.device, C.uint16_t(gf)))
+}
+
 // SupportsFeatureSet reports whether device d supports feature set fs.
+//
+// Deprecated: Use SupportsFamily instead.
 //
 // Reference: https://developer.apple.com/documentation/metal/mtldevice/1433418-supportsfeatureset.
 func (d Device) SupportsFeatureSet(fs FeatureSet) bool {
-	return C.Device_SupportsFeatureSet(d.device, C.uint16_t(fs)) != 0
+	return bool(C.Device_SupportsFeatureSet(d.device, C.uint16_t(fs)))
 }
 
 // MakeCommandQueue creates a serial command submission queue.

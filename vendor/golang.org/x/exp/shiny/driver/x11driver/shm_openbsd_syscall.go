@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build openbsd
-// +build i386 amd64
+//go:build openbsd && (i386 || amd64)
 
 package x11driver
 

@@ -22,21 +22,21 @@ const dumpFrame = false
 var UnknownCommandErr = errors.New("unknown command")
 
 type context struct {
-	mw             MasterWindow
-	Input          Input
-	Style          nstyle.Style
-	Windows        []*Window
-	DockedWindows  dockedTree
-	changed        int32
-	activateEditor *TextEditor
-	cmds           []command.Command
-	trashFrame     bool
-	autopos        image.Point
+	mw            MasterWindow
+	Input         Input
+	Style         nstyle.Style
+	Windows       []*Window
+	DockedWindows dockedTree
+	changed       int32
+	cmds          []command.Command
+	trashFrame    bool
+	autopos       image.Point
 
 	finalCmds command.Buffer
 
 	dockedWindowFocus int
 	floatWindowFocus  int
+	rootWindowFocus   bool
 	scrollwheelFocus  int
 	dockedCnt         int
 
@@ -208,7 +208,6 @@ func (ctx *context) Reset() {
 			return w
 		})
 	}
-	ctx.activateEditor = nil
 	in := &ctx.Input
 	in.Mouse.Buttons[mouse.ButtonLeft].Clicked = false
 	in.Mouse.Buttons[mouse.ButtonMiddle].Clicked = false
@@ -221,6 +220,13 @@ func (ctx *context) Reset() {
 }
 
 func (ctx *context) Restack() {
+	defer func() {
+		if ctx.Input.activateWindow != nil {
+			ctx.Input.activateWindow = nil
+		} else {
+			ctx.Input.activateEditor = nil
+		}
+	}()
 	clicked := false
 	for _, b := range []mouse.Button{mouse.ButtonLeft, mouse.ButtonRight, mouse.ButtonMiddle} {
 		if ctx.Input.Mouse.Buttons[b].Clicked && ctx.Input.Mouse.Buttons[b].Down {
@@ -228,10 +234,11 @@ func (ctx *context) Restack() {
 			break
 		}
 	}
-	if !clicked {
+	if !clicked && ctx.Input.activateWindow == nil {
 		return
 	}
 	ctx.dockedWindowFocus = 0
+	ctx.rootWindowFocus = false
 	nonmodalToplevel := false
 	var toplevelIdx int
 	for i := len(ctx.Windows) - 1; i >= 0; i-- {
@@ -252,7 +259,7 @@ func (ctx *context) Restack() {
 		if ctx.Windows[i].flags&windowTooltip != 0 {
 			continue
 		}
-		if ctx.restackClick(ctx.Windows[i]) {
+		if ctx.restackClick(ctx.Windows[i]) || ctx.Input.activateWindow == ctx.Windows[i] {
 			found = true
 			if toplevelIdx != i {
 				newToplevel := ctx.Windows[i]
@@ -275,16 +282,24 @@ func (ctx *context) Restack() {
 		if ctx.restackClick(w) && (w.flags&windowDocked != 0) {
 			ctx.dockedWindowFocus = w.idx
 		}
+		if ctx.Input.activateWindow == w {
+			ctx.dockedWindowFocus = w.idx
+		}
 		return w
 	})
+	if ctx.dockedWindowFocus == 0 {
+		ctx.rootWindowFocus = true
+	}
 }
 
 func (ctx *context) FindFocus() {
 	ctx.floatWindowFocus = 0
-	for i := len(ctx.Windows) - 1; i >= 0; i-- {
-		if ctx.Windows[i].flags&windowTooltip == 0 {
-			ctx.floatWindowFocus = i
-			break
+	if !ctx.rootWindowFocus {
+		for i := len(ctx.Windows) - 1; i >= 0; i-- {
+			if ctx.Windows[i].flags&windowTooltip == 0 {
+				ctx.floatWindowFocus = i
+				break
+			}
 		}
 	}
 	ctx.scrollwheelFocus = 0
@@ -305,30 +320,33 @@ func (ctx *context) FindFocus() {
 }
 
 func (ctx *context) Walk(fn WindowWalkFn) {
-	fn(ctx.Windows[0].title, ctx.Windows[0].Data, false, 0, ctx.Windows[0].Bounds)
+	fn(ctx.Windows[0], ctx.Windows[0].title, ctx.Windows[0].Data, false, 0, ctx.Windows[0].Bounds)
 	ctx.DockedWindows.walkExt(func(t *dockedTree) {
 		switch t.Type {
 		case dockedNodeHoriz:
-			fn("", nil, true, t.Split.Size, rect.Rect{})
+			fn(t.W, "", nil, true, t.Split.Size, rect.Rect{})
 		case dockedNodeVert:
-			fn("", nil, true, -t.Split.Size, rect.Rect{})
+			fn(t.W, "", nil, true, -t.Split.Size, rect.Rect{})
 		case dockedNodeLeaf:
 			if t.W == nil {
-				fn("", nil, true, 0, rect.Rect{})
+				fn(nil, "", nil, true, 0, rect.Rect{})
 			} else {
-				fn(t.W.title, t.W.Data, true, 0, t.W.Bounds)
+				fn(t.W, t.W.title, t.W.Data, true, 0, t.W.Bounds)
 			}
 		}
 	})
 	for _, win := range ctx.Windows[1:] {
 		if win.flags&WindowNonmodal != 0 {
-			fn(win.title, win.Data, false, 0, win.Bounds)
+			fn(win, win.title, win.Data, false, 0, win.Bounds)
 		}
 	}
 }
 
 func (ctx *context) restackClick(w *Window) bool {
 	if !ctx.Input.Mouse.valid {
+		return false
+	}
+	if ctx.Input.activateWindow != nil {
 		return false
 	}
 	for _, b := range []mouse.Button{mouse.ButtonLeft, mouse.ButtonRight, mouse.ButtonMiddle} {

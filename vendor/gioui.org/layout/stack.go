@@ -104,10 +104,9 @@ func (s Stack) Layout(gtx Context, children ...StackChild) Dimensions {
 		case SW, S, SE:
 			p.Y = maxSZ.Y - sz.Y
 		}
-		stack := op.Save(gtx.Ops)
-		op.Offset(FPt(p)).Add(gtx.Ops)
+		trans := op.Offset(p).Push(gtx.Ops)
 		ch.call.Add(gtx.Ops)
-		stack.Load()
+		trans.Pop()
 		if baseline == 0 {
 			if b := ch.dims.Baseline; b != 0 {
 				baseline = b + maxSZ.Y - sz.Y - p.Y
@@ -116,6 +115,39 @@ func (s Stack) Layout(gtx Context, children ...StackChild) Dimensions {
 	}
 	return Dimensions{
 		Size:     maxSZ,
+		Baseline: baseline,
+	}
+}
+
+// Background lays out single child widget on top of a background,
+// centering, if necessary.
+type Background struct{}
+
+// Layout a widget and then add a background to it.
+func (Background) Layout(gtx Context, background, widget Widget) Dimensions {
+	macro := op.Record(gtx.Ops)
+	wdims := widget(gtx)
+	baseline := wdims.Baseline
+	call := macro.Stop()
+
+	cgtx := gtx
+	cgtx.Constraints.Min = gtx.Constraints.Constrain(wdims.Size)
+	bdims := background(cgtx)
+
+	if bdims.Size != wdims.Size {
+		p := image.Point{
+			X: (bdims.Size.X - wdims.Size.X) / 2,
+			Y: (bdims.Size.Y - wdims.Size.Y) / 2,
+		}
+		baseline += (bdims.Size.Y - wdims.Size.Y) / 2
+		trans := op.Offset(p).Push(gtx.Ops)
+		defer trans.Pop()
+	}
+
+	call.Add(gtx.Ops)
+
+	return Dimensions{
+		Size:     bdims.Size,
 		Baseline: baseline,
 	}
 }

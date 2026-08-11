@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin
+//go:build darwin
 
 // Package appkit provides access to Apple's AppKit API
 // (https://developer.apple.com/documentation/appkit).
@@ -21,6 +21,7 @@ import (
 )
 
 /*
+#include <stdbool.h>
 #include "appkit.h"
 */
 import "C"
@@ -63,12 +64,5 @@ func (v View) SetLayer(l coreanim.Layer) {
 //
 // Reference: https://developer.apple.com/documentation/appkit/nsview/1483695-wantslayer.
 func (v View) SetWantsLayer(wantsLayer bool) {
-	C.View_SetWantsLayer(v.view, toCBool(wantsLayer))
-}
-
-func toCBool(b bool) C.BOOL {
-	if b {
-		return 1
-	}
-	return 0
+	C.View_SetWantsLayer(v.view, C.bool(wantsLayer))
 }

@@ -6,23 +6,22 @@ functionality for running graphical user interfaces.
 
 See https://gioui.org for instructions to set up and run Gio programs.
 
-Windows
+# Windows
 
-Create a new Window by calling NewWindow. On mobile platforms or when Gio
-is embedded in another project, NewWindow merely connects with a previously
-created window.
+A Window is run by calling its Event method in a loop. The first time a
+method on Window is called, a new GUI window is created and shown. On mobile
+platforms or when Gio is embedded in another project, Window merely connects
+with a previously created GUI window.
 
-A Window is run by receiving events from its Events channel. The most
-important event is FrameEvent that prompts an update of the window
-contents and state.
+The most important event is [FrameEvent] that prompts an update of the window
+contents.
 
 For example:
 
-	import "gioui.org/unit"
-
-	w := app.NewWindow()
-	for e := range w.Events() {
-		if e, ok := e.(system.FrameEvent); ok {
+	w := new(app.Window)
+	for {
+		e := w.Event()
+		if e, ok := e.(app.FrameEvent); ok {
 			ops.Reset()
 			// Add operations to ops.
 			...
@@ -32,9 +31,9 @@ For example:
 	}
 
 A program must keep receiving events from the event channel until
-DestroyEvent is received.
+[DestroyEvent] is received.
 
-Main
+# Main
 
 The Main function must be called from a program's main function, to hand over
 control of the main thread to operating systems that need it.
@@ -50,20 +49,14 @@ For example, to display a blank but otherwise functional window:
 	func main() {
 		go func() {
 			w := app.NewWindow()
-			for range w.Events() {
+			for {
+				w.Event()
 			}
 		}()
 		app.Main()
 	}
 
-
-Event queue
-
-A FrameEvent's Queue method returns an event.Queue implementation that distributes
-incoming events to the event handlers declared in the last frame.
-See the gioui.org/io/event package for more information about event handlers.
-
-Permissions
+# Permissions
 
 The packages under gioui.org/app/permission should be imported
 by a Gio program or by one of its dependencies to indicate that specific

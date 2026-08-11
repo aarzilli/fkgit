@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 // +build darwin
-// +build 386 amd64
 // +build !ios
 
 #include "_cgo_export.h"
@@ -234,7 +233,7 @@ uint64 threadID() {
 @implementation AppDelegate
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
 	driverStarted();
-	[[NSRunningApplication currentApplication] activateWithOptions:(NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps)];
+	[[NSRunningApplication currentApplication] activateWithOptions:NSApplicationActivateAllWindows];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {

@@ -27,6 +27,7 @@ type UpdateFn func(*Window)
 type Window struct {
 	LastWidgetBounds rect.Rect
 	Data             interface{}
+	HelpClicked      bool
 	title            string
 	ctx              *context
 	idx              int
@@ -137,6 +138,7 @@ const (
 	WindowTitle
 	WindowContextualReplace
 	WindowNonmodal
+	WindowHelp
 
 	windowSub
 	windowGroup
@@ -195,6 +197,18 @@ func (wbuf *widgetBuffer) reset() {
 
 func (w *Window) Master() MasterWindow {
 	return w.ctx.mw
+}
+
+func (win *Window) Title() string {
+	return win.title
+}
+
+// SetTitle cannot be used to change the title of the Root window, only sub-windows and the gio backend.
+func (win *Window) SetTitle(s string) {
+	if win.idx == 0 && win.title != s {
+		win.ctx.mw.setTitle(s)
+	}
+	win.title = s
 }
 
 func (win *Window) style() *nstyle.Window {
@@ -313,6 +327,7 @@ func panelBegin(ctx *context, win *Window, title string) {
 	dwh.Style = win.style()
 
 	var closeButton rect.Rect
+	var helpButton rect.Rect
 
 	if dwh.HeaderActive {
 		/* calculate header bounds */
@@ -343,6 +358,9 @@ func panelBegin(ctx *context, win *Window, title string) {
 		dwh.Label.Y = dwh.Header.Y + wstyle.Header.LabelPadding.Y
 		dwh.Label.H = FontHeight(font) + 2*wstyle.Header.LabelPadding.Y
 		dwh.Label.W = t + 2*wstyle.Header.Spacing.X
+		if dwh.Label.X+dwh.Label.W > dwh.Header.X+dwh.Header.W {
+			dwh.Label.W = dwh.Header.X + dwh.Header.W - dwh.Label.X
+		}
 		dwh.LayoutHeaderH = layout.HeaderH
 		dwh.RowHeight = layout.Row.Height
 		dwh.Title = title
@@ -367,6 +385,24 @@ func panelBegin(ctx *context, win *Window, title string) {
 				win.close = true
 			}
 		}
+
+		// window help button
+		helpButton.Y = closeButton.Y
+		helpButton.H = closeButton.H
+		helpButton.W = closeButton.H
+		if win.flags&WindowHelp != 0 {
+			spc := wstyle.Header.Spacing.X + 2*wstyle.Header.Padding.X
+			if wstyle.Header.Align == nstyle.HeaderRight {
+				helpButton.X = closeButton.X - spc - helpButton.W
+				dwh.Header.W -= helpButton.W + spc + wstyle.Header.Padding.X
+			} else {
+				helpButton.X = closeButton.X + spc
+				dwh.Header.X += helpButton.W + spc + wstyle.Header.Padding.X
+			}
+
+			win.HelpClicked = doButton(win, label.T("?"), helpButton, &wstyle.Header.CloseButton, in, false)
+		}
+
 	} else {
 		dwh.LayoutHeaderH = layout.HeaderH
 		dwh.RowHeight = layout.Row.Height
@@ -1007,7 +1043,9 @@ func (win *Window) LayoutReserveRowScaled(height int, num int) {
 
 // Changes row layout and starts a new row.
 // Use the returned value to configure the new row layout:
-//  win.Row(10).Static(100, 120, 100)
+//
+//	win.Row(10).Static(100, 120, 100)
+//
 // If height == 0 all the row is stretched to fill all the remaining space.
 func (win *Window) Row(height int) *rowConstructor {
 	win.rowCtor.height = win.ctx.scale(height)
@@ -1325,8 +1363,8 @@ func (win *Window) LayoutAvailableWidth() int {
 		return win.layout.Clip.W
 	default:
 		style := win.style()
-		panel_spacing := int(float64(win.layout.Row.Columns-1) * float64(style.Spacing.X))
-		return win.layout.Width - style.Padding.X*2 - panel_spacing - win.layout.AtX
+		//layout := win.layout
+		return win.Bounds.W - 3*style.Spacing.X - 3*style.Padding.X - (win.layout.AtX - win.layout.Bounds.X)
 	}
 }
 
@@ -1390,6 +1428,16 @@ func (win *Window) TreePushNamed(type_ TreeType, name, title string, initial_ope
 }
 
 func (win *Window) TreePushCustom(type_ TreeType, name string, initial_open bool) (bounds rect.Rect, out *command.Buffer, ok bool) {
+	bounds, out, _, start := win.treePushCustom(type_, name, initial_open)
+	return bounds, out, start()
+}
+
+func (win *Window) TreePushNothing(type_ TreeType, name string, initial_open bool) (isopen bool, start func() bool) {
+	_, _, isopen, start = win.treePushCustom(type_, name, initial_open)
+	return isopen, start
+}
+
+func (win *Window) treePushCustom(type_ TreeType, name string, initial_open bool) (bounds rect.Rect, out *command.Buffer, isopen bool, start func() bool) {
 	/* cache some data */
 	layout := win.layout
 	style := &win.ctx.Style
@@ -1456,16 +1504,18 @@ func (win *Window) TreePushCustom(type_ TreeType, name string, initial_open bool
 		out = nil
 	}
 
-	/* increase x-axis cursor widget position pointer */
-	if node.Open {
-		layout.AtX = header.X + layout.Offset.X + style.Tab.Indent
-		layout.Width = max(layout.Width, 2*panel_padding.X)
-		layout.Width -= (style.Tab.Indent + panel_padding.X)
-		layout.Row.TreeDepth++
-		win.curNode = node
-		return labelBounds, out, true
-	} else {
-		return labelBounds, out, false
+	return labelBounds, out, node.Open, func() bool {
+		/* increase x-axis cursor widget position pointer */
+		if node.Open {
+			layout.AtX = header.X + layout.Offset.X + style.Tab.Indent
+			//layout.Width = max(layout.Width, 2*panel_padding.X)
+			layout.Width -= (style.Tab.Indent + panel_padding.X)
+			layout.Row.TreeDepth++
+			win.curNode = node
+			return true
+		} else {
+			return false
+		}
 	}
 }
 
@@ -1912,9 +1962,9 @@ func scrollwheelBehavior(win *Window, scroll, scrollwheel_bounds rect.Rect, scro
 		used_delta := (scroll_offset - old_scroll_offset) / scroll_step
 		residual := float64(in.Mouse.ScrollDelta) + used_delta
 		if residual < 0 {
-			in.Mouse.ScrollDelta = int(math.Ceil(residual))
+			in.Mouse.ScrollDelta = float32(math.Ceil(residual))
 		} else {
-			in.Mouse.ScrollDelta = int(math.Floor(residual))
+			in.Mouse.ScrollDelta = float32(math.Floor(residual))
 		}
 	}
 	return scroll_offset
@@ -2669,6 +2719,7 @@ func (ctx *context) popupOpen(title string, flags WindowFlags, rect rect.Rect, s
 	}
 	ctx.Windows = append(ctx.Windows, popup)
 	ctx.dockedWindowFocus = 0
+	ctx.rootWindowFocus = false
 
 	if scale {
 		rect.X = ctx.scale(rect.X)
@@ -2714,6 +2765,9 @@ func (ctx *context) autoPosition() (int, int) {
 func (win *Window) Close() {
 	if win.idx != 0 {
 		win.close = true
+	} else {
+		// win.idx == 0: Should be in Master window's context.
+		win.Master().Close()
 	}
 }
 

@@ -24,7 +24,8 @@ type MasterWindow interface {
 	Close()
 	Closed() bool
 	OnClose(func())
-	ActivateEditor(ed *TextEditor)
+	ActivateWindow(*Window)
+	ActivateEditor(*Window, interface{})
 
 	Style() *nstyle.Style
 	SetStyle(*nstyle.Style)
@@ -41,13 +42,15 @@ type MasterWindow interface {
 
 	Lock()
 	Unlock()
+
+	setTitle(string)
 }
 
 func NewMasterWindow(flags WindowFlags, title string, updatefn UpdateFn) MasterWindow {
 	return NewMasterWindowSize(flags, title, image.Point{640, 480}, updatefn)
 }
 
-type WindowWalkFn func(title string, data interface{}, docked bool, splitSize int, rect rect.Rect)
+type WindowWalkFn func(w *Window, title string, data interface{}, docked bool, splitSize int, rect rect.Rect)
 
 type masterWindowCommon struct {
 	ctx *context
@@ -92,8 +95,23 @@ func (mw *masterWindowCommon) Input() *Input {
 	return &mw.ctx.Input
 }
 
-func (mw *masterWindowCommon) ActivateEditor(ed *TextEditor) {
-	mw.ctx.activateEditor = ed
+// ActivateWindow raises the specified window.
+func (mw *masterWindowCommon) ActivateWindow(win *Window) {
+	mw.ActivateEditor(win, nil)
+}
+
+// ActivateEditor raises the specified window and moves the focus to the specified editor.
+func (mw *masterWindowCommon) ActivateEditor(win *Window, ed interface{}) {
+	mw.ctx.Input.activateEditor = ed
+	mw.ctx.Input.activateWindow = win
+	mw.Changed()
+}
+
+func (mw *masterWindowCommon) ActivatingEditor() interface{} {
+	if mw.ctx.Input.activateWindow == nil {
+		return mw.ctx.Input.activateEditor
+	}
+	return nil
 }
 
 func (mw *masterWindowCommon) Style() *nstyle.Style {
@@ -188,12 +206,7 @@ func (w *masterWindowCommon) drawChanged() bool {
 		pcmd := &w.prevCmds[i]
 
 		switch cmds[i].Kind {
-		case command.ScissorCmd:
-			if *pcmd != *cmd {
-				return true
-			}
-
-		case command.LineCmd:
+		case command.ScissorCmd, command.LineCmd, command.TriangleFilledCmd, command.CircleFilledCmd, command.ImageCmd, command.TextCmd, command.CursorCmd:
 			if *pcmd != *cmd {
 				return true
 			}
@@ -202,26 +215,6 @@ func (w *masterWindowCommon) drawChanged() bool {
 			if i == 0 {
 				cmd.RectFilled.Color.A = 0xff
 			}
-			if *pcmd != *cmd {
-				return true
-			}
-
-		case command.TriangleFilledCmd:
-			if *pcmd != *cmd {
-				return true
-			}
-
-		case command.CircleFilledCmd:
-			if *pcmd != *cmd {
-				return true
-			}
-
-		case command.ImageCmd:
-			if *pcmd != *cmd {
-				return true
-			}
-
-		case command.TextCmd:
 			if *pcmd != *cmd {
 				return true
 			}

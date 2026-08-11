@@ -22,11 +22,11 @@ func (s *Searcher) Events(w *nucular.Window) {
 			s.searched.Buffer = s.searched.Buffer[:0]
 			s.searchNeedle = "-DIFFERENT-"
 			s.searched.Flags = nucular.EditSelectable | nucular.EditClipboard | nucular.EditSigEnter
-			w.Master().ActivateEditor(&s.searched)
+			w.Master().ActivateEditor(w, &s.searched)
 			s.Reset()
 		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeG):
 			if !s.searching {
-				w.Master().ActivateEditor(&s.searched)
+				w.Master().ActivateEditor(w, &s.searched)
 			}
 			s.searching = true
 			s.Look(s.searchNeedle, true)
