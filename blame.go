@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/aarzilli/nucular"
-	"github.com/aarzilli/nucular/clipboard"
 	"github.com/aarzilli/nucular/label"
 	"github.com/aarzilli/nucular/richtext"
 	nstyle "github.com/aarzilli/nucular/style"
@@ -312,7 +311,7 @@ func (tab *BlameTab) blameCommitMenu(w *nucular.Window, commit *Commit) {
 	w.Row(20).Dynamic(1)
 	a := abbrev(commit.Id)
 	if w.MenuItem(label.TA("Copy", "LC")) {
-		clipboard.Set(tab.rtxt.Get(tab.rtxt.Sel))
+		w.SetClipboard(tab.rtxt.Get(tab.rtxt.Sel))
 	}
 	if w.MenuItem(label.TA(fmt.Sprintf("View %s", a), "LC")) {
 		// commit must be reloaded because it only contains the summary in Message

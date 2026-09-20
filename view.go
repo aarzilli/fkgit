@@ -6,7 +6,6 @@ import (
 	"os/exec"
 
 	"github.com/aarzilli/nucular"
-	"github.com/aarzilli/nucular/clipboard"
 	"github.com/aarzilli/nucular/richtext"
 )
 
@@ -141,7 +140,7 @@ func showCommit(lnh int, w *nucular.Window, lc Commit, viewInTabButton bool) {
 	}
 	w.Label(fmt.Sprintf("commit %s\n", lc.Id), "LC")
 	if w.ButtonText("Copy") {
-		clipboard.Set(lc.Id)
+		w.SetClipboard(lc.Id)
 	}
 	if viewInTabButton {
 		if w.ButtonText("View") {
@@ -151,7 +150,7 @@ func showCommit(lnh int, w *nucular.Window, lc Commit, viewInTabButton bool) {
 	for i := range lc.Parent {
 		w.Label(fmt.Sprintf("parent %s\n", lc.Parent[i]), "LC")
 		if w.ButtonText("Copy") {
-			clipboard.Set(lc.Parent[i])
+			w.SetClipboard(lc.Parent[i])
 		}
 	}
 	w.RowScaled(lnh).Dynamic(1)
