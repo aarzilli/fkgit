@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"image"
+	"image/png"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -22,6 +24,9 @@ import (
 )
 
 var Repodir string
+
+//go:embed icon512.png
+var iconData []byte
 
 func must(err error) {
 	if err != nil {
@@ -372,19 +377,23 @@ func tabIndex(tab Tab) int {
 
 func guiUpdate(w *nucular.Window) {
 	mw := w.Master()
-	for _, e := range w.Input().Keyboard.Keys {
+	for e := range w.Input().Keyboard.Events() {
 		switch {
-		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Code == key.CodeEqualSign):
+		case e.HandleKey(key.CodeEqualSign, key.ModControl|key.ModShift):
+			fallthrough
+		case e.HandleKey(key.CodeEqualSign, key.ModControl):
 			conf.Scaling += 0.1
 			mw.Style().Scale(conf.Scaling)
 			saveConfiguration()
 
-		case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Code == key.CodeHyphenMinus):
+		case e.HandleKey(key.CodeHyphenMinus, key.ModControl|key.ModShift):
+			fallthrough
+		case e.HandleKey(key.CodeHyphenMinus, key.ModControl):
 			conf.Scaling -= 0.1
 			mw.Style().Scale(conf.Scaling)
 			saveConfiguration()
 
-		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeR):
+		case e.HandleKey(key.CodeR, key.ModControl):
 			switch currentTab {
 			case graphTabIndex:
 				lw.mu.Lock()
@@ -395,17 +404,17 @@ func guiUpdate(w *nucular.Window) {
 				idxmw.reload()
 			}
 
-		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeW):
+		case e.HandleKey(key.CodeW, key.ModControl):
 			if tabs[currentTab].Protected() {
 				go mw.Close()
 			} else {
 				closeTab(tabs[currentTab])
 			}
 
-		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeTab):
+		case e.HandleKey(key.CodeTab, key.ModControl):
 			currentTab = (currentTab + 1) % len(tabs)
 
-		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeF):
+		case e.HandleKey(key.CodeF, key.ModControl):
 			mw.SetPerf(!mw.GetPerf())
 		}
 	}
@@ -517,7 +526,9 @@ func main() {
 
 	loadConfiguration()
 
-	wnd := nucular.NewMasterWindowSize(nucular.WindowNoScrollbar, "Fkgit", image.Point{1024, 768}, guiUpdate)
+	icon, _ := png.Decode(bytes.NewReader(iconData))
+
+	wnd := nucular.NewMasterWindowOptions(nucular.WindowNoScrollbar, nucular.NewWindowOptions{Title: "Fkgit", Size: image.Point{1024, 768}, Icon: icon}, guiUpdate)
 	wnd.SetStyle(nstyle.FromTheme(nstyle.DarkTheme, conf.Scaling))
 	fixStyle(wnd.Style())
 

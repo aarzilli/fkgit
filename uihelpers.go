@@ -65,38 +65,37 @@ func selectFromList(w *nucular.Window, name string, idx int, list []string, keys
 		} else {
 			kbd = sw.Input().Keyboard
 		}
-		for _, k := range kbd.Keys {
+		for e := range kbd.Events() {
 			switch {
-			case (k.Modifiers == 0) && (k.Code == key.CodeDownArrow):
+			case e.HandleKey(key.CodeDownArrow, 0):
 				idx++
 				moveselection = true
-			case (k.Modifiers == 0) && (k.Code == key.CodeUpArrow):
+			case e.HandleKey(key.CodeUpArrow, 0):
 				idx--
 				moveselection = true
+			case e.HandleText():
+				now := time.Now()
+				if selectFromListSearch.name != name || now.Sub(selectFromListSearch.last) > 500*time.Millisecond {
+					selectFromListSearch.name = name
+					selectFromListSearch.text = ""
+				}
+
+				selectFromListSearch.last = now
+				selectFromListSearch.text += e.Text()
+
+				for i := range list {
+					if strings.HasPrefix(list[i], selectFromListSearch.text) {
+						moveselection = idx != i
+						idx = i
+						break
+					}
+				}
 			}
 			if idx < 0 {
 				idx = 0
 			}
 			if idx >= len(list) {
 				idx = len(list) - 1
-			}
-		}
-		if kbd.Text != "" {
-			now := time.Now()
-			if selectFromListSearch.name != name || now.Sub(selectFromListSearch.last) > 500*time.Millisecond {
-				selectFromListSearch.name = name
-				selectFromListSearch.text = ""
-			}
-
-			selectFromListSearch.last = now
-			selectFromListSearch.text += kbd.Text
-
-			for i := range list {
-				if strings.HasPrefix(list[i], selectFromListSearch.text) {
-					moveselection = idx != i
-					idx = i
-					break
-				}
 			}
 		}
 
@@ -125,11 +124,11 @@ func selectFromList(w *nucular.Window, name string, idx int, list []string, keys
 
 func okCancelButtons(w *nucular.Window, dokeys bool, oktext string, showcancel bool) (ok, cancel bool) {
 	if dokeys {
-		for _, e := range w.Input().Keyboard.Keys {
+		for e := range w.Input().Keyboard.Events() {
 			switch {
-			case (e.Modifiers == 0) && (e.Code == key.CodeReturnEnter):
+			case e.HandleKey(key.CodeReturnEnter, 0):
 				ok, cancel = true, false
-			case (e.Modifiers == 0) && (e.Code == key.CodeEscape):
+			case e.HandleKey(key.CodeEscape, 0):
 				ok, cancel = false, true
 			}
 		}

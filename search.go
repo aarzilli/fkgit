@@ -15,22 +15,22 @@ type Searcher struct {
 }
 
 func (s *Searcher) Events(w *nucular.Window) {
-	for _, e := range w.Input().Keyboard.Keys {
+	for e := range w.Input().Keyboard.Events() {
 		switch {
-		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeF):
+		case e.HandleKey(key.CodeF, key.ModControl):
 			s.searching = true
 			s.searched.Buffer = s.searched.Buffer[:0]
 			s.searchNeedle = "-DIFFERENT-"
 			s.searched.Flags = nucular.EditSelectable | nucular.EditClipboard | nucular.EditSigEnter
 			w.Master().ActivateEditor(w, &s.searched)
 			s.Reset()
-		case (e.Modifiers == key.ModControl) && (e.Code == key.CodeG):
+		case e.HandleKey(key.CodeG, key.ModControl):
 			if !s.searching {
 				w.Master().ActivateEditor(w, &s.searched)
 			}
 			s.searching = true
 			s.Look(s.searchNeedle, true)
-		case (e.Modifiers == 0) && (e.Code == key.CodeEscape):
+		case e.HandleKey(key.CodeEscape, 0):
 			s.searching = false
 		}
 	}
@@ -53,25 +53,26 @@ func (s *Searcher) Update(w *nucular.Window) {
 
 // Not actually related to search, implements standard scrolling behavior
 func scrollingKeys(w *nucular.Window, lnh int) {
-	for _, e := range w.KeyboardOnHover(w.Bounds).Keys {
+	kbd := w.KeyboardOnHover(w.Bounds)
+	for e := range kbd.Events() {
 		switch {
-		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
+		case e.HandleKey(key.CodeHome, 0):
 			w.Scrollbar.X = 0
 			w.Scrollbar.Y = 0
-		case (e.Modifiers == 0) && (e.Code == key.CodeEnd):
+		case e.HandleKey(key.CodeEnd, 0):
 			w.Scrollbar.X = 0
 			w.Scrollbar.Y = w.At().Y
-		case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
+		case e.HandleKey(key.CodeUpArrow, 0):
 			w.Scrollbar.Y -= lnh
-		case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
+		case e.HandleKey(key.CodeDownArrow, 0):
 			w.Scrollbar.Y += lnh
-		case (e.Modifiers == 0) && (e.Code == key.CodeLeftArrow):
+		case e.HandleKey(key.CodeLeftArrow, 0):
 			w.Scrollbar.X -= w.Bounds.W / 10
-		case (e.Modifiers == 0) && (e.Code == key.CodeRightArrow):
+		case e.HandleKey(key.CodeRightArrow, 0):
 			w.Scrollbar.X += w.Bounds.W / 10
-		case (e.Modifiers == 0) && (e.Code == key.CodePageUp):
+		case e.HandleKey(key.CodePageUp, 0):
 			w.Scrollbar.Y -= w.Bounds.H / 2
-		case (e.Modifiers == 0) && (e.Code == key.CodePageDown):
+		case e.HandleKey(key.CodePageDown, 0):
 			w.Scrollbar.Y += w.Bounds.H / 2
 		}
 

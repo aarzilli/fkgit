@@ -183,15 +183,15 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 
 	in := w.Input()
 	if !idxmw.ed.Active && !in.Mouse.HoveringRect(diffbounds) {
-		for _, e := range in.Keyboard.Keys {
+		for e := range in.Keyboard.Events() {
 			switch {
-			case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
+			case e.HandleKey(key.CodeUpArrow, 0):
 				idxmw.selected--
 				if idxmw.selected < 0 {
 					idxmw.selected = -1
 				}
 				idxmw.loadDiff()
-			case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
+			case e.HandleKey(key.CodeDownArrow, 0):
 				idxmw.selected++
 				if idxmw.selected >= len(idxmw.status.Lines) {
 					if len(idxmw.status.Lines) == 0 {
@@ -201,17 +201,18 @@ func (idxmw *IndexManagerWindow) Update(w *nucular.Window) {
 					}
 				}
 				idxmw.loadDiff()
+			case e.HandleText():
+				if e.Text() == " " {
+					if idxmw.selected >= 0 {
+						idxmw.addRemoveIndex(true, idxmw.selected)
+					}
+					idxmw.selected++
+					if idxmw.selected >= len(idxmw.status.Lines) {
+						idxmw.selected = 0
+					}
+					idxmw.loadDiff()
+				}
 			}
-		}
-		if in.Keyboard.Text == " " {
-			if idxmw.selected >= 0 {
-				idxmw.addRemoveIndex(true, idxmw.selected)
-			}
-			idxmw.selected++
-			if idxmw.selected >= len(idxmw.status.Lines) {
-				idxmw.selected = 0
-			}
-			idxmw.loadDiff()
 		}
 	}
 }

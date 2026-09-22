@@ -741,36 +741,37 @@ func (lw *LogWindow) UpdateGraph(w *nucular.Window) {
 	thick := int(graphThick * scaling)
 
 	kbd := w.KeyboardOnHover(w.Bounds)
-	for _, e := range kbd.Keys {
+	for e := range kbd.Events() {
 		switch {
-		case (e.Modifiers == 0) && (e.Code == key.CodeHome):
+		case e.HandleKey(key.CodeHome, 0):
 			w.Scrollbar.Y = 0
-		case (e.Modifiers == 0) && (e.Code == key.CodeEnd):
+		case e.HandleKey(key.CodeEnd, 0):
 			w.Scrollbar.Y = (lnh * len(lw.commits)) - w.Bounds.H
-		case (e.Modifiers == 0) && (e.Code == key.CodeUpArrow):
+		case e.HandleKey(key.CodeUpArrow, 0):
 			w.Scrollbar.Y -= lnh
-		case (e.Modifiers == 0) && (e.Code == key.CodeDownArrow):
+		case e.HandleKey(key.CodeDownArrow, 0):
 			w.Scrollbar.Y += lnh
-		case (e.Modifiers == 0) && (e.Code == key.CodePageUp):
+		case e.HandleKey(key.CodePageUp, 0):
 			w.Scrollbar.Y -= w.Bounds.H / 2
-		case (e.Modifiers == 0) && (e.Code == key.CodePageDown):
+		case e.HandleKey(key.CodePageDown, 0):
 			w.Scrollbar.Y += w.Bounds.H / 2
+		case e.HandleText():
+			switch e.Text() {
+			case "h":
+				for _, lc := range lw.commits {
+					if lc.IsHEAD {
+						lw.selectedId = lc.Id
+						moveToSelected = true
+						break
+					}
+				}
+			case " ":
+				moveToSelected = true
+			}
 		}
 		if w.Scrollbar.Y < 0 {
 			w.Scrollbar.Y = 0
 		}
-	}
-	switch kbd.Text {
-	case "h":
-		for _, lc := range lw.commits {
-			if lc.IsHEAD {
-				lw.selectedId = lc.Id
-				moveToSelected = true
-				break
-			}
-		}
-	case " ":
-		moveToSelected = true
 	}
 
 	// number of commits needed before we can show up anything

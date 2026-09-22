@@ -3,7 +3,7 @@ module github.com/aarzilli/fkgit
 go 1.25.0
 
 require (
-	github.com/aarzilli/nucular v0.0.0-20260919163313-dfefea0307a2
+	github.com/aarzilli/nucular v0.0.0-20260922071552-58b808aa5772
 	github.com/google/go-github v2.0.1-0.20160802180827-56add9d4071b+incompatible
 	golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a
 	golang.org/x/oauth2 v0.0.0-20161219192954-314dd2c0bf3e
