@@ -3,7 +3,7 @@ module github.com/aarzilli/fkgit
 go 1.25.0
 
 require (
-	github.com/aarzilli/nucular v0.0.0-20260922071552-58b808aa5772
+	github.com/aarzilli/nucular v0.0.0-20261124151617-37de78906f86
 	github.com/google/go-github v2.0.1-0.20160802180827-56add9d4071b+incompatible
 	golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a
 	golang.org/x/oauth2 v0.0.0-20161219192954-314dd2c0bf3e
@@ -12,14 +12,15 @@ require (
 require (
 	dmitri.shuralyov.com/gpu/mtl v0.0.0-20221208032759-85de2813cf6b // indirect
 	eliasnaur.com/font v0.0.0-20230308162249-dd43949cb42d // indirect
-	gioui.org v0.10.2 // indirect
+	gioui.org v0.10.3 // indirect
 	gioui.org/cpu v0.0.0-20210808092351-bfe733dd3334 // indirect
 	gioui.org/shader v1.0.9 // indirect
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802 // indirect
 	github.com/go-gl/glfw v0.0.0-20200222043503-6f7a984d4dc4 // indirect
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20231223183121-56fa3ac82ce7 // indirect
-	github.com/go-text/typesetting v0.3.4 // indirect
-	github.com/go-text/typesetting-utils v0.0.0-20260223113751-2d88ac90dae3 // indirect
+	github.com/go-text/typesetting v0.3.5 // indirect
+	github.com/go-text/typesetting-utils v0.0.0-20260419141703-4ffe8874dabc // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/golang/protobuf v0.0.0-20161117033126-8ee79997227b // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
